@@ -13,8 +13,6 @@ A comprehensive gear wear diagnosis system that combines **Picture Analysis** an
 
 ### 📊 Vibration Analysis
 - **Mechanical Response Analysis**: Analyzes vibration signals for fault detection
-- **Bearing Fault Detection**: Identifies bearing-related issues
-- **Gear Mesh Analysis**: Detects gear mesh frequency patterns
 - **Signal Processing**: Advanced signal analysis with FFT and filtering
 
 ### 🔍 Diagnosis System
