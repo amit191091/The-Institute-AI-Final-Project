@@ -119,9 +119,9 @@ Thumbs.db
 # *.mat  # Commented out to include vibration data .mat files
 *.csv
 *.json
-*.png
-*.jpg
-*.jpeg
+# *.png  # Commented out to include gear images
+# *.jpg  # Commented out to include gear images
+# *.jpeg  # Commented out to include gear images
 *.gif
 *.bmp
 *.tiff
@@ -136,7 +136,7 @@ Thumbs.db
 !*.txt
 
 # Exclude large data directories but keep structure
-gear_images/database/
+# gear_images/database/  # Commented out to include gear images database
 # vibration_data/database/  # Commented out to include vibration data
 test_output/
 results/
