@@ -116,7 +116,7 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-*.mat
+# *.mat  # Commented out to include vibration data .mat files
 *.csv
 *.json
 *.png
@@ -137,7 +137,7 @@ Thumbs.db
 
 # Exclude large data directories but keep structure
 gear_images/database/
-vibration_data/database/
+# vibration_data/database/  # Commented out to include vibration data
 test_output/
 results/
 
