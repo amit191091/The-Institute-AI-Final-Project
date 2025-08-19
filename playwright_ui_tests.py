@@ -112,16 +112,18 @@ class PlaywrightUITester:
             test_doc_path, test_pdf_path = await self.setup_test_environment()
             
             # Test file validation
-            from rag_app.validation import DocumentValidator
+            from rag_app.validate import DocumentValidator
             validator = DocumentValidator()
             
             # Test text file validation
-            is_valid_txt = validator.validate_file(str(test_doc_path))
+            result_txt = validator.validate_document(Path(test_doc_path))
+            is_valid_txt = bool(result_txt.get("is_valid"))
             self.test_results["functionality_tests"]["txt_file_validation"] = is_valid_txt
             logger.info(f"✅ TXT file validation: {is_valid_txt}")
             
             # Test PDF file validation 
-            is_valid_pdf = validator.validate_file(str(test_pdf_path))
+            result_pdf = validator.validate_document(Path(test_pdf_path))
+            is_valid_pdf = bool(result_pdf.get("is_valid"))
             self.test_results["functionality_tests"]["pdf_file_validation"] = is_valid_pdf
             logger.info(f"✅ PDF file validation: {is_valid_pdf}")
             
@@ -131,8 +133,7 @@ class PlaywrightUITester:
             
             # Test loading text file
             try:
-                # docs = loader.load_documents([str(test_doc_path)])
-                docs = loader.load_elements([str(test_doc_path)])
+                docs = loader.load_elements(Path(test_doc_path))
                 self.test_results["functionality_tests"]["txt_file_loading"] = len(docs) > 0
                 logger.info(f"✅ TXT file loading: {len(docs)} documents loaded")
             except Exception as e:

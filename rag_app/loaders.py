@@ -6,15 +6,15 @@ from typing import List, Iterator, Tuple, Any
 import logging
 
 try:
-    from unstructured.partition.pdf import partition_pdf
-    from unstructured.partition.docx import partition_docx
-    from unstructured.partition.text import partition_text
+    from unstructured.partition.pdf import partition_pdf  # type: ignore
+    from unstructured.partition.docx import partition_docx  # type: ignore
+    from unstructured.partition.text import partition_text  # type: ignore
 except ImportError:
     logging.warning("Unstructured library not available. Some document types may not be supported.")
     partition_pdf = partition_docx = partition_text = None
 
 try:
-    import fitz  # PyMuPDF for backup PDF processing
+    import fitz  # type: ignore  # PyMuPDF for backup PDF processing
     PYMUPDF_AVAILABLE = True
 except ImportError:
     fitz = None
@@ -22,14 +22,14 @@ except ImportError:
     logging.warning("PyMuPDF not available. PDF processing will use PyPDF2 fallback.")
 
 try:
-    import PyPDF2
+    import PyPDF2  # type: ignore
     PYPDF2_AVAILABLE = True
 except ImportError:
     PyPDF2 = None
     PYPDF2_AVAILABLE = False
 
 try:
-    from docx import Document as DocxDocument
+    from docx import Document as DocxDocument  # type: ignore
     DOCX_AVAILABLE = True
 except ImportError:
     DocxDocument = None
@@ -66,10 +66,16 @@ class DocumentLoader:
     def _load_with_unstructured(self, path: Path, ext: str) -> List[Any]:
         """Load using unstructured library (preferred)"""
         if ext == ".pdf":
+            if partition_pdf is None:
+                raise ImportError("unstructured.partition.pdf not available")
             return partition_pdf(filename=str(path), infer_table_structure=True)
         elif ext in (".docx", ".doc"):
+            if partition_docx is None:
+                raise ImportError("unstructured.partition.docx not available")
             return partition_docx(filename=str(path))
         elif ext == ".txt":
+            if partition_text is None:
+                raise ImportError("unstructured.partition.text not available")
             return partition_text(filename=str(path))
         else:
             raise ValueError(f"Unsupported format: {ext}")
@@ -100,25 +106,32 @@ class DocumentLoader:
         """Load PDF using PyMuPDF"""
         if not PYMUPDF_AVAILABLE:
             raise ImportError("PyMuPDF not available")
-            
-        elements = []
+        elements: List[dict] = []
+        # fitz is available per guard above
+        assert fitz is not None
         doc = fitz.open(path)
-        
+
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             text = page.get_text()
-            
+
             if text.strip():
                 elements.append({
                     'text': text,
                     'category': 'Text',
                     'metadata': {'page_number': page_num + 1, 'id': f"page_{page_num + 1}"}
                 })
-            
+
             # Extract tables (basic)
-            tables = page.find_tables()
+            try:
+                tables = page.find_tables()
+            except Exception:
+                tables = []
             for i, table in enumerate(tables):
-                table_text = table.extract()
+                try:
+                    table_text = table.extract()
+                except Exception:
+                    table_text = None
                 if table_text:
                     table_str = "\\n".join([" | ".join(row) for row in table_text])
                     elements.append({
@@ -126,7 +139,7 @@ class DocumentLoader:
                         'category': 'Table',
                         'metadata': {'page_number': page_num + 1, 'id': f"table_{page_num + 1}_{i}"}
                     })
-        
+
         doc.close()
         return elements
 
@@ -137,6 +150,7 @@ class DocumentLoader:
             
         elements = []
         with open(path, 'rb') as file:
+            assert PyPDF2 is not None
             reader = PyPDF2.PdfReader(file)
             
             for page_num, page in enumerate(reader.pages):
@@ -154,6 +168,8 @@ class DocumentLoader:
     def _load_docx_basic(self, path: Path) -> List[dict]:
         """Load DOCX using python-docx"""
         elements = []
+        if DocxDocument is None:
+            raise ImportError("python-docx not available")
         doc = DocxDocument(path)
         
         for i, paragraph in enumerate(doc.paragraphs):

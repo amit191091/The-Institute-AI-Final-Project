@@ -98,7 +98,7 @@ class DocumentValidator:
     
     def _validate_page_count(self, elements: List[Any]) -> Dict[str, Any]:
         """Validate document has minimum required pages"""
-        result = {"warnings": [], "errors": [], "recommendations": []}
+        result: Dict[str, Any] = {"warnings": [], "errors": [], "recommendations": []}
         
         # Try multiple methods to get page count
         page_count = 1  # Default fallback
@@ -148,7 +148,8 @@ class DocumentValidator:
     
     def _validate_content_structure(self, elements: List[Any]) -> Dict[str, Any]:
         """Validate document structure and content organization"""
-        result = {"warnings": [], "errors": [], "recommendations": []}
+        # Explicitly type as Dict[str, Any] so we can add mixed value types later
+        result: Dict[str, Any] = {"warnings": [], "errors": [], "recommendations": []}
         
         # Analyze content types
         content_types = {}
@@ -171,31 +172,30 @@ class DocumentValidator:
                 has_headers = True
             
             total_text_length += len(text)
-        
-        result.update({
-            "content_types": content_types,
-            "has_tables": has_tables,
-            "has_figures": has_figures,
-            "has_headers": has_headers,
-            "total_text_length": total_text_length
-        })
-        
+
+        # Assign fields explicitly to avoid update() type narrowing complaints
+        result["content_types"] = content_types
+        result["has_tables"] = has_tables
+        result["has_figures"] = has_figures
+        result["has_headers"] = has_headers
+        result["total_text_length"] = total_text_length
+
         # Validation checks
         if total_text_length < 1000:
             result["warnings"].append("Document appears to have very little text content")
-        
+
         if not has_headers:
             result["warnings"].append("Document lacks clear section headers/structure")
             result["recommendations"].append("Add section headers to improve document structure")
-        
+
         if not has_tables and "analysis" in str(elements).lower():
             result["warnings"].append("Technical analysis document without tables may lack detailed data")
-        
+
         return result
     
     def _validate_metadata_requirements(self, elements: List[Any]) -> Dict[str, Any]:
         """Validate metadata requirements for anchoring"""
-        result = {"warnings": [], "errors": [], "recommendations": []}
+        result: Dict[str, Any] = {"warnings": [], "errors": [], "recommendations": []}
         
         elements_with_anchors = 0
         elements_with_pages = 0
@@ -227,7 +227,7 @@ class DocumentValidator:
     
     def _validate_technical_content(self, elements: List[Any]) -> Dict[str, Any]:
         """Validate technical content specific to gear/bearing analysis"""
-        result = {"warnings": [], "errors": [], "recommendations": [], "indicators": {}}
+        result: Dict[str, Any] = {"warnings": [], "errors": [], "recommendations": [], "indicators": {}}
         
         # Combine all text for analysis
         full_text = ""
@@ -374,15 +374,15 @@ class DocumentValidator:
         }
         
         return batch_results
-    
+
     def _analyze_common_issues(self, results: List[Dict]) -> List[str]:
         """Analyze common issues across validation results"""
-        issue_counts = {}
+        issue_counts: Dict[str, int] = {}
         
         for result in results:
-            for error in result["errors"]:
+            for error in result.get("errors", []):
                 issue_counts[error] = issue_counts.get(error, 0) + 1
-            for warning in result["warnings"]:
+            for warning in result.get("warnings", []):
                 issue_counts[warning] = issue_counts.get(warning, 0) + 1
         
         # Return most common issues
@@ -391,12 +391,14 @@ class DocumentValidator:
     
     def _generate_batch_recommendations(self, results: List[Dict]) -> List[str]:
         """Generate recommendations for batch processing"""
-        recommendations = set()
+        recommendations: set[str] = set()
         
         for result in results:
-            recommendations.update(result["recommendations"])
+            for rec in result.get("recommendations", []):
+                recommendations.add(rec)
         
         return list(recommendations)[:10]  # Limit to top 10
+
 
 def create_validator() -> DocumentValidator:
     """Factory function to create document validator"""

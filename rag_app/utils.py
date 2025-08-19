@@ -3,7 +3,7 @@ Utility functions for text processing, summarization, and token management
 """
 import re
 import tiktoken
-from typing import List, Optional
+from typing import List, Optional, Sequence, Any
 import logging
 from collections import Counter
 
@@ -142,14 +142,24 @@ def extract_numeric_values(text: str) -> List[tuple]:
     
     return results
 
-def format_context_for_llm(chunks: List[dict], query: str) -> str:
-    """Format retrieved chunks for LLM consumption"""
-    formatted_contexts = []
-    
+def format_context_for_llm(chunks: Sequence[Any], query: str) -> str:
+    """Format retrieved chunks for LLM consumption.
+
+    Accepts either dict-like chunks or LangChain Document objects.
+    """
+    formatted_contexts: List[str] = []
+
     for i, chunk in enumerate(chunks, 1):
-        metadata = chunk.get('metadata', {})
-        content = chunk.get('page_content', chunk.get('content', ''))
-        
+        # Support both dicts and LangChain Documents (duck-typing)
+        if hasattr(chunk, 'metadata') and hasattr(chunk, 'page_content'):
+            metadata = getattr(chunk, 'metadata', {}) or {}
+            content = getattr(chunk, 'page_content', '') or ''
+        else:
+            metadata = chunk.get('metadata', {}) if isinstance(chunk, dict) else {}
+            content = ''
+            if isinstance(chunk, dict):
+                content = chunk.get('page_content', chunk.get('content', '')) or ''
+
         # Format metadata information
         meta_info = []
         if metadata.get('file_name'):
@@ -158,17 +168,17 @@ def format_context_for_llm(chunks: List[dict], query: str) -> str:
             meta_info.append(f"Page: {metadata['page']}")
         if metadata.get('section'):
             meta_info.append(f"Section: {metadata['section']}")
-        
+
         meta_str = " | ".join(meta_info) if meta_info else "Source information unavailable"
-        
+
         formatted_chunk = f"""Context {i}:
 Source: {meta_str}
 Content: {content.strip()}
 ---"""
-        
+
         formatted_contexts.append(formatted_chunk)
-    
-    return "\\n\\n".join(formatted_contexts)
+
+    return "\n\n".join(formatted_contexts)
 
 def calculate_text_similarity(text1: str, text2: str) -> float:
     """Calculate simple text similarity using word overlap"""

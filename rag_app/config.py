@@ -17,6 +17,9 @@ class Settings:
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     LLM_MODEL: str = "gpt-4o-mini"
     RERANK_MODEL: str = "BAAI/bge-reranker-large"
+    # Google Generative AI (optional)
+    GOOGLE_EMBEDDING_MODEL: str = "text-embedding-004"
+    GOOGLE_LLM_MODEL: str = "gemini-1.5-flash"
     
     # Retrieval Parameters
     DENSE_K: int = 10

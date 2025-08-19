@@ -11,6 +11,10 @@ import logging
 import numpy as np
 from langchain.docstore.document import Document
 from langchain_openai import OpenAIEmbeddings
+try:
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings  # type: ignore
+except Exception:  # pragma: no cover
+    GoogleGenerativeAIEmbeddings = None  # type: ignore
 from langchain_community.vectorstores import FAISS
 from rank_bm25 import BM25Okapi
 import pandas as pd
@@ -29,10 +33,20 @@ class HybridIndex:
         self.index_dir = index_dir or settings.INDEX_DIR
         self.index_dir.mkdir(exist_ok=True)
         
-        # Initialize components
-        self.embeddings = OpenAIEmbeddings(
-            model=settings.EMBEDDING_MODEL
-        )
+        # Initialize components with provider fallback (Google first, then OpenAI)
+        self.embeddings = None
+        if GoogleGenerativeAIEmbeddings and settings.GOOGLE_API_KEY:
+            try:
+                self.embeddings = GoogleGenerativeAIEmbeddings(model=settings.GOOGLE_EMBEDDING_MODEL)
+            except Exception as e:  # pragma: no cover
+                logger.warning("Google embeddings init failed: %s", e)
+                self.embeddings = None
+        if self.embeddings is None and settings.OPENAI_API_KEY:
+            try:
+                self.embeddings = OpenAIEmbeddings(model=settings.EMBEDDING_MODEL)
+            except Exception as e:
+                logger.warning("OpenAI embeddings init failed: %s", e)
+                self.embeddings = None
         
         self.dense_index: Optional[FAISS] = None
         self.sparse_index: Optional[BM25Okapi] = None
@@ -84,6 +98,10 @@ class HybridIndex:
         continue without a dense index so that sparse retrieval remains available.
         """
         try:
+            if self.embeddings is None:
+                logger.warning("No embedding provider available; skipping dense index build")
+                self.dense_index = None
+                return
             if self.dense_index is None:
                 # Create new index
                 self.dense_index = FAISS.from_documents(self.documents, self.embeddings)
@@ -173,6 +191,7 @@ class HybridIndex:
                     return []
                 
                 # Create temporary index with filtered documents
+                assert self.embeddings is not None
                 temp_index = FAISS.from_documents(filtered_docs, self.embeddings)
                 results = temp_index.similarity_search(query, k=k)
             else:
@@ -326,7 +345,7 @@ class HybridIndex:
         try:
             # Load dense index
             dense_path = load_path / "dense_index"
-            if dense_path.exists():
+            if dense_path.exists() and self.embeddings is not None:
                 self.dense_index = FAISS.load_local(str(dense_path), self.embeddings)
             
             # Load sparse index

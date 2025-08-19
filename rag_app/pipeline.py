@@ -91,7 +91,7 @@ class HybridRAGPipeline:
             }
     
     def ingest_documents(self, file_paths: List[Path], 
-                        client_id: str = None, case_id: str = None) -> Dict[str, Any]:
+                        client_id: Optional[str] = None, case_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Ingest documents into the RAG system
         
@@ -152,8 +152,8 @@ class HybridRAGPipeline:
                     continue
                 
                 # Extract IDs from filename if not provided
-                file_client_id = client_id or self._extract_client_id(file_path.stem)
-                file_case_id = case_id or self._extract_case_id(file_path.stem)
+                file_client_id: Optional[str] = client_id or self._extract_client_id(file_path.stem)
+                file_case_id: Optional[str] = case_id or self._extract_case_id(file_path.stem)
                 
                 # Chunk document
                 chunks = self.chunker.chunk_document(
@@ -221,7 +221,7 @@ class HybridRAGPipeline:
         
         return results
     
-    def query(self, query: str, k_contexts: int = None) -> Dict[str, Any]:
+    def query(self, query: str, k_contexts: Optional[int] = None) -> Dict[str, Any]:
         """
         Query the RAG system
         

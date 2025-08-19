@@ -237,7 +237,7 @@ def extract_incident_info(text: str) -> Dict[str, Optional[str]]:
     Returns:
         Dictionary with incident information
     """
-    incident_info = {
+    incident_info: Dict[str, Optional[str]] = {
         "incident_type": None,
         "incident_date": None,
         "amount_range": None,
@@ -313,7 +313,7 @@ def extract_incident_info(text: str) -> Dict[str, Optional[str]]:
     
     return incident_info
 
-def attach_metadata(chunk: Dict[str, Any], client_id: str = None, case_id: str = None) -> Dict[str, Any]:
+def attach_metadata(chunk: Dict[str, Any], client_id: Optional[str] = None, case_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Attach comprehensive metadata to a document chunk
     

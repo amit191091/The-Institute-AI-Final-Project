@@ -13,14 +13,14 @@ from .retrieve import HybridRetriever
 from .validate import DocumentValidator
 from .config import settings
 
-# Import existing gear analysis components
+# Import existing gear analysis components (optional)
 import sys
 sys.path.append('..')
 try:
-    from vibration_analysis import VibrationAnalysis
-    from picture_analysis_menu import analyze_gear_images
+    from vibration_analysis import VibrationAnalysis  # type: ignore
+    from picture_analysis_menu import analyze_gear_images  # type: ignore
     GEAR_ANALYSIS_AVAILABLE = True
-except ImportError:
+except Exception:
     GEAR_ANALYSIS_AVAILABLE = False
     logging.warning("Gear analysis modules not available")
 
@@ -290,9 +290,8 @@ class RAGInterface:
     
     def create_interface(self):
         """Create the Gradio interface"""
-        
-        with gr.Blocks(title="Hybrid RAG for Failure Analysis", theme=gr.themes.Soft()) as interface:
-            
+        # Use default theme to avoid private import warnings in some Gradio versions
+        with gr.Blocks(title="Hybrid RAG for Failure Analysis") as interface:
             gr.Markdown("""
             # 🔧 Hybrid RAG for Gear & Bearing Failure Analysis
             
@@ -301,20 +300,19 @@ class RAGInterface:
             This system combines advanced document processing with specialized AI agents to analyze
             gear and bearing failure reports, integrating with live analysis capabilities.
             """)
-            
+
             # System Status
             with gr.Row():
                 init_btn = gr.Button("🚀 Initialize System", variant="primary")
                 status_btn = gr.Button("📊 System Stats")
-            
+
             status_output = gr.Textbox(label="System Status", interactive=False)
-            
+
             # Document Management Tab
             with gr.Tabs():
-                
                 with gr.TabItem("📄 Document Management"):
                     gr.Markdown("### Upload and Validate Documents")
-                    
+
                     with gr.Row():
                         with gr.Column():
                             file_upload = gr.File(
@@ -323,7 +321,7 @@ class RAGInterface:
                                 file_types=[".pdf", ".docx", ".doc", ".txt"]
                             )
                             upload_btn = gr.Button("📤 Upload & Index", variant="primary")
-                        
+
                         with gr.Column():
                             validate_file = gr.File(
                                 label="Validate Single Document",
@@ -331,13 +329,13 @@ class RAGInterface:
                                 file_types=[".pdf", ".docx", ".doc", ".txt"]
                             )
                             validate_btn = gr.Button("🔍 Validate")
-                    
+
                     upload_output = gr.Textbox(label="Upload Results", lines=10)
                     validation_output = gr.Markdown(label="Validation Results")
-                
+
                 with gr.TabItem("🤖 Document Query"):
                     gr.Markdown("### Query Documents with Multi-Agent Intelligence")
-                    
+
                     with gr.Row():
                         with gr.Column():
                             query_input = gr.Textbox(
@@ -345,14 +343,14 @@ class RAGInterface:
                                 placeholder="E.g., 'What are the main causes of gear wear in case MG-5025A?'",
                                 lines=2
                             )
-                            
+
                             with gr.Row():
                                 k_contexts = gr.Slider(
                                     minimum=1, maximum=20, value=8, step=1,
                                     label="Number of Contexts to Retrieve"
                                 )
                                 query_btn = gr.Button("🔍 Query Documents", variant="primary")
-                        
+
                         with gr.Column():
                             gr.Markdown("**Example Queries:**")
                             gr.Markdown("""
@@ -361,13 +359,13 @@ class RAGInterface:
                             • *"Show me the timeline of events in the failure report"*
                             • *"What are the conclusions about gear tooth wear?"*
                             """)
-                    
+
                     query_response = gr.Textbox(label="Response", lines=10, interactive=False)
                     query_metadata = gr.Markdown(label="Query Details")
-                
+
                 with gr.TabItem("🔬 Integrated Analysis"):
                     gr.Markdown("### Combine Document Analysis with Live Gear Analysis")
-                    
+
                     with gr.Row():
                         with gr.Column():
                             integrated_query = gr.Textbox(
@@ -375,7 +373,7 @@ class RAGInterface:
                                 placeholder="E.g., 'Compare documented failures with current gear condition'",
                                 lines=2
                             )
-                            
+
                             with gr.Row():
                                 include_vibration = gr.Checkbox(
                                     label="Include Vibration Analysis",
@@ -385,9 +383,9 @@ class RAGInterface:
                                     label="Include Picture Analysis",
                                     value=GEAR_ANALYSIS_AVAILABLE
                                 )
-                            
+
                             integrated_btn = gr.Button("🔬 Run Integrated Analysis", variant="primary")
-                        
+
                         with gr.Column():
                             gr.Markdown("**Integration Features:**")
                             gr.Markdown("""
@@ -396,47 +394,47 @@ class RAGInterface:
                             • Provides comprehensive assessment
                             • Identifies patterns and correlations
                             """)
-                    
+
                     integrated_response = gr.Textbox(label="Integrated Analysis Results", lines=12, interactive=False)
                     integrated_metadata = gr.Markdown(label="Analysis Details")
-            
+
             # Event Handlers
             init_btn.click(
                 fn=self.initialize_system,
                 outputs=status_output
             )
-            
+
             status_btn.click(
                 fn=self.get_system_stats,
                 outputs=status_output
             )
-            
+
             upload_btn.click(
                 fn=self.upload_documents,
                 inputs=file_upload,
                 outputs=upload_output
             )
-            
+
             validate_btn.click(
                 fn=self.validate_document_upload,
                 inputs=validate_file,
                 outputs=validation_output
             )
-            
+
             query_btn.click(
                 fn=self.query_documents,
                 inputs=[query_input, k_contexts],
                 outputs=[query_response, query_metadata]
             )
-            
+
             integrated_btn.click(
                 fn=self.integrated_analysis,
                 inputs=[integrated_query, include_vibration, include_pictures],
                 outputs=[integrated_response, integrated_metadata]
             )
-            
+
             # Example queries
-            examples = gr.Examples(
+            gr.Examples(
                 examples=[
                     ["What caused the gearbox failure in the MG-5025A case?"],
                     ["Show me all measurement data from the wear investigation"],
@@ -446,8 +444,8 @@ class RAGInterface:
                 ],
                 inputs=query_input
             )
-        
-        return interface
+
+            return interface
 
 def create_gradio_interface():
     """Create and return a Gradio interface without launching"""

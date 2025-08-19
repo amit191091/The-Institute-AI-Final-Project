@@ -8,7 +8,7 @@ import json
 import tempfile
 import shutil
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import logging
 import traceback
 
@@ -30,7 +30,7 @@ class ComprehensiveRAGTester:
             "integration": {},
             "ui_tests": {}
         }
-        self.temp_dir = None
+        self.temp_dir: Optional[Path] = None
     
     def setup_test_environment(self):
         """Set up test environment"""
@@ -322,6 +322,7 @@ class ComprehensiveRAGTester:
             # Test document processing with sample text
             if integration_tests["pipeline_init"]:
                 # Create a test document
+                assert self.temp_dir is not None
                 test_doc_path = self.temp_dir / "test_doc.txt"
                 with open(test_doc_path, 'w') as f:
                     f.write("""

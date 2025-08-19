@@ -23,7 +23,7 @@ class StructureAwareChunker:
         self.overlap_size = settings.OVERLAP_SIZE
     
     def chunk_document(self, elements: List[Any], file_path: str, 
-                      client_id: str = None, case_id: str = None) -> List[Dict[str, Any]]:
+                      client_id: Optional[str] = None, case_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Process document elements into structured chunks with metadata
         
@@ -80,7 +80,7 @@ class StructureAwareChunker:
             return self._process_text(raw_text, file_path, page, anchor, section_type)
     
     def _process_table(self, text: str, file_path: str, page: int, 
-                      anchor: str, section_type: str) -> List[Dict[str, Any]]:
+                      anchor: Optional[str], section_type: str) -> List[Dict[str, Any]]:
         """Process table elements with special handling"""
         # Apply distillation to get core 5% information
         distilled_summary = simple_summarize(text, ratio=0.05, min_length=100)
@@ -110,7 +110,7 @@ class StructureAwareChunker:
         return [chunk]
     
     def _process_figure(self, text: str, file_path: str, page: int, 
-                       anchor: str, section_type: str) -> List[Dict[str, Any]]:
+                       anchor: Optional[str], section_type: str) -> List[Dict[str, Any]]:
         """Process figure/image elements"""
         # For figures, keep more context (50% ratio)
         caption = text or "Figure"
@@ -135,7 +135,7 @@ class StructureAwareChunker:
         return [chunk]
     
     def _process_text(self, text: str, file_path: str, page: int, 
-                     anchor: str, section_type: str) -> List[Dict[str, Any]]:
+                     anchor: Optional[str], section_type: str) -> List[Dict[str, Any]]:
         """Process textual elements with smart chunking"""
         # Apply distillation to get core 5% information
         distilled = simple_summarize(text, ratio=0.05, min_length=100)
@@ -162,7 +162,7 @@ class StructureAwareChunker:
             return self._split_long_text(distilled, file_path, page, anchor, section_type)
     
     def _split_long_text(self, text: str, file_path: str, page: int, 
-                        anchor: str, section_type: str) -> List[Dict[str, Any]]:
+                        anchor: Optional[str], section_type: str) -> List[Dict[str, Any]]:
         """Split long text into multiple chunks with overlap"""
         chunks = []
         
