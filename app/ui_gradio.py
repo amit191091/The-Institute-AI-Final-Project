@@ -14,12 +14,27 @@ def _render_router_info(route: str, top_docs):
 
 
 def _extract_table_figure_context(docs):
+	"""Return a Markdown-ready preview of the top Table/Figure contexts.
+	If a table markdown file was generated, embed its content; otherwise fall back to the chunk text.
+	"""
 	subset = [d for d in docs if d.metadata.get("section") in ("Table", "Figure")]
 	if not subset:
 		return "(no table/figure contexts in top candidates)"
 	out = []
 	for d in subset[:3]:
-		out.append(f"[{d.metadata.get('file_name')} p{d.metadata.get('page')}]\n{d.page_content[:800]}")
+		head = f"[{d.metadata.get('file_name')} p{d.metadata.get('page')}]"
+		md_path = d.metadata.get("table_md_path")
+		csv_path = d.metadata.get("table_csv_path")
+		if md_path and Path(str(md_path)).exists():
+			try:
+				content = Path(str(md_path)).read_text(encoding="utf-8")
+				link_line = f"(table files: [markdown]({md_path})" + (f" | [csv]({csv_path})" if csv_path else ")")
+				out.append(f"{head}\n{link_line}\n\n{content}")
+				continue
+			except Exception:
+				pass
+		# Fallback to the chunk page content
+		out.append(f"{head}\n{d.page_content[:1000]}")
 	return "\n\n---\n\n".join(out)
 
 
@@ -125,7 +140,8 @@ def build_ui(docs, hybrid, llm, debug=None):
 				gt = gr.Textbox(label="Ground truth (optional)")
 				dbg = gr.Checkbox(label="Show retrieval debug", value=False)
 				btn = gr.Button("Ask", variant="primary")
-				ans = gr.Textbox(label="Answer", lines=10)
+				# Render answer as Markdown so tables display nicely
+				ans = gr.Markdown()
 				metrics = gr.Textbox(label="Metrics", lines=3)
 				btn.click(on_ask, inputs=[q, gt, dbg], outputs=[ans, metrics])
 

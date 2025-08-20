@@ -19,6 +19,35 @@ from app.ui_gradio import build_ui
 from app.validate import validate_min_pages
 from app.logger import get_logger
 from app.retrieve import lexical_overlap
+def _clean_run_outputs():
+    """Delete prior run artifacts so new extraction overwrites files.
+    Cleans: data/images, data/elements, logs/queries.jsonl, logs/elements/*.jsonl
+    Controlled by env RAG_CLEAN_RUN (default: true).
+    """
+    flag = os.getenv("RAG_CLEAN_RUN", "1").lower() not in ("0", "false", "no")
+    if not flag:
+        return
+    import shutil
+    # Directories
+    for d in (Path("data")/"images", Path("data")/"elements"):
+        try:
+            if d.exists():
+                shutil.rmtree(d)
+        except Exception:
+            pass
+    # Logs: queries.jsonl and logs/elements dumps
+    try:
+        q = Path("logs")/"queries.jsonl"
+        if q.exists():
+            q.unlink(missing_ok=True)  # type: ignore[arg-type]
+    except Exception:
+        pass
+    try:
+        ed = Path("logs")/"elements"
+        if ed.exists():
+            shutil.rmtree(ed)
+    except Exception:
+        pass
 
 
 def _discover_input_paths() -> List[Path]:
@@ -224,6 +253,7 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
 
 def main() -> None:
     load_dotenv()
+    _clean_run_outputs()
     paths = _discover_input_paths()
     if not paths:
         print("No input files found. Place PDFs/DOCs under data/ or the root PDF.")
