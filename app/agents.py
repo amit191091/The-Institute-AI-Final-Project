@@ -21,7 +21,8 @@ def route_question(q: str) -> str:
 	ql = q.lower()
 	if any(w in ql for w in ("summarize", "overview", "overall", "conclusion", "brief")):
 		return "summary"
-	if any(w in ql for w in ("table", "chart", "value", "figure", "graph", "plot")):
+	# Include figure/image cues to route to table/figure handler
+	if any(w in ql for w in ("table", "chart", "value", "figure", "fig ", "image", "graph", "plot")):
 		return "table"
 	return "needle"
 

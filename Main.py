@@ -155,6 +155,13 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     # enforce rerank pool size
     candidates = candidates[: settings.RERANK_TOP_K]
     filtered = apply_filters(candidates, qa["filters"])  # metadata filters
+    # Fallback: if section filter applied but nothing left, pull from all docs with that section
+    try:
+        sec = qa["filters"].get("section")
+    except Exception:
+        sec = None
+    if sec and not filtered:
+        filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
     top_docs = rerank_candidates(question, filtered, top_n=settings.CONTEXT_TOP_N)
     route = route_question(question)
     # Logging: route, filters, counts, scores
@@ -230,7 +237,8 @@ def main() -> None:
     else:
         try:
             ui = build_ui(docs, hybrid, llm, debug)
-            ui.launch()
+            share = os.getenv("GRADIO_SHARE", "").lower() in ("1", "true", "yes")
+            ui.launch(share=share)
         except Exception as e:
             print(f"UI failed to launch: {e}")
             # fallback single query demo

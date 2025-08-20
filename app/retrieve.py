@@ -8,7 +8,8 @@ from langchain.retrievers import EnsembleRetriever
 def query_analyzer(q: str) -> Dict:
 	"""Extract keywords, case/client IDs, dates to build metadata filters."""
 	filt: Dict[str, str] = {}
-	mcase = re.search(r"(?:case|id)[:\-\s]*([A-Za-z0-9_-]+)", q, re.I)
+	# Require at least 3 chars for case/id to avoid filtering on trivial digits like "1"
+	mcase = re.search(r"(?:case|id)[:\-\s]*([A-Za-z0-9_-]{3,})", q, re.I)
 	if mcase:
 		filt["case_id"] = mcase.group(1)
 	mclient = re.search(r"(?:client)[:\-\s]*([A-Za-z0-9_-]+)", q, re.I)
@@ -17,8 +18,11 @@ def query_analyzer(q: str) -> Dict:
 	mdate = re.search(r"(20\d{2}-\d{2}-\d{2})", q)
 	if mdate:
 		filt["incident_date"] = mdate.group(1)
-	if "table" in q.lower():
+	ql = q.lower()
+	if "table" in ql:
 		filt["section"] = "Table"
+	elif any(w in ql for w in ("figure", "image", "fig ", "photo", "plot", "graph")):
+		filt["section"] = "Figure"
 	return {"filters": filt, "keywords": re.findall(r"[A-Za-z0-9°%]+", q)[:10]}
 
 
