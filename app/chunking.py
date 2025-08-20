@@ -49,6 +49,16 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			caption = raw_text or "Figure"
 			distilled = simple_summarize(caption, ratio=0.5)
 			content = f"[FIGURE]\n{distilled}"
+			# Try to detect image path hint embedded by loader
+			img_path = None
+			m = None
+			try:
+				import re as _re
+				m = _re.search(r"Extracted image saved at (.+)$", caption)
+			except Exception:
+				m = None
+			if m:
+				img_path = m.group(1).strip()
 			tok = approx_token_len(content)
 			if tok > 800:
 				content = truncate_to_tokens(content, 800)
@@ -58,6 +68,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 					"page": page,
 					"section_type": section_type or "Figure",
 					"anchor": anchor or None,
+					"image_path": img_path,
 					"content": content.strip(),
 					"keywords": extract_keywords(content),
 				}

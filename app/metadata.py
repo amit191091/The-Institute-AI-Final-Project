@@ -81,6 +81,7 @@ def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | No
 		"page": chunk.get("page"),
 		"section": chunk.get("section_type"),
 		"anchor": chunk.get("anchor"),
+		"image_path": chunk.get("image_path"),
 		"table_row_range": chunk.get("table_row_range"),
 		"table_col_names": chunk.get("table_col_names"),
 		"client_id": client_id,

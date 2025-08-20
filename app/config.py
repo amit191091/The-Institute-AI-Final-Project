@@ -7,7 +7,7 @@ class Settings:
 	DATA_DIR: Path = Path("data")
 	INDEX_DIR: Path = Path("index")
 	EMBEDDING_MODEL_OPENAI: str = "text-embedding-3-small"
-	EMBEDDING_MODEL_GOOGLE: str = "text-embedding-004"
+	EMBEDDING_MODEL_GOOGLE: str = "models/text-embedding-004"
 	DENSE_K: int = 10
 	SPARSE_K: int = 10
 	RERANK_TOP_K: int = 20
@@ -18,4 +18,3 @@ class Settings:
 
 
 settings = Settings()
-
