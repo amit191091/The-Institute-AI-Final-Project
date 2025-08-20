@@ -65,7 +65,7 @@ def load_elements(path: Path):
 			try:
 				return partition_pdf(filename=str(path), strategy="hi_res", infer_table_structure=True)
 			except TypeError:
-				# Fallback older/newer kw
+				# Fallback for different versions
 				try:
 					return partition_pdf(filename=str(path), pdf_infer_table_structure=True)
 				except Exception:
@@ -91,8 +91,7 @@ def load_elements(path: Path):
 					self.metadata = MD(page_number)
 			elements.append(_Shim(text, i))
 		get_logger().warning("Using pypdf fallback for PDF parsing (limited structure detection).")
-	
- 	return elements
+		return elements
 	if ext in (".docx", ".doc"):
 		if partition_docx is None:
 			raise RuntimeError("unstructured[all-docs] not installed for DOCX parsing")
