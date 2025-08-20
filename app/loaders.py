@@ -13,6 +13,47 @@ except Exception:  # pragma: no cover - allow import even if extras missing
 	partition_pdf = partition_docx = partition_text = None  # type: ignore
 
 
+def _export_tables_to_files(elements, path: Path) -> None:
+	"""Persist detected table elements to data/elements as Markdown and CSV files.
+	Attach file paths back into element.metadata as table_md_path/table_csv_path when possible.
+	"""
+	base_dir = Path("data") / "elements"
+	base_dir.mkdir(parents=True, exist_ok=True)
+	for i, e in enumerate(elements, start=1):
+		if str(getattr(e, "category", "")).lower() != "table":
+			continue
+		text = (getattr(e, "text", "") or "").strip()
+		if not text:
+			continue
+		# Determine file stems
+		stem = f"{path.stem}-table-{i}"
+		md_file = base_dir / f"{stem}.md"
+		csv_file = base_dir / f"{stem}.csv"
+		# Heuristic: if looks like markdown table, write to md; else if CSV-like, write csv; otherwise write md anyway
+		looks_markdown = text.lstrip().startswith("|") and "|" in text
+		looks_csv = "," in text and "\n" in text and not looks_markdown
+		try:
+			if looks_markdown:
+				md_file.write_text(text, encoding="utf-8")
+			elif looks_csv:
+				csv_file.write_text(text, encoding="utf-8")
+			else:
+				md_file.write_text(text, encoding="utf-8")
+		except Exception:
+			continue
+		# Attach paths to element metadata if possible
+		md_obj = getattr(e, "metadata", None)
+		if md_obj is not None:
+			try:
+				# Some metadata are SimpleNamespace; set attributes dynamically
+				if looks_markdown or not looks_csv:
+					setattr(md_obj, "table_md_path", str(md_file))
+				if looks_csv:
+					setattr(md_obj, "table_csv_path", str(csv_file))
+			except Exception:
+				pass
+
+
 def _pdf_fallback_elements(path: Path):
 	"""Lightweight PDF parsing via pypdf as a fallback for Windows.
 	Produces simple elements with .text, .category, and .metadata(page_number,id).
@@ -136,6 +177,18 @@ def load_elements(path: Path):
 			if _added:
 				els.extend(_added)
 				get_logger().info("%s: Tabula extracted %d tables", path.name, len(_added))
+	# Optional: pdfplumber table extraction
+		if os.getenv("RAG_USE_PDFPLUMBER", "").lower() in ("1", "true", "yes"):
+			_pdfp = _try_pdfplumber_tables(path)
+			if _pdfp:
+				els.extend(_pdfp)
+				get_logger().info("%s: pdfplumber extracted %d tables", path.name, len(_pdfp))
+		# Optional: Camelot table extraction
+		if os.getenv("RAG_USE_CAMELOT", "").lower() in ("1", "true", "yes"):
+			_cam = _try_camelot_tables(path)
+			if _cam:
+				els.extend(_cam)
+				get_logger().info("%s: Camelot extracted %d tables", path.name, len(_cam))
 		# Optional: synthesize table-like elements from text blocks if none detected
 		if os.getenv("RAG_SYNTH_TABLES", "").lower() in ("1", "true", "yes"):
 			try:
@@ -151,6 +204,11 @@ def load_elements(path: Path):
 			if _figs:
 				els.extend(_figs)
 				get_logger().info("%s: Extracted %d images as figures", path.name, len(_figs))
+		# Optional: export tables to markdown/csv files and attach paths in metadata
+		try:
+			_export_tables_to_files(els, path)
+		except Exception:
+			get_logger().debug("table export failed; continuing")
 		return els
 	if ext in (".docx", ".doc"):
 		if partition_docx is None:
@@ -284,6 +342,95 @@ def _try_tabula_tables(path: Path):
 	return elements
 
 
+def _try_pdfplumber_tables(path: Path):
+	"""Extract simple tables using pdfplumber per page. No external deps beyond pdfminer.six.
+	Returns shim elements with markdown/CSV-ish text.
+	"""
+	try:
+		import pdfplumber  # type: ignore
+	except Exception:
+		get_logger().debug("pdfplumber not available; skip table extraction")
+		return []
+	elements = []
+	idx = 0
+	try:
+		with pdfplumber.open(str(path)) as pdf:
+			for pno, page in enumerate(pdf.pages, start=1):
+				for table in (page.extract_tables() or []):
+					try:
+						# Convert to markdown-like text
+						rows = [[(c or "").strip() for c in row] for row in table]
+						if not rows:
+							continue
+						width = max(len(r) for r in rows)
+						rows = [r + [""] * (width - len(r)) for r in rows]
+						header = rows[0]
+						sep = ["---"] * len(header)
+						body = rows[1:]
+						fmt = lambda r: "| " + " | ".join(r) + " |"
+						md_text = "\n".join([fmt(header), fmt(sep)] + [fmt(r) for r in body])
+						idx += 1
+						elements.append(
+							SimpleNamespace(
+								text=md_text,
+								category="Table",
+								metadata=SimpleNamespace(page_number=pno, id=f"pdfplumber-{path.name}-{idx}"),
+							)
+						)
+					except Exception:
+						continue
+	except Exception as e:
+		get_logger().warning("pdfplumber failed (%s)", e.__class__.__name__)
+		return []
+	return elements
+
+
+def _try_camelot_tables(path: Path):
+	"""Extract tables using Camelot if available. Requires Ghostscript/Poppler; optional.
+	"""
+	try:
+		import camelot  # type: ignore
+	except Exception:
+		get_logger().debug("Camelot not available; skip table extraction")
+		return []
+	elements = []
+	idx = 0
+	for flavor in ("lattice", "stream"):
+		try:
+			# pages='all' can be slow; try '1-end' style
+			tables = camelot.read_pdf(str(path), pages="all", flavor=flavor)
+		except Exception as e:
+			get_logger().warning("Camelot %s failed (%s)", flavor, e.__class__.__name__)
+			continue
+		for t in getattr(tables, "df", []) or []:
+			try:
+				# t is DataFrame when accessed as tables[i].df; iterate tables properly
+				pass
+			except Exception:
+				pass
+		# Camelot returns a TableList; iterate explicitly
+		for ti, tbl in enumerate(tables, start=1):
+			try:
+				df = getattr(tbl, "df", None)
+				if df is None:
+					continue
+				try:
+					md_text = df.to_markdown(index=False)  # type: ignore[attr-defined]
+				except Exception:
+					md_text = df.to_csv(index=False)
+				idx += 1
+				elements.append(
+					SimpleNamespace(
+						text=md_text,
+						category="Table",
+						metadata=SimpleNamespace(page_number=None, id=f"camelot-{flavor}-{path.name}-{idx}"),
+					)
+				)
+			except Exception:
+				continue
+	return elements
+
+
 def _try_extract_images(path: Path):
 	"""Extract images from PDF pages as Figure elements using PyMuPDF (fitz).
 	Saves images to logs/images and creates placeholder Figure elements.
@@ -293,7 +440,7 @@ def _try_extract_images(path: Path):
 	except Exception:
 		get_logger().debug("PyMuPDF not available; skip image extraction")
 		return []
-	out_dir = Path("logs") / "images"
+	out_dir = Path("data") / "images"
 	out_dir.mkdir(parents=True, exist_ok=True)
 	elements = []
 	try:
@@ -322,5 +469,46 @@ def _try_extract_images(path: Path):
 	except Exception as e:
 		get_logger().warning("Image extraction failed (%s)", e.__class__.__name__)
 		return []
-	return elements
+		return elements
+
+
+	def _export_tables_to_files(elements, path: Path) -> None:
+		"""Persist detected table elements to data/elements as Markdown and CSV files.
+		Attach file paths back into element.metadata as table_md_path/table_csv_path when possible.
+		"""
+		base_dir = Path("data") / "elements"
+		base_dir.mkdir(parents=True, exist_ok=True)
+		for i, e in enumerate(elements, start=1):
+			if str(getattr(e, "category", "")).lower() != "table":
+				continue
+			text = (getattr(e, "text", "") or "").strip()
+			if not text:
+				continue
+			# Determine file stems
+			stem = f"{path.stem}-table-{i}"
+			md_file = base_dir / f"{stem}.md"
+			csv_file = base_dir / f"{stem}.csv"
+			# Heuristic: if looks like markdown table, write to md; else if CSV-like, write csv; otherwise write md anyway
+			looks_markdown = text.lstrip().startswith("|") and "|" in text
+			looks_csv = "," in text and "\n" in text and not looks_markdown
+			try:
+				if looks_markdown:
+					md_file.write_text(text, encoding="utf-8")
+				elif looks_csv:
+					csv_file.write_text(text, encoding="utf-8")
+				else:
+					md_file.write_text(text, encoding="utf-8")
+			except Exception:
+				continue
+			# Attach paths to element metadata if possible
+			md_obj = getattr(e, "metadata", None)
+			if md_obj is not None:
+				try:
+					# Some metadata are SimpleNamespace; set attributes dynamically
+					if looks_markdown or not looks_csv:
+						setattr(md_obj, "table_md_path", str(md_file))
+					if looks_csv:
+						setattr(md_obj, "table_csv_path", str(csv_file))
+				except Exception:
+					pass
 

@@ -43,3 +43,5 @@ The app builds the index and launches a Gradio UI.
 - RAG_USE_TABULA=true — try extracting tables via Java Tabula in addition to standard parsing.
 - RAG_EXTRACT_IMAGES=true — extract embedded images via PyMuPDF and index as Figure contexts.
 - RAG_SYNTH_TABLES=true — synthesize table-like elements from text blocks when native extractors fail.
+- RAG_USE_PDFPLUMBER=true — try extracting tables via pdfplumber (pure Python; good fallback).
+- RAG_USE_CAMELOT=true — try extracting tables via Camelot (needs Ghostscript/Poppler).
