@@ -25,7 +25,7 @@ def query_analyzer(q: str) -> Dict:
 		filt["section"] = "Table"
 	elif any(w in ql for w in ("figure", "image", "fig ", "photo", "plot", "graph")):
 		filt["section"] = "Figure"
-	return {"filters": filt, "keywords": re.findall(r"[A-Za-z0-9ֲ°%]+", q)[:10]}
+	return {"filters": filt, "keywords": re.findall(r"[A-Za-z0-9°%]+", q)[:10]}
 
 
 def apply_filters(docs: List[Document], filters: Dict) -> List[Document]:
@@ -56,7 +56,7 @@ def lexical_overlap(a: str, b: str) -> float:
 
 
 def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) -> List[Document]:
-	kws = set(re.findall(r"[A-Za-z0-9ֲ°%]+", query.lower()))
+	kws = set(re.findall(r"[A-Za-z0-9°%]+", query.lower()))
 	scored = []
 	for d in candidates:
 		base = lexical_overlap(query, d.page_content)
@@ -74,4 +74,3 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 	except Exception:
 		pass
 	return [d for _, __, d in scored[:top_n]]
-

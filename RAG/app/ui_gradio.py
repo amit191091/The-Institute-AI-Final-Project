@@ -72,7 +72,7 @@ def build_ui(docs, hybrid, llm, debug=None):
 				md.get("table_md_path") or "",
 				md.get("table_csv_path") or "",
 				md.get("image_path") or "",
-				(txt[:200] + ("ג€¦" if len(txt) > 200 else "")),
+				(txt[:200] + ("…" if len(txt) > 200 else "")),
 			])
 			if len(rows) >= limit:
 				break
@@ -107,8 +107,8 @@ def build_ui(docs, hybrid, llm, debug=None):
 			debug_block = (
 				"\n\n=== DEBUG ===\n"
 				+ f"Filters used: {qa['filters']}\n"
-				+ "Dense (kג‰ˆ10):\n" + _fmt_docs(dense_docs) + "\n\n"
-				+ "Sparse (kג‰ˆ10):\n" + _fmt_docs(sparse_docs) + "\n\n"
+				+ "Dense (k≈10):\n" + _fmt_docs(dense_docs) + "\n\n"
+				+ "Sparse (k≈10):\n" + _fmt_docs(sparse_docs) + "\n\n"
 				+ "Hybrid candidates (pre-filter):\n" + _fmt_docs(cands)
 			)
 		if r == "summary":
@@ -162,11 +162,11 @@ def build_ui(docs, hybrid, llm, debug=None):
 		return out, metrics_txt
 
 	# Build a sleeker Blocks UI with tabs
-	with gr.Blocks(title="Hybrid RAG ג€“ Failure Reports") as demo:
-		gr.Markdown("## Hybrid RAG ג€“ Failure Reports\nRouter + Summary / Needle / Table QA")
+	with gr.Blocks(title="Hybrid RAG – Failure Reports") as demo:
+		gr.Markdown("## Hybrid RAG – Failure Reports\nRouter + Summary / Needle / Table QA")
 		with gr.Tabs():
 			with gr.Tab("Ask"):
-				q = gr.Textbox(label="Question", placeholder="Ask about figures, tables, procedures, conclusionsג€¦")
+				q = gr.Textbox(label="Question", placeholder="Ask about figures, tables, procedures, conclusions…")
 				gt = gr.Textbox(label="Ground truth (optional)")
 				dbg = gr.Checkbox(label="Show retrieval debug", value=False)
 				btn = gr.Button("Ask", variant="primary")
@@ -203,6 +203,6 @@ def build_ui(docs, hybrid, llm, debug=None):
 
 		return demo
 
-	# Fallback just in case ג€“ should not reach here
+	# Fallback just in case – should not reach here
 	return demo
 

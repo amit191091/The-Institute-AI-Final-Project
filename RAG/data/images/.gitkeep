@@ -1,3 +1,0 @@
-# This folder will contain extracted images from documents
-# Files will be automatically generated when running the RAG system
-# Format: {document_name}-{page}-img{number}.png

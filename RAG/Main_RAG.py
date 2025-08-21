@@ -60,14 +60,14 @@ def _clean_run_outputs():
 
 
 def _discover_input_paths() -> List[Path]:
-    """Collect input files: root Gear wear Failure.pdf and files under data/"""
+    """Collect only the Gear wear Failure.pdf file"""
     candidates: List[Path] = []
-    root_pdf = Path("Gear wear Failure.pdf")
+    root_pdf = settings.DATA_DIR / "Gear wear Failure.pdf"
     if root_pdf.exists():
         candidates.append(root_pdf)
-    if settings.DATA_DIR.exists():
-        for ext in ("*.pdf", "*.docx", "*.doc", "*.txt"):
-            candidates.extend(settings.DATA_DIR.glob(ext))
+        print(f"✅ Found target file: {root_pdf}")
+    else:
+        print(f"❌ Target file not found: {root_pdf}")
     return candidates
 
 
@@ -82,12 +82,12 @@ def _get_embeddings():
     except Exception:
         OpenAIEmbeddings = None  # type: ignore
 
-    if os.getenv("GOOGLE_API_KEY") and GoogleGenerativeAIEmbeddings is not None:
+    if settings.GOOGLE_API_KEY and GoogleGenerativeAIEmbeddings is not None:
         return GoogleGenerativeAIEmbeddings(model=settings.EMBEDDING_MODEL_GOOGLE)
-    if os.getenv("OPENAI_API_KEY") and OpenAIEmbeddings is not None:
+    if settings.OPENAI_API_KEY and OpenAIEmbeddings is not None:
         return OpenAIEmbeddings(model=settings.EMBEDDING_MODEL_OPENAI)
     raise RuntimeError(
-        "No embedding backend available. Set GOOGLE_API_KEY or OPENAI_API_KEY and install langchain-google-genai or langchain-openai."
+        "No embedding backend available. Set GOOGLE_API_KEY or OPENAI_API_KEY in config.py and install langchain-google-genai or langchain-openai."
     )
 
 
@@ -98,7 +98,7 @@ class _LLM:
         self._backend = None
         self._which = None
         # Prefer Google Gemini
-        if os.getenv("GOOGLE_API_KEY"):
+        if settings.GOOGLE_API_KEY:
             try:
                 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -107,7 +107,7 @@ class _LLM:
             except Exception:
                 self._backend = None
         # Fallback to OpenAI
-        if self._backend is None and os.getenv("OPENAI_API_KEY"):
+        if self._backend is None and settings.OPENAI_API_KEY:
             try:
                 from langchain_openai import ChatOpenAI
 
