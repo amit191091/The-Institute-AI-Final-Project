@@ -37,10 +37,9 @@ def display_results_menu(agent, results):
                     print("⚠️ No picture analysis results available")
                     
             elif choice == "3":
-                if 'vibration_analysis' in results and results['vibration_analysis']:
-                    display_vibration_summary(results['vibration_analysis'])
-                else:
-                    print("⚠️ No vibration analysis results available")
+                print("📊 Vibration Analysis - Plot Viewing Mode")
+                print("ℹ️ Use the Vibration Analysis submenu to view plots")
+                print("ℹ️ No data processing is performed")
                     
             elif choice == "4":
                 display_wear_case_details(results)
@@ -127,8 +126,8 @@ def display_system_information():
     print("   • Picture Analysis (Visual wear detection)")
     print("   • Vibration Analysis (Mechanical response)")
     print("\n📁 Data Locations:")
-    print("   • Picture Data: gear_images/database/")
-    print("   • Vibration Data: vibration_data/database/")
+    print("   • Picture Data: Pictures and Vibrations database/Picture/database/")
+    print("   • Vibration Data: Pictures and Vibrations database/Vibration/database/")
     print("\n💾 Output Files:")
     print("   • comprehensive_diagnosis_report.txt")
     print("   • comprehensive_diagnosis_results.json")
@@ -162,20 +161,9 @@ def display_vibration_summary(vibration_results):
     """Display vibration analysis summary"""
     print("\n📊 VIBRATION ANALYSIS SUMMARY")
     print("=" * 35)
-    
-    if vibration_results:
-        total_cases = len(vibration_results)
-        cases_with_vibration = sum(1 for data in vibration_results.values() if 'rms' in data and data['rms'] > 0)
-        
-        print(f"📊 Total Cases: {total_cases}")
-        print(f"📊 Cases with Vibration Data: {cases_with_vibration}")
-        
-        if cases_with_vibration > 0:
-            rms_values = [data['rms'] for data in vibration_results.values() if 'rms' in data and data['rms'] > 0]
-            avg_rms = sum(rms_values) / len(rms_values)
-            print(f"📈 Average RMS: {avg_rms:.4f}")
-    else:
-        print("⚠️ No vibration analysis results available")
+    print("ℹ️ Vibration analysis")
+    print("ℹ️ Use the Vibration Analysis submenu to view plots")
+    print("✅ Vibration plot viewing available!")
 
 def check_saved_files_status():
     """Check and display status of saved files"""
@@ -185,12 +173,12 @@ def check_saved_files_status():
     import os
     
     files_to_check = [
-        ("gear_images/healthy_baseline.json", "Healthy Baseline Analysis"),
-        ("gear_images/wear_analysis_results.json", "Wear Analysis Results"),
+        ("Pictures and Vibrations database/Picture/healthy_baseline.json", "Healthy Baseline Analysis"),
+        ("Pictures and Vibrations database/Picture/wear_analysis_results.json", "Wear Analysis Results"),
         ("comprehensive_diagnosis_results.json", "Comprehensive Results"),
         ("comprehensive_diagnosis_report.txt", "Comprehensive Report"),
-        ("gear_images/picture_analysis_report.txt", "Picture Analysis Report"),
-        ("gear_images/picture_analysis_results.json", "Picture Analysis Results")
+        ("Pictures and Vibrations database/Picture/picture_analysis_report.txt", "Picture Analysis Report"),
+        ("Pictures and Vibrations database/Picture/picture_analysis_results.json", "Picture Analysis Results")
     ]
     
     for filepath, description in files_to_check:

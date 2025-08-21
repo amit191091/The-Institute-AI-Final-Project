@@ -27,12 +27,9 @@ def display_write_summary_menu(agent):
                     print("⚠️ No picture analysis results available. Run analysis first.")
                     
             elif choice == "2":
-                print("\n📝 Generating Vibration Analysis Summary...")
-                if hasattr(agent, 'vibration_analysis_results') and agent.vibration_analysis_results:
-                    agent.generate_vibration_summary()
-                    print("✅ Vibration analysis summary generated!")
-                else:
-                    print("⚠️ No vibration analysis results available. Run analysis first.")
+                print("\n📝 Vibration Analysis")
+                print("ℹ️ Use the Vibration Analysis submenu to view plots")
+                print("ℹ️ No data processing or report generation is performed")
                     
             elif choice == "3":
                 print("\n📝 Generating Comprehensive Summary...")
@@ -86,12 +83,8 @@ def display_saved_reports_menu():
             elif choice == "2":
                 print("\n📄 VIBRATION ANALYSIS REPORT:")
                 print("=" * 35)
-                try:
-                    with open('vibration_analysis_report.txt', 'r') as f:
-                        content = f.read()
-                        print(content)
-                except FileNotFoundError:
-                    print("⚠️ Vibration analysis report not found")
+                print("ℹ️ Vibration analysis")
+                print("ℹ️ No reports are generated")
                     
             elif choice == "3":
                 print("\n📄 COMPREHENSIVE REPORT:")
