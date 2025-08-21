@@ -26,6 +26,10 @@ from utility_functions import (
     check_saved_files_status
 )
 
+# Import new modular gear wear analysis
+import subprocess
+import sys
+
 class GearWearDiagnosisAgent:
     """Main coordinator for gear wear diagnosis using modular analysis"""
     
@@ -34,22 +38,124 @@ class GearWearDiagnosisAgent:
         self.overall_diagnosis = {}
     
     def run_picture_analysis(self, use_saved_files=True, force_reanalysis=False):
-        """Run picture analysis pipeline using integrated system"""
+        """Run picture analysis pipeline using new modular system"""
         print("🖼️ Starting Picture Analysis...")
         print("=" * 50)
-        print("ℹ️ Picture analysis is now handled through the integrated menu system.")
-        print("ℹ️ Please use 'Database Process (Gear Wear Analysis)' from the Picture Analysis menu.")
-        print("ℹ️ This will run the complete analysis using the new integrated scripts.")
         
-        # Return a placeholder result indicating the new system should be used
-        return {
-            "status": "integrated_system",
-            "message": "Picture analysis is now handled through the integrated menu system",
-            "files": {
-                "single_tooth_results": "gear_images/single_tooth_results.csv",
-                "all_teeth_results": "gear_images/all_teeth_results.csv",
-            }
-        }
+        if use_saved_files and not force_reanalysis:
+            # Check if we have existing results
+            if os.path.exists("gear_images/all_teeth_results.csv"):
+                print("✅ Using existing analysis results")
+                return {
+                    "status": "success",
+                    "message": "Using existing analysis results",
+                    "files": {
+                        "all_teeth_results": "gear_images/all_teeth_results.csv",
+                        "visualization": "gear_images/all_teeth_analysis_graph.png"
+                    }
+                }
+        
+        # Run the new modular analysis
+        return self.run_modular_gear_analysis()
+    
+    def run_modular_gear_analysis(self):
+        """Run the new modular gear wear analysis"""
+        print("🔧 Running Modular Gear Wear Analysis...")
+        print("=" * 50)
+        
+        try:
+            # Change to gear_images directory
+            original_dir = os.getcwd()
+            gear_images_dir = os.path.join(original_dir, "gear_images")
+            
+            if not os.path.exists(gear_images_dir):
+                print(f"❌ Gear images directory not found: {gear_images_dir}")
+                return {"status": "error", "message": "Gear images directory not found"}
+            
+            os.chdir(gear_images_dir)
+            
+            # Run the modular analysis
+            print("🚀 Executing modular analysis...")
+            result = subprocess.run([sys.executable, "Analyze_all_teeth.py"], 
+                                  capture_output=True, 
+                                  text=True)
+            
+            # Print output
+            if result.stdout:
+                print(result.stdout)
+            if result.stderr:
+                print("⚠️ Warnings/Errors:")
+                print(result.stderr)
+            
+            # Return to original directory
+            os.chdir(original_dir)
+            
+            if result.returncode == 0:
+                print("✅ Modular gear analysis completed successfully")
+                return {
+                    "status": "success",
+                    "message": "Modular gear analysis completed successfully",
+                    "files": {
+                        "all_teeth_results": "gear_images/all_teeth_results.csv",
+                        "visualization": "gear_images/all_teeth_analysis_graph.png"
+                    }
+                }
+            else:
+                print("❌ Modular gear analysis failed")
+                return {"status": "error", "message": "Modular gear analysis failed"}
+                
+        except Exception as e:
+            print(f"❌ Error running modular gear analysis: {e}")
+            return {"status": "error", "message": f"Error: {str(e)}"}
+    
+    def run_tooth1_analysis(self):
+        """Run the modular tooth1 wear depth analysis (backup method)"""
+        print("🔧 Running Tooth1 Wear Depth Analysis (Backup Method)...")
+        print("=" * 60)
+        
+        try:
+            # Change to gear_images directory
+            original_dir = os.getcwd()
+            gear_images_dir = os.path.join(original_dir, "gear_images")
+            
+            if not os.path.exists(gear_images_dir):
+                print(f"❌ Gear images directory not found: {gear_images_dir}")
+                return {"status": "error", "message": "Gear images directory not found"}
+            
+            os.chdir(gear_images_dir)
+            
+            # Run the tooth1 analysis
+            print("🚀 Executing tooth1 analysis...")
+            result = subprocess.run([sys.executable, "Analyze_tooth1.py"], 
+                                  capture_output=True, 
+                                  text=True)
+            
+            # Print output
+            if result.stdout:
+                print(result.stdout)
+            if result.stderr:
+                print("⚠️ Warnings/Errors:")
+                print(result.stderr)
+            
+            # Return to original directory
+            os.chdir(original_dir)
+            
+            if result.returncode == 0:
+                print("✅ Tooth1 analysis completed successfully")
+                return {
+                    "status": "success",
+                    "message": "Tooth1 analysis completed successfully",
+                    "files": {
+                        "tooth1_results": "gear_images/single_tooth_results.csv"
+                    }
+                }
+            else:
+                print("❌ Tooth1 analysis failed")
+                return {"status": "error", "message": "Tooth1 analysis failed"}
+                
+        except Exception as e:
+            print(f"❌ Error running tooth1 analysis: {e}")
+            return {"status": "error", "message": f"Error: {str(e)}"}
     
     def run_quick_diagnosis(self):
         """Run quick diagnosis using saved files (fast mode)"""
@@ -410,18 +516,57 @@ class GearWearDiagnosisAgent:
         return per_image_data
 
     def regenerate_wear_measurement_results(self):
-        """Regenerate wear measurement results using integrated system"""
+        """Regenerate wear measurement results using new modular system"""
         print("🔄 Regenerating Wear Measurement Results...")
         print("=" * 50)
-        print("ℹ️ Wear measurement regeneration is now handled through the integrated menu system.")
-        print("ℹ️ Please use 'Database Process (Gear Wear Analysis)' from the Picture Analysis menu.")
-        print("ℹ️ This will regenerate the complete analysis using the new integrated scripts.")
+        print("ℹ️ Running new modular gear wear analysis...")
         
-        # Return a placeholder result indicating the new system should be used
-        return {
-            "status": "integrated_system",
-            "message": "Wear measurement regeneration is now handled through the integrated menu system"
-        }
+        # Force reanalysis using the new modular system
+        return self.run_modular_gear_analysis()
+
+def run_rag_analysis():
+    """Run the RAG document analysis system"""
+    print("🤖 Starting RAG Document Analysis System...")
+    print("=" * 50)
+    print("ℹ️ This system uses AI to analyze your 'Gear wear Failure.docx' document")
+    print("ℹ️ You can ask questions about the document content")
+    print("ℹ️ The system will retrieve relevant information and provide answers")
+    print()
+    
+    try:
+        # Import and run the RAG system
+        import subprocess
+        import sys
+        
+        print("🚀 Launching RAG system...")
+        print("ℹ️ The system will:")
+        print("   - Load and process your document")
+        print("   - Build search indexes")
+        print("   - Start a web interface for questions")
+        print()
+        
+        # Run the RAG system
+        result = subprocess.run([sys.executable, "Main_rag.py"], 
+                              capture_output=False, 
+                              text=True)
+        
+        if result.returncode == 0:
+            print("✅ RAG system completed successfully")
+        else:
+            print("⚠️ RAG system exited with some issues")
+            
+    except ImportError as e:
+        print(f"❌ Error: Missing dependencies for RAG system: {e}")
+        print("ℹ️ Please install required packages: pip install -r requirements.txt")
+    except FileNotFoundError:
+        print("❌ Error: Main_rag.py not found")
+        print("ℹ️ Make sure the RAG system files are properly integrated")
+    except Exception as e:
+        print(f"❌ Error running RAG system: {e}")
+        print("ℹ️ Check the RAG system documentation in Yuval.md")
+    
+    print("\n🔙 Returning to main menu...")
+    input("Press Enter to continue...")
 
 def main():
     """Main function to run the gear wear diagnosis agent with user menu"""
@@ -440,41 +585,47 @@ def main():
         print("3. Diagnosis")
         print("4. Write Summary")
         print("5. View System Information")
-        print("6. Exit")
+        print("6. RAG Document Analysis")
+        print("7. Exit")
         
         try:
-            choice = input("\nEnter your choice (1-6): ").strip()
+            choice = input("\nEnter your choice (1-7): ").strip()
             
             if choice == "1":
                 print("\n🖼️ PICTURE ANALYSIS")
-                print("=" * 25)
+                print("=" * 35)
                 display_picture_analysis_menu(agent)
                     
             elif choice == "2":
                 print("\n📊 VIBRATION ANALYSIS")
-                print("=" * 25)
+                print("=" * 35)
                 display_vibration_analysis_menu(agent)
                     
             elif choice == "3":
                 print("\n🔍 DIAGNOSIS")
-                print("=" * 25)
+                print("=" * 35)
                 display_diagnosis_menu(agent)
                 
             elif choice == "4":
                 print("\n📝 WRITE SUMMARY")
-                print("=" * 25)
+                print("=" * 35)
                 display_write_summary_menu(agent)
                 
             elif choice == "5":
                 display_system_information()
                 
             elif choice == "6":
+                print("\n🤖 RAG DOCUMENT ANALYSIS")
+                print("=" * 35)
+                run_rag_analysis()
+                
+            elif choice == "7":
                 print("\n👋 Thank you for using Gear Wear Diagnosis Agent!")
                 print("Goodbye! 👋")
                 break
                 
             else:
-                print("❌ Invalid choice. Please enter a number between 1-6.")
+                print("❌ Invalid choice. Please enter a number between 1-7.")
                 
         except KeyboardInterrupt:
             print("\n\n⚠️ Operation cancelled by user.")
