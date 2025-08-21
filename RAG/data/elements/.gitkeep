@@ -1,3 +1,0 @@
-# This folder will contain extracted text and tables from documents
-# Files will be automatically generated when running the RAG system
-# Format: {document_name}-{element_type}-{number}.md

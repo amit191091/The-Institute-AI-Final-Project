@@ -54,7 +54,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			if tok > 800:
 				content = truncate_to_tokens(content, 800)
 			if trace:
-				log.debug("CHUNK-OUT[%d]: section=Table tokensג‰ˆ%d anchor=%s", idx, tok, anchor)
+				log.debug("CHUNK-OUT[%d]: section=Table tokens≈%d anchor=%s", idx, tok, anchor)
 			chunks.append(
 				{
 					"file_name": file_path,
@@ -96,7 +96,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			if tok > 800:
 				content = truncate_to_tokens(content, 800)
 			if trace:
-				log.debug("CHUNK-OUT[%d]: section=Figure tokensג‰ˆ%d img=%s", idx, tok, img_path)
+				log.debug("CHUNK-OUT[%d]: section=Figure tokens≈%d img=%s", idx, tok, img_path)
 			chunks.append(
 				{
 					"file_name": file_path,
@@ -127,4 +127,3 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				pass
 
 	return chunks
-

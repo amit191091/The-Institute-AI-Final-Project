@@ -378,7 +378,7 @@ def _synthesize_tables_from_text(els, path: Path):
 		wide_cols = sum(1 for ln in lines[:8] if _re.search(r"\S\s{3,}\S.*\S\s{3,}\S", ln))  # At least 2 wide columns
 		
 		# More data-like patterns (numbers, units, technical terms)
-		has_data_patterns = any(_re.search(r"\b\d+\.?\d*\s*(mm|־¼m|MPa|Hz|ֲ°C|N|kN|rpm|%)\b", ln, _re.I) for ln in lines[:5])
+		has_data_patterns = any(_re.search(r"\b\d+\.?\d*\s*(mm|μm|MPa|Hz|°C|N|kN|rpm|%)\b", ln, _re.I) for ln in lines[:5])
 		has_multiple_columns = any(ln.count("|") >= 3 or ln.count("\t") >= 2 for ln in lines)
 		
 		# Only synthesize if we have strong evidence of tabular data
@@ -588,43 +588,3 @@ def _try_extract_images(path: Path):
 		get_logger().warning("Image extraction failed (%s)", e.__class__.__name__)
 		return []
 	return elements
-	def _export_tables_to_files(elements, path: Path) -> None:
-		"""Persist detected table elements to data/elements as Markdown and CSV files.
-		Attach file paths back into element.metadata as table_md_path/table_csv_path when possible.
-		"""
-		base_dir = Path("data") / "elements"
-		base_dir.mkdir(parents=True, exist_ok=True)
-		for i, e in enumerate(elements, start=1):
-			if str(getattr(e, "category", "")).lower() != "table":
-				continue
-			text = (getattr(e, "text", "") or "").strip()
-			if not text:
-				continue
-			# Determine file stems
-			stem = f"{path.stem}-table-{i}"
-			md_file = base_dir / f"{stem}.md"
-			csv_file = base_dir / f"{stem}.csv"
-			# Heuristic: if looks like markdown table, write to md; else if CSV-like, write csv; otherwise write md anyway
-			looks_markdown = text.lstrip().startswith("|") and "|" in text
-			looks_csv = "," in text and "\n" in text and not looks_markdown
-			try:
-				if looks_markdown:
-					md_file.write_text(text, encoding="utf-8")
-				elif looks_csv:
-					csv_file.write_text(text, encoding="utf-8")
-				else:
-					md_file.write_text(text, encoding="utf-8")
-			except Exception:
-				continue
-			# Attach paths to element metadata if possible
-			md_obj = getattr(e, "metadata", None)
-			if md_obj is not None:
-				try:
-					# Some metadata are SimpleNamespace; set attributes dynamically
-					if looks_markdown or not looks_csv:
-						setattr(md_obj, "table_md_path", str(md_file))
-					if looks_csv:
-						setattr(md_obj, "table_csv_path", str(csv_file))
-				except Exception:
-					pass
-
