@@ -568,8 +568,27 @@ def _try_extract_images(path: Path):
 				finally:
 					pix = None  # release
 				
-				# Try to get text around the image for context
-				page_text = page.get_text()
+				# Try to get text around the image for context (PyMuPDF compatible across versions)
+				page_text = ""
+				_get_text = getattr(page, "get_text", None)
+				if callable(_get_text):
+					try:
+						# Newer PyMuPDF versions support get_text() defaulting to 'text'
+						page_text = _get_text()
+					except TypeError:
+						# Older signatures require an explicit type
+						try:
+							page_text = _get_text("text")
+						except Exception:
+							page_text = ""
+				else:
+					# Very old PyMuPDF used getText
+					_getText = getattr(page, "getText", None)
+					if callable(_getText):
+						try:
+							page_text = _getText("text")
+						except Exception:
+							page_text = ""
 				figure_summary = _generate_figure_summary(page_text, pno + 1, img_index)
 				
 				elements.append(
@@ -588,43 +607,4 @@ def _try_extract_images(path: Path):
 		get_logger().warning("Image extraction failed (%s)", e.__class__.__name__)
 		return []
 	return elements
-	def _export_tables_to_files(elements, path: Path) -> None:
-		"""Persist detected table elements to data/elements as Markdown and CSV files.
-		Attach file paths back into element.metadata as table_md_path/table_csv_path when possible.
-		"""
-		base_dir = Path("data") / "elements"
-		base_dir.mkdir(parents=True, exist_ok=True)
-		for i, e in enumerate(elements, start=1):
-			if str(getattr(e, "category", "")).lower() != "table":
-				continue
-			text = (getattr(e, "text", "") or "").strip()
-			if not text:
-				continue
-			# Determine file stems
-			stem = f"{path.stem}-table-{i}"
-			md_file = base_dir / f"{stem}.md"
-			csv_file = base_dir / f"{stem}.csv"
-			# Heuristic: if looks like markdown table, write to md; else if CSV-like, write csv; otherwise write md anyway
-			looks_markdown = text.lstrip().startswith("|") and "|" in text
-			looks_csv = "," in text and "\n" in text and not looks_markdown
-			try:
-				if looks_markdown:
-					md_file.write_text(text, encoding="utf-8")
-				elif looks_csv:
-					csv_file.write_text(text, encoding="utf-8")
-				else:
-					md_file.write_text(text, encoding="utf-8")
-			except Exception:
-				continue
-			# Attach paths to element metadata if possible
-			md_obj = getattr(e, "metadata", None)
-			if md_obj is not None:
-				try:
-					# Some metadata are SimpleNamespace; set attributes dynamically
-					if looks_markdown or not looks_csv:
-						setattr(md_obj, "table_md_path", str(md_file))
-					if looks_csv:
-						setattr(md_obj, "table_csv_path", str(csv_file))
-				except Exception:
-					pass
 

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import List
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 
 from dotenv import load_dotenv
 
@@ -214,7 +214,7 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     qa = query_analyzer(question)
     # Compatible retrieval call
     try:
-        candidates = hybrid.get_relevant_documents(question)
+        candidates = hybrid.invoke(question)
     except Exception:
         candidates = hybrid.invoke(question)
     # enforce rerank pool size
@@ -263,7 +263,7 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     try:
         log_dir = Path("logs"); log_dir.mkdir(exist_ok=True)
         entry = {
-            "ts": datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "question": question,
             "route": route,
             "keywords": qa["keywords"],
@@ -304,7 +304,9 @@ def main() -> None:
         try:
             ui = build_ui(docs, hybrid, llm, debug)
             share = os.getenv("GRADIO_SHARE", "").lower() in ("1", "true", "yes")
-            ui.launch(share=share)
+            # Ensure predictable host/port for testing
+            port = int(os.getenv("GRADIO_PORT", "7860"))
+            ui.launch(share=share, server_name=os.getenv("GRADIO_SERVER_NAME", "127.0.0.1"), server_port=port, show_error=True)
         except Exception as e:
             print(f"UI failed to launch: {e}")
             # fallback single query demo

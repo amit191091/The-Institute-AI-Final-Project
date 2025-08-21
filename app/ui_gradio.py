@@ -1,4 +1,5 @@
 import gradio as gr
+import pandas as pd
 import json
 from pathlib import Path
 
@@ -77,6 +78,14 @@ def build_ui(docs, hybrid, llm, debug=None):
 			if len(rows) >= limit:
 				break
 		return rows
+
+	def _rows_to_df(rows):
+		cols = ["file", "page", "section", "anchor", "words", "table_md", "table_csv", "image_path", "preview"]
+		try:
+			return pd.DataFrame(rows, columns=cols)
+		except Exception:
+			# graceful fallback
+			return pd.DataFrame([], columns=cols)
 
 	def on_ask(q, ground_truth, debug_toggle):
 		qa = query_analyzer(q)
@@ -180,7 +189,8 @@ def build_ui(docs, hybrid, llm, debug=None):
 				fig_paths = [d.metadata.get("image_path") for d in docs if d.metadata.get("section") == "Figure" and d.metadata.get("image_path")]
 				fig_paths = [str(Path(p)) for p in fig_paths if p]
 				if fig_paths:
-					gr.Gallery(value=fig_paths, label="Extracted Figures", allow_preview=True, columns=4, height=400)
+					# Recent Gradio versions preview by default; keep args minimal for compatibility
+					gr.Gallery(value=fig_paths, label="Extracted Figures", columns=4, height=400)
 				else:
 					gr.Markdown("(No extracted figures. Enable RAG_EXTRACT_IMAGES=true and rerun.)")
 
@@ -191,15 +201,25 @@ def build_ui(docs, hybrid, llm, debug=None):
 
 			with gr.Tab("DB Explorer"):
 				gr.Markdown("### Browse indexed documents (filters below)")
-				sec_dd = gr.Dropdown(choices=section_values, label="Section filter", value=None, allow_custom_value=True)
+				# Add an '(All)' option to avoid None handling differences across versions
+				sec_choices = ["(All)"] + section_values
+				sec_dd = gr.Dropdown(choices=sec_choices, label="Section filter", value="(All)")
 				qbox = gr.Textbox(label="Contains (text or metadata)")
 				refresh = gr.Button("Refresh")
-				df = gr.Dataframe(headers=["file", "page", "section", "anchor", "words", "table_md", "table_csv", "image_path", "preview"], wrap=True)
+				# Initialize the table with data at construction time for v5 compatibility
+				_initial_rows = _rows_for_df(None, None)
+				df = gr.Dataframe(
+					value=_rows_to_df(_initial_rows),
+					wrap=True,
+					interactive=False,
+				)
 				def _on_refresh(fs, qq):
-					return gr.update(value=_rows_for_df(fs, qq))
+					# Normalize '(All)' to no filter and return a pandas DataFrame
+					fsn = None if (fs in (None, "", "(All)")) else fs
+					rows = _rows_for_df(fsn, qq)
+					return gr.update(value=_rows_to_df(rows))
 				refresh.click(_on_refresh, inputs=[sec_dd, qbox], outputs=[df])
-				# initial load
-				df.value = _rows_for_df(None, None)
+				# initial load handled via value above
 
 		return demo
 
