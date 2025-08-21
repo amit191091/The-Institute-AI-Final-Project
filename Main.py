@@ -12,7 +12,7 @@ from app.config import settings
 from app.loaders import load_many
 from app.chunking import structure_chunks
 from app.metadata import attach_metadata
-from app.indexing import build_dense_index, build_sparse_retriever, to_documents
+from app.indexing import build_dense_index, build_sparse_retriever, to_documents, dump_chroma_snapshot
 from app.retrieve import apply_filters, build_hybrid_retriever, query_analyzer, rerank_candidates
 from app.agents import answer_needle, answer_summary, answer_table, route_question
 from app.ui_gradio import build_ui
@@ -35,6 +35,15 @@ def _clean_run_outputs():
                 shutil.rmtree(d)
         except Exception:
             pass
+    # Optional: clean Chroma persist dir
+    try:
+        chroma_dir = os.getenv("RAG_CHROMA_DIR")
+        if chroma_dir:
+            d = Path(chroma_dir)
+            if d.exists():
+                shutil.rmtree(d)
+    except Exception:
+        pass
     # Logs: queries.jsonl and logs/elements dumps
     try:
         q = Path("logs")/"queries.jsonl"
@@ -150,6 +159,27 @@ def build_pipeline(paths: List[Path]):
         log.info("Section histogram: %s", sorted(sec_hist.items(), key=lambda x: (-x[1], str(x[0]))))
     # vectorization
     docs = to_documents(records)
+    # Write a quick DB snapshot for debugging
+    try:
+        Path("logs").mkdir(exist_ok=True)
+        snap_path = Path("logs")/"db_snapshot.jsonl"
+        with open(snap_path, "w", encoding="utf-8") as f:
+            for d in docs:
+                md = (d.metadata or {})
+                rec = {
+                    "file": md.get("file_name"),
+                    "page": md.get("page"),
+                    "section": md.get("section"),
+                    "anchor": md.get("anchor"),
+                    "table_md_path": md.get("table_md_path"),
+                    "table_csv_path": md.get("table_csv_path"),
+                    "image_path": md.get("image_path"),
+                    "words": len((d.page_content or "").split()),
+                    "preview": (d.page_content or "")[:200],
+                }
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
     tbl_cnt = sum(1 for d in docs if (d.metadata or {}).get("section") == "Table")
     fig_cnt = sum(1 for d in docs if (d.metadata or {}).get("section") == "Figure")
     log.info(
@@ -164,6 +194,12 @@ def build_pipeline(paths: List[Path]):
     dense = build_dense_index(docs, embeddings)
     sparse = build_sparse_retriever(docs, k=settings.SPARSE_K)
     hybrid = build_hybrid_retriever(dense, sparse, dense_k=settings.DENSE_K)
+    # If Chroma is persisted, try writing a snapshot
+    try:
+        if os.getenv("RAG_CHROMA_DIR"):
+            dump_chroma_snapshot(dense, Path("logs")/"chroma_snapshot.jsonl")
+    except Exception:
+        pass
     # expose per-retriever diagnostics
     try:
         dense_ret = dense.as_retriever(search_kwargs={"k": settings.DENSE_K})

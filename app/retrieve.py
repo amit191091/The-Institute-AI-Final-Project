@@ -1,5 +1,7 @@
+import os
 import re
 from typing import Dict, List
+from app.logger import get_logger
 
 from langchain.schema import Document
 from langchain.retrievers import EnsembleRetriever
@@ -31,7 +33,14 @@ def apply_filters(docs: List[Document], filters: Dict) -> List[Document]:
 		return docs
 	def ok(meta):
 		return all(meta.get(k) == v for k, v in filters.items())
-	return [d for d in docs if ok(d.metadata)]
+	out = [d for d in docs if ok(d.metadata)]
+	try:
+		if os.getenv("RAG_TRACE", "0").lower() in ("1", "true", "yes") or os.getenv("RAG_TRACE_RETRIEVAL", "0").lower() in ("1", "true", "yes"):
+			log = get_logger()
+			log.debug("FILTER: %d -> %d using %s", len(docs), len(out), filters)
+	except Exception:
+		pass
+	return out
 
 
 def build_hybrid_retriever(dense_store, sparse_retriever, dense_k: int = 10):
@@ -56,5 +65,13 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 		score = base + boost
 		scored.append((score, len(d.page_content), d))
 	scored.sort(key=lambda x: (-x[0], x[1]))
+	try:
+		if os.getenv("RAG_TRACE", "0").lower() in ("1", "true", "yes") or os.getenv("RAG_TRACE_RETRIEVAL", "0").lower() in ("1", "true", "yes"):
+			log = get_logger()
+			for i, (s, ln, d) in enumerate(scored[:top_n], start=1):
+				md = d.metadata or {}
+				log.debug("RERANK[%d]: score=%.4f len=%d %s p%s %s", i, s, ln, md.get("file_name"), md.get("page"), md.get("section"))
+	except Exception:
+		pass
 	return [d for _, __, d in scored[:top_n]]
 
