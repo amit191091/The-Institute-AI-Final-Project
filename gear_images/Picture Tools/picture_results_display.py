@@ -148,7 +148,6 @@ def display_summary_statistics(single_tooth_data: Dict[int, float],
             print(f"⚙️ Tooth 1 Analysis:")
             print(f"   Cases analyzed: {len(single_tooth_data)}")
             print(f"   Depth range: {min(tooth1_depths):.1f} - {max(tooth1_depths):.1f} µm")
-            print(f"   Mean depth: {sum(tooth1_depths)/len(tooth1_depths):.1f} µm")
         
         # All teeth statistics
         if all_teeth_data:
@@ -160,7 +159,6 @@ def display_summary_statistics(single_tooth_data: Dict[int, float],
             print(f"   Cases analyzed: {len(all_teeth_data)}")
             print(f"   Total measurements: {len(all_depths)}")
             print(f"   Depth range: {min(all_depths):.1f} - {max(all_depths):.1f} µm")
-            print(f"   Mean depth: {sum(all_depths)/len(all_depths):.1f} µm")
         
     except Exception as e:
         print(f"❌ Error displaying summary statistics: {str(e)}")
