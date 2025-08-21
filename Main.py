@@ -3,17 +3,17 @@ import sys
 import json
 import numpy as np
 from datetime import datetime
+import subprocess
 
-# Add gear_images to path for imports
-sys.path.append('gear_images')
+# Add Picture and Vibration to path for imports
+sys.path.append('Pictures and Vibrations database/Picture')
+sys.path.append('Pictures and Vibrations database/Vibration')
 
 # Import analysis modules
-from vibration_analysis import VibrationAnalysis
 
 # Import submenu modules
 from picture_analysis_menu import display_picture_analysis_menu
 from vibration_analysis_menu import display_vibration_analysis_menu
-from diagnosis_menu import display_diagnosis_menu
 from write_summary_menu import display_write_summary_menu
 
 # Import utility functions
@@ -22,20 +22,18 @@ from utility_functions import (
     display_wear_case_details, 
     display_system_information,
     display_picture_summary,
-    display_vibration_summary,
     check_saved_files_status
 )
 
 # Import new modular gear wear analysis
-import subprocess
-import sys
 
 class GearWearDiagnosisAgent:
     """Main coordinator for gear wear diagnosis using modular analysis"""
     
     def __init__(self):
-        self.vibration_analyzer = VibrationAnalysis()
         self.overall_diagnosis = {}
+        # Initialize vibration analysis menu functionality
+        self.vibration_analysis_menu = None
     
     def run_picture_analysis(self, use_saved_files=True, force_reanalysis=False):
         """Run picture analysis pipeline using new modular system"""
@@ -44,14 +42,14 @@ class GearWearDiagnosisAgent:
         
         if use_saved_files and not force_reanalysis:
             # Check if we have existing results
-            if os.path.exists("gear_images/all_teeth_results.csv"):
+            if os.path.exists("Pictures and Vibrations database/Picture/all_teeth_results.csv"):
                 print("✅ Using existing analysis results")
                 return {
                     "status": "success",
                     "message": "Using existing analysis results",
                     "files": {
-                        "all_teeth_results": "gear_images/all_teeth_results.csv",
-                        "visualization": "gear_images/all_teeth_analysis_graph.png"
+                        "all_teeth_results": "Pictures and Vibrations database/Picture/all_teeth_results.csv",
+                        "visualization": "Pictures and Vibrations database/Picture/all_teeth_analysis_graph.png"
                     }
                 }
         
@@ -64,15 +62,15 @@ class GearWearDiagnosisAgent:
         print("=" * 50)
         
         try:
-            # Change to gear_images directory
+            # Change to Picture directory
             original_dir = os.getcwd()
-            gear_images_dir = os.path.join(original_dir, "gear_images")
+            picture_dir = os.path.join(original_dir, "Pictures and Vibrations database", "Picture")
             
-            if not os.path.exists(gear_images_dir):
-                print(f"❌ Gear images directory not found: {gear_images_dir}")
-                return {"status": "error", "message": "Gear images directory not found"}
+            if not os.path.exists(picture_dir):
+                print(f"❌ Picture directory not found: {picture_dir}")
+                return {"status": "error", "message": "Picture directory not found"}
             
-            os.chdir(gear_images_dir)
+            os.chdir(picture_dir)
             
             # Run the modular analysis
             print("🚀 Executing modular analysis...")
@@ -96,8 +94,8 @@ class GearWearDiagnosisAgent:
                     "status": "success",
                     "message": "Modular gear analysis completed successfully",
                     "files": {
-                        "all_teeth_results": "gear_images/all_teeth_results.csv",
-                        "visualization": "gear_images/all_teeth_analysis_graph.png"
+                        "all_teeth_results": "Pictures and Vibrations database/Picture/all_teeth_results.csv",
+                        "visualization": "Pictures and Vibrations database/Picture/all_teeth_analysis_graph.png"
                     }
                 }
             else:
@@ -114,15 +112,15 @@ class GearWearDiagnosisAgent:
         print("=" * 60)
         
         try:
-            # Change to gear_images directory
+            # Change to Picture directory
             original_dir = os.getcwd()
-            gear_images_dir = os.path.join(original_dir, "gear_images")
+            picture_dir = os.path.join(original_dir, "Pictures and Vibrations database", "Picture")
             
-            if not os.path.exists(gear_images_dir):
-                print(f"❌ Gear images directory not found: {gear_images_dir}")
-                return {"status": "error", "message": "Gear images directory not found"}
+            if not os.path.exists(picture_dir):
+                print(f"❌ Picture directory not found: {picture_dir}")
+                return {"status": "error", "message": "Picture directory not found"}
             
-            os.chdir(gear_images_dir)
+            os.chdir(picture_dir)
             
             # Run the tooth1 analysis
             print("🚀 Executing tooth1 analysis...")
@@ -146,7 +144,7 @@ class GearWearDiagnosisAgent:
                     "status": "success",
                     "message": "Tooth1 analysis completed successfully",
                     "files": {
-                        "tooth1_results": "gear_images/single_tooth_results.csv"
+                        "tooth1_results": "Pictures and Vibrations database/Picture/single_tooth_results.csv"
                     }
                 }
             else:
@@ -191,24 +189,9 @@ class GearWearDiagnosisAgent:
         """Run vibration analysis"""
         print("📊 Starting Vibration Analysis...")
         print("=" * 50)
-        
-        if vibration_paths is None:
-            # Default vibration file paths
-            vibration_paths = [
-                "vibration_data/vibration1.mat",
-                "vibration_data/vibration2.mat"
-            ]
-        
-        # Filter existing files
-        existing_vibration = [path for path in vibration_paths if os.path.exists(path)]
-        
-        if existing_vibration:
-            results = self.vibration_analyzer.analyze_vibration_data(existing_vibration)
-            print("✅ Vibration analysis completed successfully")
-            return results
-        else:
-            print("⚠️ No vibration data files found")
-            return None
+        print("ℹ️ Vibration analysis is now plot viewing only")
+        print("ℹ️ Use the Vibration Analysis submenu to view plots")
+        return {"status": "plot_viewing_only", "message": "Use submenu to view plots"}
     
     def run_complete_diagnosis(self):
         """Run complete gear wear diagnosis with all analysis types"""
@@ -351,11 +334,8 @@ class GearWearDiagnosisAgent:
         if self.overall_diagnosis['vibration_analysis']:
             report.append("📊 VIBRATION ANALYSIS SUMMARY")
             report.append("-" * 40)
-            for path, analysis in self.overall_diagnosis['vibration_analysis'].items():
-                report.append(f"File: {analysis['filename']}")
-                report.append(f"  - Bearing Fault Probability: {analysis['bearing_analysis']['bearing_fault_probability']}")
-                if analysis['gear_mesh_analysis']['dominant_mesh_frequency']:
-                    report.append(f"  - Dominant Mesh Frequency: {analysis['gear_mesh_analysis']['dominant_mesh_frequency']:.1f} Hz")
+            report.append("Vibration analysis is in plot viewing mode")
+            report.append("Use the Vibration Analysis submenu to view plots")
             report.append("")
         
         # Recommendations
@@ -528,15 +508,16 @@ def run_rag_analysis():
     """Run the RAG document analysis system"""
     print("🤖 Starting RAG Document Analysis System...")
     print("=" * 50)
-    print("ℹ️ This system uses AI to analyze your 'Gear wear Failure.docx' document")
+    print("ℹ️ This system uses AI to analyze your 'Gear wear Failure.pdf' document")
     print("ℹ️ You can ask questions about the document content")
     print("ℹ️ The system will retrieve relevant information and provide answers")
     print()
     
     try:
-        # Import and run the RAG system
+        # Import and run the RAG system using our new structure
         import subprocess
         import sys
+        from pathlib import Path
         
         print("🚀 Launching RAG system...")
         print("ℹ️ The system will:")
@@ -545,10 +526,15 @@ def run_rag_analysis():
         print("   - Start a web interface for questions")
         print()
         
-        # Run the RAG system
-        result = subprocess.run([sys.executable, "Main_rag.py"], 
-                              capture_output=False, 
-                              text=True)
+        # Run RAG system directly
+        rag_main = Path(__file__).parent / "RAG" / "Main_RAG.py"
+        if rag_main.exists():
+            result = subprocess.run([sys.executable, str(rag_main)], 
+                                  capture_output=False, 
+                                  text=True,
+                                  cwd=str(rag_main.parent))
+        else:
+            raise FileNotFoundError("RAG system files not found")
         
         if result.returncode == 0:
             print("✅ RAG system completed successfully")
@@ -558,12 +544,12 @@ def run_rag_analysis():
     except ImportError as e:
         print(f"❌ Error: Missing dependencies for RAG system: {e}")
         print("ℹ️ Please install required packages: pip install -r requirements.txt")
-    except FileNotFoundError:
-        print("❌ Error: Main_rag.py not found")
-        print("ℹ️ Make sure the RAG system files are properly integrated")
+    except FileNotFoundError as e:
+        print(f"❌ Error: RAG system files not found: {e}")
+        print("ℹ️ Make sure the RAG folder is properly set up")
     except Exception as e:
         print(f"❌ Error running RAG system: {e}")
-        print("ℹ️ Check the RAG system documentation in Yuval.md")
+        print("ℹ️ Check the RAG system documentation")
     
     print("\n🔙 Returning to main menu...")
     input("Press Enter to continue...")
@@ -580,52 +566,53 @@ def main():
         # Display main menu
         print("\n📋 MAIN MENU")
         print("=" * 30)
-        print("1. Picture Analysis")
-        print("2. Vibration Analysis")
-        print("3. Diagnosis")
-        print("4. Write Summary")
-        print("5. View System Information")
-        print("6. RAG Document Analysis")
-        print("7. Exit")
+        print("1. Extract Database")
+        print("2. RAG Document Analysis")
+        print("3. Write Summary")
+        print("4. View System Information")
+        print("5. Exit")
         
         try:
-            choice = input("\nEnter your choice (1-7): ").strip()
+            choice = input("\nEnter your choice (1-5): ").strip()
             
             if choice == "1":
-                print("\n🖼️ PICTURE ANALYSIS")
+                print("\n📊 EXTRACT DATABASE")
                 print("=" * 35)
-                display_picture_analysis_menu(agent)
+                print("1. Picture Analysis")
+                print("2. Vibration Analysis")
+                print("3. Back to Main Menu")
+                
+                sub_choice = input("\nEnter your choice (1-3): ").strip()
+                
+                if sub_choice == "1":
+                    display_picture_analysis_menu(agent)
+                elif sub_choice == "2":
+                    display_vibration_analysis_menu(agent)
+                elif sub_choice == "3":
+                    continue
+                else:
+                    print("❌ Invalid choice. Please enter a number between 1-3.")
                     
             elif choice == "2":
-                print("\n📊 VIBRATION ANALYSIS")
-                print("=" * 35)
-                display_vibration_analysis_menu(agent)
-                    
-            elif choice == "3":
-                print("\n🔍 DIAGNOSIS")
-                print("=" * 35)
-                display_diagnosis_menu(agent)
-                
-            elif choice == "4":
-                print("\n📝 WRITE SUMMARY")
-                print("=" * 35)
-                display_write_summary_menu(agent)
-                
-            elif choice == "5":
-                display_system_information()
-                
-            elif choice == "6":
                 print("\n🤖 RAG DOCUMENT ANALYSIS")
                 print("=" * 35)
                 run_rag_analysis()
                 
-            elif choice == "7":
+            elif choice == "3":
+                print("\n📝 WRITE SUMMARY")
+                print("=" * 35)
+                display_write_summary_menu(agent)
+                
+            elif choice == "4":
+                display_system_information()
+                
+            elif choice == "5":
                 print("\n👋 Thank you for using Gear Wear Diagnosis Agent!")
                 print("Goodbye! 👋")
                 break
                 
             else:
-                print("❌ Invalid choice. Please enter a number between 1-7.")
+                print("❌ Invalid choice. Please enter a number between 1-5.")
                 
         except KeyboardInterrupt:
             print("\n\n⚠️ Operation cancelled by user.")

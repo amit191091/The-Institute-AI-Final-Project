@@ -136,13 +136,48 @@ Thumbs.db
 !*.txt
 
 # Exclude large data directories but keep structure
-# gear_images/database/  # Commented out to include gear images database
-# vibration_data/database/  # Commented out to include vibration data
+# Pictures and Vibrations database/Picture/database/  # Commented out to include gear images database
+# Pictures and Vibrations database/Vibration/database/  # Commented out to include vibration data
 test_output/
 results/
 
 # Keep analysis results
-!gear_images/*.csv
-!gear_images/*.json
-!gear_images/*.png
-!gear_images/Picture Tools/*.csv
+!Pictures and Vibrations database/Picture/*.csv
+!Pictures and Vibrations database/Picture/*.json
+!Pictures and Vibrations database/Picture/*.png
+!Pictures and Vibrations database/Picture/Picture Tools/*.csv
+!Pictures and Vibrations database/Vibration/*.csv
+
+# RAG System
+RAG/.chroma/
+RAG/data/
+RAG/logs/
+RAG/__pycache__/
+RAG/app/__pycache__/
+
+# RAG specific files to ignore
+RAG/**/*.sqlite3
+RAG/**/*.db
+RAG/**/*.log
+RAG/**/*.json
+RAG/**/*.png
+RAG/**/*.md
+RAG/**/*.jpg
+RAG/**/*.jpeg
+RAG/**/*.csv
+RAG/**/*.jsonl
+
+# RAG subdirectory specific patterns
+RAG/data/elements/*.md
+RAG/data/elements/*.txt
+RAG/data/images/*.png
+RAG/data/images/*.jpg
+RAG/data/images/*.jpeg
+RAG/logs/*.jsonl
+RAG/logs/*.log
+RAG/logs/*.json
+
+# Keep RAG source code
+!RAG/*.py
+!RAG/app/*.py
+!RAG/requirements.txt
