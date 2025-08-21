@@ -5,6 +5,81 @@ import os
 from types import SimpleNamespace
 from app.logger import get_logger
 
+
+def _generate_table_summary(text: str) -> str:
+	"""Generate a semantic summary for a table based on its content."""
+	import re
+	lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+	if not lines:
+		return "Data table"
+	
+	# Look for table title or caption
+	for line in lines[:3]:
+		if re.search(r"\btable\s*\d+", line, re.I):
+			# Extract everything after "Table X:"
+			match = re.search(r"\btable\s*\d+[:\.\-\s]*(.+)", line, re.I)
+			if match:
+				return f"Table: {match.group(1).strip()}"
+	
+	# Look for column headers to infer content
+	header_indicators = []
+	for line in lines[:3]:
+		if any(term in line.lower() for term in ["case", "wear", "depth", "sensor", "value", "feature"]):
+			header_indicators.extend(re.findall(r"\b(case|wear|depth|sensor|value|feature|measurement|data)\w*\b", line.lower()))
+	
+	if "wear" in header_indicators:
+		return "Wear measurement data table"
+	elif "sensor" in header_indicators:
+		return "Sensor configuration table"
+	elif "case" in header_indicators:
+		return "Case study data table"
+	elif header_indicators:
+		return f"Data table ({', '.join(set(header_indicators[:3]))})"
+	
+	return "Data table"
+
+
+def _generate_figure_summary(page_text: str, page_num: int, img_index: int) -> str:
+	"""Generate a semantic summary for a figure based on surrounding text."""
+	import re
+	
+	# Look for figure captions near this image
+	fig_patterns = [
+		rf"\bfig\.?\s*{img_index}\b[:\.\-\s]*([^\n\r]+)",
+		rf"\bfigure\s*{img_index}\b[:\.\-\s]*([^\n\r]+)",
+		r"\bfig\.?\s*\d+[:\.\-\s]*([^\n\r]+)",
+		r"\bfigure\s*\d+[:\.\-\s]*([^\n\r]+)"
+	]
+	
+	for pattern in fig_patterns:
+		matches = re.findall(pattern, page_text, re.I)
+		if matches:
+			caption = matches[0].strip()
+			if len(caption) > 10:  # Reasonable caption length
+				return f"Figure {img_index}: {caption[:100]}"
+	
+	# Look for technical context on the page
+	technical_terms = re.findall(r"\b(gear|vibration|wear|failure|damage|spall|fatigue|bearing|shaft|tooth)\w*\b", page_text.lower())
+	if technical_terms:
+		unique_terms = list(set(technical_terms[:3]))
+		return f"Figure {img_index}: Technical diagram ({', '.join(unique_terms)})"
+	
+	return f"Figure {img_index}: Image from page {page_num}"
+
+
+# Placeholder for future LlamaIndex integration
+def _try_llamaindex_extraction(path: Path):
+	"""Future: Use LlamaIndex/LlamaParse for enhanced PDF parsing.
+	This function is a placeholder for when we want to integrate LlamaIndex
+	as an alternative to the current extraction pipeline.
+	"""
+	# TODO: Implement LlamaIndex integration
+	# - Check for LLAMA_CLOUD_API_KEY
+	# - Use LlamaParse for better table/figure detection
+	# - Convert results to our element format
+	# - Fall back to current extractors if unavailable
+	return []
+
 try:
 	from unstructured.partition.pdf import partition_pdf
 	from unstructured.partition.docx import partition_docx
@@ -264,6 +339,7 @@ def load_many(paths: List[Path]):
 def _synthesize_tables_from_text(els, path: Path):
 	"""Heuristically detect table-like blocks in text elements and produce Table elements.
 	Useful when Tabula/hi_res are unavailable or PDF is mostly text with delimited rows.
+	Now with improved filtering to avoid page headers and simple text.
 	"""
 	try:
 		import re as _re
@@ -278,23 +354,55 @@ def _synthesize_tables_from_text(els, path: Path):
 		text = (getattr(e, "text", "") or "").strip()
 		if not text:
 			continue
-		# Heuristics: presence of row delimiters, multiple consecutive spaces forming columns, or a 'Table X' header
-		lines = [ln for ln in text.splitlines() if ln.strip()]
-		if not lines or len(lines) < 2:
+		
+		# Skip obvious page headers and simple text
+		lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+		if not lines or len(lines) < 3:  # Need at least 3 lines for a real table
 			continue
+			
+		# Skip page headers like "5 | P a g e"
+		if len(lines) <= 2 and any(_re.match(r"^\d+\s*\|\s*P\s+a\s+g\s+e\s*$", ln, _re.I) for ln in lines):
+			continue
+			
+		# Skip if most content is just page numbers or simple headers
+		non_header_lines = [ln for ln in lines if not _re.match(r"^\d+\s*\|\s*P\s+a\s+g\s+e", ln, _re.I)]
+		if len(non_header_lines) < 2:
+			continue
+			
 		head = lines[0].lower()
-		looks_like_header = _re.search(r"\btable\s*\d+\b", head)
-		sep_counts = sum(("\t" in ln) + ("," in ln) + ("|" in ln) for ln in lines[:8])
-		wide_cols = sum(1 for ln in lines[:8] if _re.search(r"\S\s{2,}\S", ln))
-		if looks_like_header or sep_counts >= 2 or wide_cols >= 3:
+		# More specific table header detection
+		looks_like_header = _re.search(r"\btable\s*\d+\b", head) and ":" in text
+		
+		# Count meaningful separators (ignore single | in page headers)
+		sep_counts = sum(("\t" in ln) + ("," in ln) + (ln.count("|") >= 3) for ln in lines[:8])
+		wide_cols = sum(1 for ln in lines[:8] if _re.search(r"\S\s{3,}\S.*\S\s{3,}\S", ln))  # At least 2 wide columns
+		
+		# More data-like patterns (numbers, units, technical terms)
+		has_data_patterns = any(_re.search(r"\b\d+\.?\d*\s*(mm|μm|MPa|Hz|°C|N|kN|rpm|%)\b", ln, _re.I) for ln in lines[:5])
+		has_multiple_columns = any(ln.count("|") >= 3 or ln.count("\t") >= 2 for ln in lines)
+		
+		# Only synthesize if we have strong evidence of tabular data
+		if (looks_like_header or 
+		    (sep_counts >= 3 and has_multiple_columns) or 
+		    (wide_cols >= 2 and has_data_patterns) or
+		    (has_data_patterns and has_multiple_columns and len(lines) >= 4)):
+			
 			count += 1
 			md = getattr(e, "metadata", None)
 			page_no = getattr(md, "page_number", None) if md else None
+			
+			# Generate a better summary for the table
+			summary = _generate_table_summary(text)
+			
 			out.append(
 				SimpleNamespace(
 					text=text,
 					category="Table",
-					metadata=SimpleNamespace(page_number=page_no, id=f"synth-{path.name}-{count}"),
+					metadata=SimpleNamespace(
+						page_number=page_no, 
+						id=f"synth-{path.name}-{count}",
+						table_summary=summary
+					),
 				)
 			)
 	return out
@@ -433,7 +541,7 @@ def _try_camelot_tables(path: Path):
 
 def _try_extract_images(path: Path):
 	"""Extract images from PDF pages as Figure elements using PyMuPDF (fitz).
-	Saves images to logs/images and creates placeholder Figure elements.
+	Saves images to data/images and creates proper Figure elements with OCR summaries.
 	"""
 	try:
 		import fitz  # PyMuPDF
@@ -459,19 +567,27 @@ def _try_extract_images(path: Path):
 					pix.save(fpath)
 				finally:
 					pix = None  # release
+				
+				# Try to get text around the image for context
+				page_text = page.get_text()
+				figure_summary = _generate_figure_summary(page_text, pno + 1, img_index)
+				
 				elements.append(
 					SimpleNamespace(
-						text=f"[FIGURE] Extracted image saved at {fpath}",
+						text=f"[FIGURE] {figure_summary}\nImage file: {fpath}",
 						category="Figure",
-						metadata=SimpleNamespace(page_number=pno + 1, id=f"img-{path.name}-{pno+1}-{img_index}", image_path=str(fpath)),
+						metadata=SimpleNamespace(
+							page_number=pno + 1, 
+							id=f"img-{path.name}-{pno+1}-{img_index}", 
+							image_path=str(fpath),
+							figure_summary=figure_summary
+						),
 					)
 				)
 	except Exception as e:
 		get_logger().warning("Image extraction failed (%s)", e.__class__.__name__)
 		return []
-		return elements
-
-
+	return elements
 	def _export_tables_to_files(elements, path: Path) -> None:
 		"""Persist detected table elements to data/elements as Markdown and CSV files.
 		Attach file paths back into element.metadata as table_md_path/table_csv_path when possible.

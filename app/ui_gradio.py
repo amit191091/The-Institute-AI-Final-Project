@@ -47,6 +47,36 @@ def _fmt_docs(docs, max_items=8):
 
 def build_ui(docs, hybrid, llm, debug=None):
 	log = get_logger()
+	# Precompute unique sections for filters
+	section_values = sorted({(d.metadata or {}).get("section") or "" for d in docs})
+	section_values = [s for s in section_values if s]
+
+	def _rows_for_df(filter_section: str | None, q: str | None, limit: int = 300):
+		"""Build rows for the DB Explorer table with light filtering."""
+		fs = (filter_section or "").strip()
+		qq = (q or "").strip().lower()
+		rows = []
+		for d in docs:
+			md = d.metadata or {}
+			if fs and md.get("section") != fs:
+				continue
+			txt = d.page_content or ""
+			if qq and qq not in (txt.lower() + " " + " ".join(map(str, md.values())).lower()):
+				continue
+			rows.append([
+				md.get("file_name"),
+				md.get("page"),
+				md.get("section"),
+				md.get("anchor"),
+				0 if not txt else len(txt.split()),
+				md.get("table_md_path") or "",
+				md.get("table_csv_path") or "",
+				md.get("image_path") or "",
+				(txt[:200] + ("…" if len(txt) > 200 else "")),
+			])
+			if len(rows) >= limit:
+				break
+		return rows
 
 	def on_ask(q, ground_truth, debug_toggle):
 		qa = query_analyzer(q)
@@ -158,6 +188,18 @@ def build_ui(docs, hybrid, llm, debug=None):
 				gr.Markdown("### Top indexed docs (sample)")
 				sample_docs = [d for d in docs[:12]]
 				gr.Textbox(value=_fmt_docs(sample_docs, max_items=12), label="Sample Contexts", lines=15)
+
+			with gr.Tab("DB Explorer"):
+				gr.Markdown("### Browse indexed documents (filters below)")
+				sec_dd = gr.Dropdown(choices=section_values, label="Section filter", value=None, allow_custom_value=True)
+				qbox = gr.Textbox(label="Contains (text or metadata)")
+				refresh = gr.Button("Refresh")
+				df = gr.Dataframe(headers=["file", "page", "section", "anchor", "words", "table_md", "table_csv", "image_path", "preview"], wrap=True)
+				def _on_refresh(fs, qq):
+					return gr.update(value=_rows_for_df(fs, qq))
+				refresh.click(_on_refresh, inputs=[sec_dd, qbox], outputs=[df])
+				# initial load
+				df.value = _rows_for_df(None, None)
 
 		return demo
 
