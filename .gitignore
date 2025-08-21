@@ -150,12 +150,10 @@ results/
 
 # RAG System
 RAG/.chroma/
-RAG/data/
-RAG/logs/
 RAG/__pycache__/
 RAG/app/__pycache__/
 
-# RAG specific files to ignore
+# RAG specific files to ignore (but allow folder structure)
 RAG/**/*.sqlite3
 RAG/**/*.db
 RAG/**/*.log
@@ -167,17 +165,12 @@ RAG/**/*.jpeg
 RAG/**/*.csv
 RAG/**/*.jsonl
 
-# RAG subdirectory specific patterns
-RAG/data/elements/*.md
-RAG/data/elements/*.txt
-RAG/data/images/*.png
-RAG/data/images/*.jpg
-RAG/data/images/*.jpeg
-RAG/logs/*.jsonl
-RAG/logs/*.log
-RAG/logs/*.json
-
-# Keep RAG source code
+# Keep RAG source code and folder structure
 !RAG/*.py
 !RAG/app/*.py
 !RAG/requirements.txt
+!RAG/data/
+!RAG/data/elements/
+!RAG/data/images/
+!RAG/logs/
+!RAG/**/.gitkeep

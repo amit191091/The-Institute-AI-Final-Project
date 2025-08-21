@@ -1,0 +1,5 @@
+# This file ensures the data folder is tracked in git
+# Users should place their documents (PDF, DOCX, TXT) in this folder
+# The RAG system will process these documents and create:
+# - elements/ folder with extracted text and tables
+# - images/ folder with extracted images
