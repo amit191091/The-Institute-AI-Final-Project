@@ -145,3 +145,4 @@ results/
 !gear_images/*.csv
 !gear_images/*.json
 !gear_images/*.png
+!gear_images/Picture Tools/*.csv
