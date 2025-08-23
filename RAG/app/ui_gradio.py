@@ -3,9 +3,22 @@ import json
 from pathlib import Path
 
 from app.agents import answer_needle, answer_summary, answer_table, route_question
+from app.hierarchical import _ask_table_hierarchical
 from app.retrieve import apply_filters, query_analyzer, rerank_candidates
 from app.eval_ragas import run_eval, pretty_metrics
 from app.logger import get_logger
+from app.auto_evaluator import AutoEvaluator
+from app.enhanced_question_analyzer import EnhancedQuestionAnalyzer
+from app.evaluation_wrapper import (
+    EVAL_AVAILABLE, 
+    test_google_api, 
+    test_ragas, 
+    generate_ground_truth, 
+    evaluate_rag
+)
+
+# Initialize logger globally
+log = get_logger()
 
 
 def _render_router_info(route: str, top_docs):
@@ -46,7 +59,6 @@ def _fmt_docs(docs, max_items=8):
 
 
 def build_ui(docs, hybrid, llm, debug=None):
-	log = get_logger()
 	# Precompute unique sections for filters
 	section_values = sorted({(d.metadata or {}).get("section") or "" for d in docs})
 	section_values = [s for s in section_values if s]
@@ -81,59 +93,82 @@ def build_ui(docs, hybrid, llm, debug=None):
 	def on_ask(q, ground_truth, debug_toggle):
 		qa = query_analyzer(q)
 		cands = hybrid.invoke(q)
-		dense_docs = []
-		sparse_docs = []
-		if debug and debug.get("dense") is not None:
-			try:
-				dense_docs = debug["dense"].invoke(q)
-			except Exception:
-				pass
-		if debug and debug.get("sparse") is not None:
-			try:
-				sparse_docs = debug["sparse"].invoke(q)
-			except Exception:
-				pass
 		filtered = apply_filters(cands, qa["filters"])
-		# section fallback if nothing after filtering
-		sec = qa["filters"].get("section") if qa and qa.get("filters") else None
-		if sec and not filtered:
-			filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
-		top_docs = rerank_candidates(q, filtered, top_n=8)
+		top_docs = rerank_candidates(q, filtered)[:8]
 		r = route_question(q)
-		router_info = _render_router_info(r, top_docs)
-		trace = f"Keywords: {qa['keywords']} | Filters: {qa['filters']}"
-		debug_block = ""
-		if debug_toggle:
-			debug_block = (
-				"\n\n=== DEBUG ===\n"
-				+ f"Filters used: {qa['filters']}\n"
-				+ "Dense (k≈10):\n" + _fmt_docs(dense_docs) + "\n\n"
-				+ "Sparse (k≈10):\n" + _fmt_docs(sparse_docs) + "\n\n"
-				+ "Hybrid candidates (pre-filter):\n" + _fmt_docs(cands)
-			)
+		
+		# Enhanced evaluation for questions without ground truth
+		metrics_txt = ""
+		if not ground_truth.strip():
+			try:
+				# Use enhanced evaluation system
+				auto_evaluator = AutoEvaluator(llm)
+				question_analyzer = EnhancedQuestionAnalyzer()
+				
+				# Analyze question type
+				question_type = question_analyzer.analyze_question(q)
+				
+				# Generate synthetic ground truth
+				synthetic_gt = auto_evaluator.generate_synthetic_ground_truth(q, top_docs)
+				
+				# Evaluate with synthetic ground truth
+				eval_result = auto_evaluator.evaluate_answer(q, top_docs, synthetic_gt)
+				
+				metrics_txt = f"Enhanced Evaluation (Question Type: {question_type})\n"
+				metrics_txt += f"Synthetic Ground Truth: {synthetic_gt}\n\n"
+				metrics_txt += f"Evaluation Metrics:\n"
+				for metric, score in eval_result.items():
+					metrics_txt += f"{metric}: {score:.3f}\n"
+				
+				# Calculate overall score
+				overall_score = sum(eval_result.values()) / len(eval_result)
+				metrics_txt += f"\nOverall Score: {overall_score:.3f}"
+				
+			except Exception as e:
+				metrics_txt = f"(enhanced evaluation failed: {e})"
+		else:
+			# Standard evaluation with provided ground truth
+			try:
+				dataset = {
+					"question": [q],
+					"answer": [""],  # Will be filled after getting answer
+					"ground_truth": [ground_truth],
+					"contexts": [[d.page_content for d in top_docs]]
+				}
+				metrics = run_eval(dataset)
+				metrics_txt = pretty_metrics(metrics)
+			except Exception as e:
+				metrics_txt = f"(evaluation failed: {e})"
+		
 		if r == "summary":
 			ans = answer_summary(llm, top_docs, q)
 		elif r == "table":
-			table_ctx = _extract_table_figure_context(top_docs)
-			ans = answer_table(llm, top_docs, q)
-			ans = f"{router_info}\n\nTable/Figure context preview:\n{table_ctx}\n\n---\n\n{ans}\n\n(trace: {trace}){debug_block}"
+			# Use hierarchical search for table questions
+			ans = _ask_table_hierarchical(docs, hybrid, llm, q, qa)
 		else:
 			ans = answer_needle(llm, top_docs, q)
-		out = f"{router_info}\n\n{ans}\n\n(trace: {trace}){debug_block}"
-		metrics_txt = ""
-		if ground_truth and ground_truth.strip():
+		
+		# Update dataset with actual answer for evaluation
+		if ground_truth.strip():
 			try:
 				dataset = {
 					"question": [q],
 					"answer": [ans],
-					"contexts": [[d.page_content for d in top_docs]],
 					"ground_truth": [ground_truth],
-					"ground_truths": [[ground_truth]],
+					"contexts": [[d.page_content for d in top_docs]]
 				}
-				m = run_eval(dataset)
-				metrics_txt = pretty_metrics(m)
+				metrics = run_eval(dataset)
+				metrics_txt = pretty_metrics(metrics)
 			except Exception as e:
-				metrics_txt = f"(metrics failed: {e})"
+				metrics_txt = f"(evaluation failed: {e})"
+		
+		router_info = _render_router_info(r, top_docs)
+		out = f"{router_info}\n\n{ans}\n\n(trace: {qa})"
+		
+		if debug_toggle:
+			debug_block = f"\n\n--- DEBUG ---\nDense: {len(dense_docs)} docs\nSparse: {len(sparse_docs)} docs\nFiltered: {len(filtered)} docs\nTop: {len(top_docs)} docs"
+			out += debug_block
+		
 		# Logging + audit
 		log.info("Q: %s", q)
 		log.info("Answer: %s", out)
@@ -161,48 +196,181 @@ def build_ui(docs, hybrid, llm, debug=None):
 			pass
 		return out, metrics_txt
 
-	# Build a sleeker Blocks UI with tabs
-	with gr.Blocks(title="Hybrid RAG – Failure Reports") as demo:
-		gr.Markdown("## Hybrid RAG – Failure Reports\nRouter + Summary / Needle / Table QA")
-		with gr.Tabs():
-			with gr.Tab("Ask"):
-				q = gr.Textbox(label="Question", placeholder="Ask about figures, tables, procedures, conclusions…")
-				gt = gr.Textbox(label="Ground truth (optional)")
-				dbg = gr.Checkbox(label="Show retrieval debug", value=False)
-				btn = gr.Button("Ask", variant="primary")
-				# Render answer as Markdown so tables display nicely
-				ans = gr.Markdown()
-				metrics = gr.Textbox(label="Metrics", lines=3)
-				btn.click(on_ask, inputs=[q, gt, dbg], outputs=[ans, metrics])
+	def on_shutdown():
+		"""Gracefully shutdown the server."""
+		log.info("Shutdown requested by user")
+		try:
+			# Close any open files or connections
+			import os
+			import signal
+			
+			# Send SIGTERM to current process
+			os.kill(os.getpid(), signal.SIGTERM)
+			return "🔄 Server shutdown initiated..."
+		except Exception as e:
+			log.error(f"Error during shutdown: {e}")
+			return f"❌ Shutdown error: {e}"
 
-			with gr.Tab("Figures"):
-				# Build a gallery of extracted figures
-				fig_paths = [d.metadata.get("image_path") for d in docs if d.metadata.get("section") == "Figure" and d.metadata.get("image_path")]
-				fig_paths = [str(Path(p)) for p in fig_paths if p]
-				if fig_paths:
-					gr.Gallery(value=fig_paths, label="Extracted Figures", allow_preview=True, columns=4, height=400)
+	# Evaluation functions
+	def on_test_google_api():
+		return test_google_api()
+
+	def on_test_ragas():
+		return test_ragas()
+
+	def on_generate_ground_truth(num_questions: int):
+		# Create a simple pipeline wrapper for evaluation
+		class PipelineWrapper:
+			def __init__(self, docs, hybrid, llm):
+				self.docs = docs
+				self.hybrid = hybrid
+				self.llm = llm
+			
+			def query(self, question: str):
+				qa = query_analyzer(question)
+				cands = self.hybrid.invoke(question)
+				filtered = apply_filters(cands, qa["filters"])
+				top_docs = rerank_candidates(question, filtered)[:5]
+				
+				route = route_question(question)
+				if route == "summary":
+					ans = answer_summary(self.llm, top_docs, question)
+				elif route == "table":
+					ans = answer_table(self.llm, top_docs, question)
 				else:
-					gr.Markdown("(No extracted figures. Enable RAG_EXTRACT_IMAGES=true and rerun.)")
+					ans = answer_needle(self.llm, top_docs, question)
+				
+				return {
+					"answer": ans,
+					"contexts": top_docs
+				}
+		
+		pipeline = PipelineWrapper(docs, hybrid, llm)
+		return generate_ground_truth(pipeline, num_questions)
 
-			with gr.Tab("Inspect"):
-				gr.Markdown("### Top indexed docs (sample)")
-				sample_docs = [d for d in docs[:12]]
-				gr.Textbox(value=_fmt_docs(sample_docs, max_items=12), label="Sample Contexts", lines=15)
+	def on_evaluate_rag():
+		# Create pipeline wrapper
+		class PipelineWrapper:
+			def __init__(self, docs, hybrid, llm):
+				self.docs = docs
+				self.hybrid = hybrid
+				self.llm = llm
+			
+			def query(self, question: str):
+				qa = query_analyzer(question)
+				cands = self.hybrid.invoke(question)
+				filtered = apply_filters(cands, qa["filters"])
+				top_docs = rerank_candidates(question, filtered)[:5]
+				
+				route = route_question(question)
+				if route == "summary":
+					ans = answer_summary(self.llm, top_docs, question)
+				elif route == "table":
+					ans = answer_table(self.llm, top_docs, question)
+				else:
+					ans = answer_needle(self.llm, top_docs, question)
+				
+				return {
+					"answer": ans,
+					"contexts": top_docs
+				}
+		
+		pipeline = PipelineWrapper(docs, hybrid, llm)
+		return evaluate_rag(pipeline)
 
-			with gr.Tab("DB Explorer"):
-				gr.Markdown("### Browse indexed documents (filters below)")
-				sec_dd = gr.Dropdown(choices=section_values, label="Section filter", value=None, allow_custom_value=True)
-				qbox = gr.Textbox(label="Contains (text or metadata)")
-				refresh = gr.Button("Refresh")
-				df = gr.Dataframe(headers=["file", "page", "section", "anchor", "words", "table_md", "table_csv", "image_path", "preview"], wrap=True)
-				def _on_refresh(fs, qq):
-					return gr.update(value=_rows_for_df(fs, qq))
-				refresh.click(_on_refresh, inputs=[sec_dd, qbox], outputs=[df])
-				# initial load
-				df.value = _rows_for_df(None, None)
-
-		return demo
-
-	# Fallback just in case – should not reach here
+	# Build the Gradio interface
+	with gr.Blocks(title="RAG System", theme=gr.themes.Soft()) as demo:
+		gr.Markdown("# 🤖 RAG System - Gear Failure Analysis")
+		gr.Markdown("Ask questions about gear failure analysis, transmission ratios, wear measurements, and more.")
+		
+		with gr.Tab("🔍 Query"):
+			with gr.Row():
+				with gr.Column(scale=3):
+					question = gr.Textbox(
+						label="Question",
+						placeholder="e.g., What is the transmission ratio? When did the failure occur?",
+						lines=3
+					)
+					ground_truth = gr.Textbox(
+						label="Ground Truth (Optional)",
+						placeholder="Expected answer for evaluation...",
+						lines=2
+					)
+					debug_toggle = gr.Checkbox(label="Show Debug Info", value=False)
+					
+					with gr.Row():
+						ask_btn = gr.Button("🔍 Ask", variant="primary")
+						clear_btn = gr.Button("🗑️ Clear")
+						shutdown_btn = gr.Button("🛑 Shutdown Server", variant="stop")
+					
+					answer = gr.Textbox(label="Answer", lines=10, interactive=False)
+					metrics = gr.Textbox(label="Evaluation Metrics", lines=8, interactive=False)
+				
+				with gr.Column(scale=2):
+					gr.Markdown("### 📊 System Info")
+					gr.Markdown(f"**Total Documents:** {len(docs)}")
+					gr.Markdown(f"**Sections:** {', '.join(section_values)}")
+					
+					if debug:
+						gr.Markdown("### 🔧 Debug Tools")
+						gr.Markdown("Debug information available")
+		
+		with gr.Tab("📋 Evaluation"):
+			gr.Markdown("### RAGAS Evaluation Tools")
+			with gr.Row():
+				test_google_btn = gr.Button("Test Google API")
+				test_ragas_btn = gr.Button("Test RAGAS")
+			with gr.Row():
+				generate_gt_btn = gr.Button("Generate Ground Truth")
+				num_questions = gr.Slider(minimum=5, maximum=50, value=10, step=5, label="Number of Questions")
+			evaluate_btn = gr.Button("Evaluate RAG System", variant="primary")
+			eval_output = gr.Textbox(label="Evaluation Results", lines=15, interactive=False)
+		
+		with gr.Tab("🗄️ Database Explorer"):
+			gr.Markdown("### Explore the loaded documents")
+			with gr.Row():
+				filter_section = gr.Dropdown(choices=[""] + section_values, label="Filter by Section", value="")
+				search_query = gr.Textbox(label="Search Query", placeholder="Search in documents...")
+			explore_btn = gr.Button("🔍 Explore")
+			explore_df = gr.Dataframe(
+				headers=["File", "Page", "Section", "Anchor", "Words", "MD Path", "CSV Path", "Image Path", "Preview"],
+				label="Document Explorer"
+			)
+		
+		# Event handlers
+		ask_btn.click(
+			on_ask,
+			inputs=[question, ground_truth, debug_toggle],
+			outputs=[answer, metrics]
+		)
+		
+		clear_btn.click(
+			lambda: ("", "", False, "", ""),
+			outputs=[question, ground_truth, debug_toggle, answer, metrics]
+		)
+		
+		shutdown_btn.click(
+			on_shutdown,
+			outputs=[answer]
+		)
+		
+		explore_btn.click(
+			_rows_for_df,
+			inputs=[filter_section, search_query],
+			outputs=[explore_df]
+		)
+		
+		# Evaluation handlers
+		test_google_btn.click(on_test_google_api, outputs=[eval_output])
+		test_ragas_btn.click(on_test_ragas, outputs=[eval_output])
+		generate_gt_btn.click(on_generate_ground_truth, inputs=[num_questions], outputs=[eval_output])
+		evaluate_btn.click(on_evaluate_rag, outputs=[eval_output])
+		
+		# Keyboard shortcuts
+		question.submit(
+			on_ask,
+			inputs=[question, ground_truth, debug_toggle],
+			outputs=[answer, metrics]
+		)
+	
 	return demo
-

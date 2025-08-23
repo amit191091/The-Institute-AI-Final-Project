@@ -25,6 +25,19 @@ def simple_summarize(text: str, ratio: float = 0.1, min_lines: int = 1) -> str:
 	return "\n".join(lines[: max(1, n)])
 
 
+def normalize_engineering_tokens(text: str) -> str:
+	"""Normalize engineering tokens for better matching."""
+	import re
+	t = text
+	# Add spaced/alt forms for slashes and colons, e.g. "18/35" -> "18 / 35 ; 18:35 ; 18 to 35"
+	t = re.sub(r"(\d+)\s*/\s*(\d+)", r"\1/\2 \1 / \2 \1:\2 \1 to \2", t)
+	# Common oil viscosity patterns: "15W/40" -> "15W-40 15W / 40"
+	t = re.sub(r"(\d+\s*W)\s*/\s*(\d+)", r"\1/\2 \1-\2 \1 / \2", t, flags=re.I)
+	# Add GMF synonym
+	t = re.sub(r"\bgear mesh frequency\b", "gear mesh frequency (GMF)", t, flags=re.I)
+	return t
+
+
 def naive_markdown_table(text: str) -> str:
 	"""Heuristic conversion of delimited text to Markdown table."""
 	lines = [ln.strip() for ln in text.splitlines() if ln.strip()]

@@ -3,6 +3,11 @@ import re
 
 SECTION_ENUM = {"Summary", "Timeline", "Table", "Figure", "Analysis", "Conclusion", "Text"}
 
+# Constants
+DEFAULT_TOP_KEYWORDS = 10
+MAX_CHUNK_SUMMARY_LENGTH = 200
+MAX_TECHNICAL_TERMS = 3
+
 
 def classify_section_type(kind: str, text: str) -> str:
 	k = (kind or "").lower()
@@ -27,7 +32,7 @@ _STOP = set(
 )
 
 
-def extract_keywords(text: str, top_n: int = 10) -> List[str]:
+def extract_keywords(text: str, top_n: int = DEFAULT_TOP_KEYWORDS) -> List[str]:
 	words = re.findall(r"[A-Za-z0-9°%]+", text)
 	words = [w for w in words if w.lower() not in _STOP]
 	return words[:top_n]
@@ -90,7 +95,7 @@ def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | No
 		"case_id": case_id,
 		"keywords": chunk.get("keywords", []),
 		"critical_entities": ents,
-		"chunk_summary": (chunk["content"].splitlines() or [""])[0][:200],
+		"chunk_summary": (chunk["content"].splitlines() or [""])[0][:MAX_CHUNK_SUMMARY_LENGTH],
 		"incident_type": inc["IncidentType"],
 		"incident_date": inc["IncidentDate"],
 		"amount_range": inc["AmountRange"],
