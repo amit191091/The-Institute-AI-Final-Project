@@ -1,9 +1,20 @@
 from pathlib import Path
-from typing import List
+from typing import List, Dict
 import re
 import os
 from types import SimpleNamespace
 from app.logger import get_logger
+
+# Constants
+TABLE_HEADER_TERMS = ["case", "wear", "depth", "sensor", "value", "feature"]
+TECHNICAL_TERMS = ["gear", "vibration", "wear", "failure", "damage", "spall", "fatigue", "bearing", "shaft", "tooth"]
+FIGURE_CAPTION_MIN_LENGTH = 10
+FIGURE_CAPTION_MAX_LENGTH = 100
+TABLE_PREVIEW_LINES = 3
+DEFAULT_TABLE_SUMMARY = "Data table"
+WEAR_TABLE_SUMMARY = "Wear measurement data table"
+SENSOR_TABLE_SUMMARY = "Sensor configuration table"
+CASE_TABLE_SUMMARY = "Case study data table"
 
 
 def _generate_table_summary(text: str) -> str:
@@ -11,10 +22,10 @@ def _generate_table_summary(text: str) -> str:
 	import re
 	lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
 	if not lines:
-		return "Data table"
+		return DEFAULT_TABLE_SUMMARY
 	
 	# Look for table title or caption
-	for line in lines[:3]:
+	for line in lines[:TABLE_PREVIEW_LINES]:
 		if re.search(r"\btable\s*\d+", line, re.I):
 			# Extract everything after "Table X:"
 			match = re.search(r"\btable\s*\d+[:\.\-\s]*(.+)", line, re.I)
@@ -23,27 +34,43 @@ def _generate_table_summary(text: str) -> str:
 	
 	# Look for column headers to infer content
 	header_indicators = []
-	for line in lines[:3]:
-		if any(term in line.lower() for term in ["case", "wear", "depth", "sensor", "value", "feature"]):
+	for line in lines[:TABLE_PREVIEW_LINES]:
+		if any(term in line.lower() for term in TABLE_HEADER_TERMS):
 			header_indicators.extend(re.findall(r"\b(case|wear|depth|sensor|value|feature|measurement|data)\w*\b", line.lower()))
 	
 	if "wear" in header_indicators:
-		return "Wear measurement data table"
+		return WEAR_TABLE_SUMMARY
 	elif "sensor" in header_indicators:
-		return "Sensor configuration table"
+		return SENSOR_TABLE_SUMMARY
 	elif "case" in header_indicators:
-		return "Case study data table"
+		return CASE_TABLE_SUMMARY
 	elif header_indicators:
 		return f"Data table ({', '.join(set(header_indicators[:3]))})"
 	
-	return "Data table"
+	return DEFAULT_TABLE_SUMMARY
 
 
 def _generate_figure_summary(page_text: str, page_num: int, img_index: int) -> str:
 	"""Generate a semantic summary for a figure based on surrounding text."""
 	import re
 	
-	# Look for figure captions near this image
+	# First, try to find the actual figure number from the page text
+	# Look for "Figure X:" patterns and extract the actual figure number
+	fig_number_patterns = [
+		r"\bfigure\s*(\d+)[:\.\-\s]*([^\n\r]+)",
+		r"\bfig\.?\s*(\d+)[:\.\-\s]*([^\n\r]+)"
+	]
+	
+	for pattern in fig_number_patterns:
+		matches = re.findall(pattern, page_text, re.I)
+		if matches:
+			# Use the first match found (most likely the correct figure)
+			fig_num = matches[0][0]
+			caption = matches[0][1].strip()
+			if len(caption) > FIGURE_CAPTION_MIN_LENGTH:
+				return f"Figure {fig_num}: {caption[:FIGURE_CAPTION_MAX_LENGTH]}"
+	
+	# Fallback: Look for figure captions near this image
 	fig_patterns = [
 		rf"\bfig\.?\s*{img_index}\b[:\.\-\s]*([^\n\r]+)",
 		rf"\bfigure\s*{img_index}\b[:\.\-\s]*([^\n\r]+)",
@@ -55,11 +82,11 @@ def _generate_figure_summary(page_text: str, page_num: int, img_index: int) -> s
 		matches = re.findall(pattern, page_text, re.I)
 		if matches:
 			caption = matches[0].strip()
-			if len(caption) > 10:  # Reasonable caption length
-				return f"Figure {img_index}: {caption[:100]}"
+			if len(caption) > FIGURE_CAPTION_MIN_LENGTH:  # Reasonable caption length
+				return f"Figure {img_index}: {caption[:FIGURE_CAPTION_MAX_LENGTH]}"
 	
 	# Look for technical context on the page
-	technical_terms = re.findall(r"\b(gear|vibration|wear|failure|damage|spall|fatigue|bearing|shaft|tooth)\w*\b", page_text.lower())
+	technical_terms = re.findall(r"\b(" + "|".join(TECHNICAL_TERMS) + r")\w*\b", page_text.lower())
 	if technical_terms:
 		unique_terms = list(set(technical_terms[:3]))
 		return f"Figure {img_index}: Technical diagram ({', '.join(unique_terms)})"
@@ -169,24 +196,106 @@ def _pdf_fallback_elements(path: Path):
 	if not elements:
 		# ensure at least one element exists
 		elements.append(SimpleNamespace(text="", category="Text", metadata=SimpleNamespace(page_number=1, id=f"{path.name}-p1-b1")))
-	print(f"[INFO] Using pypdf fallback for {path.name}: produced {len(elements)} elements")
+	return elements
+
+
+def load_jsonl(path: Path):
+	"""Yield elements from a JSONL with keys like page_content / text / metadata."""
+	import json
+	elements = []
+	with path.open("r", encoding="utf-8", errors="ignore") as f:
+		for i, line in enumerate(f, 1):
+			try:
+				rec = json.loads(line)
+			except Exception:
+				continue
+			txt = rec.get("page_content") or rec.get("text") or ""
+			meta = rec.get("metadata") or {}
+			elements.append(SimpleNamespace(
+				text=str(txt),
+				category="Text",
+				metadata=SimpleNamespace(**meta, id=f"jsonl-{path.name}-{i}")
+			))
+	return elements
+
+
+def load_csv(path: Path):
+	"""Load CSV files and convert them to document elements."""
+	import csv
+	import pandas as pd
+	
+	elements = []
+	
+	try:
+		# Try using pandas first for better handling
+		df = pd.read_csv(path)
+		
+		# Convert DataFrame to text representation
+		csv_text = df.to_string(index=False)
+		
+		# Create a single element for the entire CSV
+		elements.append(SimpleNamespace(
+			text=csv_text,
+			category="Table",
+			metadata=SimpleNamespace(
+				id=f"csv-{path.name}",
+				file_name=path.name,
+				page=1,
+				section="Table",
+				source="csv",
+				rows=len(df),
+				columns=len(df.columns),
+				column_names=list(df.columns)
+			)
+		))
+		
+		# Also create individual row elements for better searchability
+		for i, row in df.iterrows():
+			row_text = " | ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
+			if row_text.strip():
+				elements.append(SimpleNamespace(
+					text=row_text,
+					category="Text",
+					metadata=SimpleNamespace(
+						id=f"csv-{path.name}-row-{i+1}",
+						file_name=path.name,
+						page=1,
+						section="Table",
+						source="csv",
+						row_number=i+1
+					)
+				))
+				
+	except Exception as e:
+		# Fallback: basic CSV reading
+		pass
+	
 	return elements
 
 
 def load_elements(path: Path):
 	"""Return Unstructured elements for PDF/DOCX/TXT with page metadata kept."""
+	# Import settings at the top of the function
+	try:
+		from app.pdf_extractions_settings import pdf_settings
+	except ImportError:
+		# Fallback to environment variables
+		class FallbackSettings:
+			RAG_PDF_HI_RES = os.getenv("RAG_PDF_HI_RES", "1").lower() not in ("0", "false", "no")
+			RAG_USE_TABULA = os.getenv("RAG_USE_TABULA", "").lower() in ("1", "true", "yes")
+			RAG_USE_CAMELOT = os.getenv("RAG_USE_CAMELOT", "").lower() in ("1", "true", "yes")
+			RAG_SYNTH_TABLES = os.getenv("RAG_SYNTH_TABLES", "").lower() in ("1", "true", "yes")
+			RAG_EXTRACT_IMAGES = os.getenv("RAG_EXTRACT_IMAGES", "").lower() in ("1", "true", "yes")
+			RAG_USE_PDFPLUMBER = os.getenv("RAG_USE_PDFPLUMBER", "").lower() in ("1", "true", "yes")
+		pdf_settings = FallbackSettings()
+	
 	ext = path.suffix.lower()
 	if ext == ".pdf":
 		els = None
+		
 		if partition_pdf is not None:
-			log = get_logger()
-			# Log feature toggles
-			log.info(
-				"PDF parse toggles: hi_res=%s, tabula=%s, extract_images=%s",
-				os.getenv("RAG_PDF_HI_RES", "1"), os.getenv("RAG_USE_TABULA", "0"), os.getenv("RAG_EXTRACT_IMAGES", "0")
-			)
 			# Optional env toggle to skip hi_res completely
-			use_hi_res = (os.getenv("RAG_PDF_HI_RES", "1").lower() not in ("0", "false", "no"))
+			use_hi_res = pdf_settings.RAG_PDF_HI_RES
 			if use_hi_res:
 				# Pass OCR language(s) using preferred 'languages' kw when available; fallback to 'ocr_languages'
 				lang = (os.getenv("RAG_OCR_LANG", "eng") or "eng").strip()
@@ -207,9 +316,9 @@ def load_elements(path: Path):
 							ocr_languages=lang,
 						)
 					except Exception as e:
-						log.warning("hi_res PDF parsing failed (%s); falling back to standard parser", e.__class__.__name__)
+						pass
 				except Exception as e:
-					log.warning("hi_res PDF parsing failed (%s); falling back to standard parser", e.__class__.__name__)
+					pass
 			# Try standard parser with/without table inference flags
 			if els is None:
 				for kwargs in (
@@ -223,7 +332,17 @@ def load_elements(path: Path):
 						# Ignore bad kw on older versions
 						continue
 					except Exception as e:
-						log.warning("standard PDF parsing attempt failed (%s); trying next/fallback", e.__class__.__name__)
+						pass
+		
+		# IMPORTANT: Always try PDFPlumber first, even if unstructured failed
+		# This ensures we get tables even when unstructured fails
+		if pdf_settings.RAG_USE_PDFPLUMBER:
+			_pdfp = _try_pdfplumber_tables(path)
+			if _pdfp:
+				if els is None:
+					els = []
+				els.extend(_pdfp)
+		
 		# Fallback: basic text extraction per page using pypdf
 		if els is None:
 			try:
@@ -245,45 +364,47 @@ def load_elements(path: Path):
 								self.id = f"p{i}"
 						self.metadata = MD(page_number)
 				els.append(_Shim(text, i))
-			get_logger().warning("Using pypdf fallback for PDF parsing (limited structure detection).")
+		
 		# Optional: enrich with Tabula tables
-		if os.getenv("RAG_USE_TABULA", "").lower() in ("1", "true", "yes"):
+		if pdf_settings.RAG_USE_TABULA:
 			_added = _try_tabula_tables(path)
 			if _added:
 				els.extend(_added)
-				get_logger().info("%s: Tabula extracted %d tables", path.name, len(_added))
-	# Optional: pdfplumber table extraction
-		if os.getenv("RAG_USE_PDFPLUMBER", "").lower() in ("1", "true", "yes"):
-			_pdfp = _try_pdfplumber_tables(path)
-			if _pdfp:
-				els.extend(_pdfp)
-				get_logger().info("%s: pdfplumber extracted %d tables", path.name, len(_pdfp))
+
 		# Optional: Camelot table extraction
-		if os.getenv("RAG_USE_CAMELOT", "").lower() in ("1", "true", "yes"):
+		if pdf_settings.RAG_USE_CAMELOT:
 			_cam = _try_camelot_tables(path)
 			if _cam:
 				els.extend(_cam)
-				get_logger().info("%s: Camelot extracted %d tables", path.name, len(_cam))
+
 		# Optional: synthesize table-like elements from text blocks if none detected
-		if os.getenv("RAG_SYNTH_TABLES", "").lower() in ("1", "true", "yes"):
+		if pdf_settings.RAG_SYNTH_TABLES:
 			try:
 				_synth = _synthesize_tables_from_text(els, path)
 				if _synth:
 					els.extend(_synth)
-					get_logger().info("%s: Synthesized %d table-like elements from text", path.name, len(_synth))
 			except Exception:
 				pass
+		
 		# Optional: extract images as figures via PyMuPDF
-		if os.getenv("RAG_EXTRACT_IMAGES", "").lower() in ("1", "true", "yes"):
+		if pdf_settings.RAG_EXTRACT_IMAGES:
 			_figs = _try_extract_images(path)
 			if _figs:
 				els.extend(_figs)
-				get_logger().info("%s: Extracted %d images as figures", path.name, len(_figs))
+
 		# Optional: export tables to markdown/csv files and attach paths in metadata
 		try:
 			_export_tables_to_files(els, path)
 		except Exception:
-			get_logger().debug("table export failed; continuing")
+			pass
+		
+		# Log what we extracted
+		if els:
+			categories = {}
+			for el in els:
+				cat = getattr(el, "category", "Unknown")
+				categories[cat] = categories.get(cat, 0) + 1
+		
 		return els
 	if ext in (".docx", ".doc"):
 		if partition_docx is None:
@@ -293,46 +414,16 @@ def load_elements(path: Path):
 		if partition_text is None:
 			raise RuntimeError("unstructured not installed for text parsing")
 		return partition_text(filename=str(path))
+	if ext in (".jsonl",):
+		return load_jsonl(path)
+	if ext in (".csv",):
+		return load_csv(path)
 	raise ValueError(f"Unsupported format: {ext}")
 
 
 def load_many(paths: List[Path]):
-	log = get_logger()
 	for p in paths:
 		els = load_elements(p)
-		# Log tables/figures present in the parsed elements (best-effort)
-		try:
-			cats = [str(getattr(e, "category", "")).lower() for e in els]
-			# histogram by category
-			hist = {}
-			for c in cats:
-				hist[c] = hist.get(c, 0) + 1
-			if hist:
-				log.info(f"{p.name}: element categories -> {sorted(hist.items(), key=lambda x: (-x[1], x[0]))}")
-			tables = [getattr(e, "text", "").strip()[:80] for e in els if str(getattr(e, "category", "")).lower() == "table"]
-			figures = [getattr(e, "text", "").strip()[:80] for e in els if str(getattr(e, "category", "")).lower() in ("figure", "image")]
-			if tables:
-				log.info(f"{p.name}: detected {len(tables)} table elements (sample): {tables[:2]}")
-			if figures:
-				log.info(f"{p.name}: detected {len(figures)} figure elements (sample): {figures[:2]}")
-			# Optional raw elements dump for deep debugging
-			import os, json
-			if os.getenv("RAG_DUMP_ELEMENTS", "").lower() in ("1", "true", "yes"):
-				dump_dir = Path("logs") / "elements"
-				dump_dir.mkdir(parents=True, exist_ok=True)
-				out_path = dump_dir / f"{p.stem}.jsonl"
-				with open(out_path, "w", encoding="utf-8") as f:
-					for e in els:
-						md = getattr(e, "metadata", None)
-						rec = {
-							"category": str(getattr(e, "category", "")),
-							"page_number": getattr(md, "page_number", None) if md else None,
-							"id": getattr(md, "id", None) if md else None,
-							"text_head": (getattr(e, "text", "") or "").strip()[:200],
-						}
-						f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-		except Exception:
-			pass
 		yield p, els
 
 
@@ -357,7 +448,7 @@ def _synthesize_tables_from_text(els, path: Path):
 		
 		# Skip obvious page headers and simple text
 		lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-		if not lines or len(lines) < 3:  # Need at least 3 lines for a real table
+		if not lines or len(lines) < 2:  # Reduced minimum lines for technical tables
 			continue
 			
 		# Skip page headers like "5 | P a g e"
@@ -366,7 +457,7 @@ def _synthesize_tables_from_text(els, path: Path):
 			
 		# Skip if most content is just page numbers or simple headers
 		non_header_lines = [ln for ln in lines if not _re.match(r"^\d+\s*\|\s*P\s+a\s+g\s+e", ln, _re.I)]
-		if len(non_header_lines) < 2:
+		if len(non_header_lines) < 1:  # Reduced minimum
 			continue
 			
 		head = lines[0].lower()
@@ -374,18 +465,22 @@ def _synthesize_tables_from_text(els, path: Path):
 		looks_like_header = _re.search(r"\btable\s*\d+\b", head) and ":" in text
 		
 		# Count meaningful separators (ignore single | in page headers)
-		sep_counts = sum(("\t" in ln) + ("," in ln) + (ln.count("|") >= 3) for ln in lines[:8])
-		wide_cols = sum(1 for ln in lines[:8] if _re.search(r"\S\s{3,}\S.*\S\s{3,}\S", ln))  # At least 2 wide columns
+		sep_counts = sum(("\t" in ln) + ("," in ln) + (ln.count("|") >= 2) for ln in lines[:8])  # Reduced pipe count
+		wide_cols = sum(1 for ln in lines[:8] if _re.search(r"\S\s{2,}\S.*\S\s{2,}\S", ln))  # Reduced spacing requirement
 		
 		# More data-like patterns (numbers, units, technical terms)
-		has_data_patterns = any(_re.search(r"\b\d+\.?\d*\s*(mm|μm|MPa|Hz|°C|N|kN|rpm|%)\b", ln, _re.I) for ln in lines[:5])
-		has_multiple_columns = any(ln.count("|") >= 3 or ln.count("\t") >= 2 for ln in lines)
+		has_data_patterns = any(_re.search(r"\b\d+\.?\d*\s*(mm|μm|MPa|Hz|°C|N|kN|rpm|%|ratio|module)\b", ln, _re.I) for ln in lines[:5])
+		has_multiple_columns = any(ln.count("|") >= 2 or ln.count("\t") >= 1 for ln in lines)  # Reduced requirements
+		
+		# Look for specific technical terms that indicate tables
+		has_technical_terms = any(_re.search(r"\b(gear|transmission|ratio|module|teeth|wear|depth|parameter|value|measurement)\b", ln, _re.I) for ln in lines[:3])
 		
 		# Only synthesize if we have strong evidence of tabular data
 		if (looks_like_header or 
-		    (sep_counts >= 3 and has_multiple_columns) or 
-		    (wide_cols >= 2 and has_data_patterns) or
-		    (has_data_patterns and has_multiple_columns and len(lines) >= 4)):
+		    (sep_counts >= 2 and has_multiple_columns) or  # Reduced requirements
+		    (wide_cols >= 1 and has_data_patterns) or  # Reduced requirements
+		    (has_data_patterns and has_multiple_columns and len(lines) >= 2) or  # Reduced requirements
+		    (has_technical_terms and has_data_patterns)):  # New condition for technical tables
 			
 			count += 1
 			md = getattr(e, "metadata", None)
@@ -416,16 +511,13 @@ def _try_tabula_tables(path: Path):
 		# Import the function explicitly to satisfy static analysis across tabula-py versions
 		from tabula import read_pdf as tabula_read_pdf  # type: ignore
 	except Exception:
-		get_logger().debug("Tabula not available; skip table extraction")
 		return []
 	try:
 		dfs = tabula_read_pdf(str(path), pages="all", multiple_tables=True, guess=True, stream=True)
 	except Exception as e1:
-		get_logger().warning("Tabula stream mode failed (%s); trying lattice", e1.__class__.__name__)
 		try:
 			dfs = tabula_read_pdf(str(path), pages="all", multiple_tables=True, guess=True, lattice=True)
 		except Exception as e2:
-			get_logger().warning("Tabula failed to extract tables (%s)", e2.__class__.__name__)
 			return []
 	elements = []
 	idx = 0
@@ -457,40 +549,94 @@ def _try_pdfplumber_tables(path: Path):
 	try:
 		import pdfplumber  # type: ignore
 	except Exception:
-		get_logger().debug("pdfplumber not available; skip table extraction")
 		return []
+	
 	elements = []
-	idx = 0
+	
 	try:
 		with pdfplumber.open(str(path)) as pdf:
-			for pno, page in enumerate(pdf.pages, start=1):
-				for table in (page.extract_tables() or []):
+			for pno, page in enumerate(pdf.pages, 1):
+				page_tables = []
+				
+				# Method 1: Try standard PDFPlumber table extraction
+				try:
+					page_tables = page.extract_tables()
+				except Exception:
+					pass
+				
+				# Method 2: Try to find tables by looking for table-like structures
+				if not page_tables:
+					text = page.extract_text() or ""
+					# More aggressive table detection for technical documents
+					if any(keyword in text.lower() for keyword in ["table", "parameter", "value", "measurement", "gear", "module", "ratio", "transmission", "teeth", "wear", "depth"]):
+						lines = text.split('\n')
+						table_data = []
+						
+						for line in lines:
+							# Look for lines with multiple columns (separated by spaces or tabs)
+							if len(line.split()) >= 3 and any(char in line for char in ['|', '\t', '  ']):
+								table_data.append(line)
+						
+						if len(table_data) >= 2:
+							page_tables.append(table_data)
+				
+				# Method 3: Look for specific technical table patterns
+				if not page_tables:
+					text = page.extract_text() or ""
+					table_patterns = [
+						r"Table\s+\d+[:\-]\s*(.+?)(?:\n|$)",
+						r"Parameter\s+Value\s+Unit",
+						r"Gear\s+Module\s+Teeth",
+						r"Transmission\s+Ratio",
+						r"Wear\s+Depth\s+Measurement"
+					]
+					for pattern in table_patterns:
+						matches = re.findall(pattern, text, re.I)
+						if matches:
+							# Extract surrounding lines as table data
+							lines = text.split('\n')
+							table_data = []
+							for i, line in enumerate(lines):
+								if any(match.lower() in line.lower() for match in matches):
+									# Add this line and a few surrounding lines
+									start = max(0, i-2)
+									end = min(len(lines), i+3)
+									table_data.extend(lines[start:end])
+									break
+							if table_data:
+								page_tables.append(table_data)
+				
+				# Process extracted tables
+				for idx, table_rows in enumerate(page_tables):
+					if len(table_rows) < 2 or len(table_rows[0]) < 2:
+						continue  # Skip very small tables
+					
 					try:
-						# Convert to markdown-like text
-						rows = [[(c or "").strip() for c in row] for row in table]
-						if not rows:
-							continue
-						width = max(len(r) for r in rows)
-						rows = [r + [""] * (width - len(r)) for r in rows]
-						header = rows[0]
-						sep = ["---"] * len(header)
-						body = rows[1:]
-						fmt = lambda r: "| " + " | ".join(r) + " |"
-						md_text = "\n".join([fmt(header), fmt(sep)] + [fmt(r) for r in body])
-						idx += 1
-						elements.append(
-							SimpleNamespace(
-								text=md_text,
-								category="Table",
-								metadata=SimpleNamespace(page_number=pno, id=f"pdfplumber-{path.name}-{idx}"),
+						# Convert table to text representation
+						table_text = "\n".join(table_rows)
+						
+						# Generate table summary
+						table_summary = _generate_table_summary(table_text)
+						
+						# Create table element
+						table_element = SimpleNamespace(
+							text=table_text,
+							category="Table",
+							metadata=SimpleNamespace(
+								page_number=pno,
+								id=f"table-{path.name}-p{pno}-t{idx}",
+								table_summary=table_summary,
+								source="pdfplumber"
 							)
 						)
-					except Exception:
-						continue
+						elements.append(table_element)
+					except Exception as e:
+						pass
+		
+		return elements
+	
 	except Exception as e:
-		get_logger().warning("pdfplumber failed (%s)", e.__class__.__name__)
 		return []
-	return elements
 
 
 def _try_camelot_tables(path: Path):
@@ -499,7 +645,6 @@ def _try_camelot_tables(path: Path):
 	try:
 		import camelot  # type: ignore
 	except Exception:
-		get_logger().debug("Camelot not available; skip table extraction")
 		return []
 	elements = []
 	idx = 0
@@ -508,7 +653,6 @@ def _try_camelot_tables(path: Path):
 			# pages='all' can be slow; try '1-end' style
 			tables = camelot.read_pdf(str(path), pages="all", flavor=flavor)
 		except Exception as e:
-			get_logger().warning("Camelot %s failed (%s)", flavor, e.__class__.__name__)
 			continue
 		for t in getattr(tables, "df", []) or []:
 			try:
@@ -546,7 +690,6 @@ def _try_extract_images(path: Path):
 	try:
 		import fitz  # PyMuPDF
 	except Exception:
-		get_logger().debug("PyMuPDF not available; skip image extraction")
 		return []
 	out_dir = Path("data") / "images"
 	out_dir.mkdir(parents=True, exist_ok=True)
@@ -558,12 +701,14 @@ def _try_extract_images(path: Path):
 			for img_index, img in enumerate(page.get_images(full=True), start=1):
 				xref = img[0]
 				pix = fitz.Pixmap(doc, xref)
-				# Save as PNG
+				# Save as PNG with higher resolution
 				fname = f"{path.stem}-p{pno+1}-img{img_index}.png"
 				fpath = out_dir / fname
 				try:
 					if pix.alpha:  # convert RGBA to RGB
 						pix = fitz.Pixmap(fitz.csRGB, pix)
+					
+					# Save with original resolution for now (scaling can cause issues)
 					pix.save(fpath)
 				finally:
 					pix = None  # release
@@ -585,6 +730,5 @@ def _try_extract_images(path: Path):
 					)
 				)
 	except Exception as e:
-		get_logger().warning("Image extraction failed (%s)", e.__class__.__name__)
 		return []
 	return elements

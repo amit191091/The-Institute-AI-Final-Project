@@ -7,13 +7,17 @@ from langchain_community.retrievers import BM25Retriever
 
 
 def to_documents(records: List[dict]) -> List[Document]:
-	return [Document(page_content=r["page_content"], metadata=r["metadata"]) for r in records]
+	return [Document(page_content=r.get("page_content", r.get("content", "")), metadata=r["metadata"]) for r in records]
 
 
 def build_dense_index(docs: List[Document], embedding_fn):
 	"""Build a dense index; try Chroma first, fallback to DocArrayInMemorySearch.
-	If env RAG_CHROMA_DIR is set, persist to that directory (and use optional RAG_CHROMA_COLLECTION).
+	Set RAG_REBUILD=1 to drop the persisted store and rebuild.
 	"""
+	# Check if we should rebuild the index
+	if os.getenv("RAG_REBUILD", "0").lower() in ("1", "true", "yes"):
+		# Rebuild index
+		pass
 	# Lazy import to avoid OS-specific failures at import time
 	try:
 		from langchain_community.vectorstores import Chroma

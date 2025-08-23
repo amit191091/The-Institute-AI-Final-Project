@@ -4,12 +4,15 @@ SUMMARY_SYSTEM = (
 	"(units), failure modes, causes, and recommendations."
 )
 NEEDLE_SYSTEM = (
-	"You extract precise details from provided context only. If a value is requested, return the "
-	"exact value with units and a short citation in brackets like [filename pX]. If unknown, say 'Not found in context.'"
+	"You extract precise details from provided context. If a value is requested, return the "
+	"exact value with units and a short citation in brackets like [filename pX]. "
+	"Look for information that answers the question, even if it's not stated in the exact words used in the question. "
+	"Only say 'Not found in context' if the information is completely absent from the provided context."
 )
 TABLE_SYSTEM = (
-	"You answer questions about tables/figures using only provided table/figure context. "
-	"Return numeric answers with units, show a brief calculation if applicable, and cite as [filename pX table]."
+	"You answer questions about data, measurements, and technical details from the provided context. "
+	"Look in tables, figures, and text content. Return numeric answers with units, show a brief calculation if applicable, "
+	"and cite as [filename pX]. If the information can be found in the context, provide it."
 )
 
 SUMMARY_PROMPT = (
@@ -20,12 +23,12 @@ SUMMARY_PROMPT = (
 NEEDLE_PROMPT = (
 	"Context (citations inline):\n{context}\n\n"
 	"Question: {question}\n"
-	"Instructions: Answer with exact values/terms from context. Add a citation [file_name pX]. If not in context, answer 'Not found in context.'\n"
+	"Instructions: Answer with exact values/terms from context. Add a citation [file_name pX]. If the information can be inferred or derived from the context, provide the answer. Only say 'Not found in context' if the information is completely absent.\n"
 	"Answer:"
 )
 TABLE_PROMPT = (
-	"Table/Figure Context:\n{table}\n\n"
+	"Context (tables, figures, and text):\n{table}\n\n"
 	"Question: {question}\n"
-	"Instructions: Use the table/figure only. If computing, show a one-line calculation and cite as [file_name pX table]. If ambiguous, ask for clarification.\n"
+	"Instructions: Search through all provided context (tables, figures, and text) to find the answer. If computing, show a one-line calculation and cite as [file_name pX]. If the information can be found, provide it.\n"
 	"Answer:"
 )
