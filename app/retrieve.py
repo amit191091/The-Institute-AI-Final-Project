@@ -5,27 +5,40 @@ from app.logger import get_logger
 
 from langchain_core.documents import Document
 from langchain.retrievers import EnsembleRetriever
+from app.agents import simplify_question
 
 
 def query_analyzer(q: str) -> Dict:
-	"""Extract keywords, case/client IDs, dates to build metadata filters."""
+	"""Extract keywords, case/client IDs, dates to build metadata filters.
+	Also returns a 'canonical' simplified query from a rules-based pre-agent.
+	"""
 	filt: Dict[str, str] = {}
-	# Require at least 3 chars for case/id to avoid filtering on trivial digits like "1"
-	mcase = re.search(r"(?:case|id)[:\-\s]*([A-Za-z0-9_-]{3,})", q, re.I)
+	simp = simplify_question(q)
+	# Safer patterns: require word boundaries; avoid matching 'id' inside 'did'
+	# Accept 'case: XYZ' or 'case id: XYZ' or 'client: ABC' but not bare 'id'
+	mcase = re.search(r"\bcase(?:\s*id)?\b[:\-\s]*([A-Za-z0-9_-]{3,})", q, re.I)
 	if mcase:
 		filt["case_id"] = mcase.group(1)
-	mclient = re.search(r"(?:client)[:\-\s]*([A-Za-z0-9_-]+)", q, re.I)
+	mclient = re.search(r"\bclient(?:\s*id)?\b[:\-\s]*([A-Za-z0-9_-]{3,})", q, re.I)
 	if mclient:
 		filt["client_id"] = mclient.group(1)
 	mdate = re.search(r"(20\d{2}-\d{2}-\d{2})", q)
 	if mdate:
 		filt["incident_date"] = mdate.group(1)
 	ql = q.lower()
-	if "table" in ql:
+	# Section hints from simplifier or raw tokens
+	if bool(simp.get("wants_table")) or "table" in ql:
 		filt["section"] = "Table"
-	elif any(w in ql for w in ("figure", "image", "fig ", "photo", "plot", "graph")):
+	elif bool(simp.get("wants_figure")) or any(w in ql for w in ("figure", "image", "fig ", "photo", "plot", "graph")):
 		filt["section"] = "Figure"
-	return {"filters": filt, "keywords": re.findall(r"[A-Za-z0-9°%]+", q)[:10]}
+	# Case id from simplifier (e.g., W26)
+	if simp.get("case_id") and "case_id" not in filt:
+		filt["case_id"] = str(simp.get("case_id"))
+	return {
+		"filters": filt,
+		"keywords": re.findall(r"[A-Za-z0-9°%]+", q)[:10],
+		"canonical": str(simp.get("canonical") or "").strip() or None,
+	}
 
 
 def apply_filters(docs: List[Document], filters: Dict) -> List[Document]:
@@ -75,10 +88,28 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 	elif any(w in ql for w in ("figure", "image", "fig ", "plot", "graph", "photo")):
 		sec_pref = "Figure"
 
+	# Detect month/day phrases to boost timeline/date matches
+	_months = [
+		"january","february","march","april","may","june","july","august","september","october","november","december"
+	]
+	month_in_q = None
+	day_in_q: str | None = None
+	for m in _months:
+		if m in ql:
+			month_in_q = m
+			break
+	# capture patterns like "June 13th" or "June 13"
+	md = re.search(r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?", ql)
+	if md:
+		month_in_q = md.group(1)
+		day_in_q = md.group(2)
+	# also support ISO-like dates
+	iso_in_q = re.search(r"20\d{2}-\d{2}-\d{2}", ql)
+
 	def _len_penalty(n: int) -> float:
 		# Mild penalty for very short or extremely long contexts
-		if n < 200:
-			return 0.9
+		if n < 120:
+			return 0.93
 		if n > 3000:
 			return 0.9
 		return 1.0
@@ -105,7 +136,34 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 		meta_boost = 0.2 * lexical_overlap(" ".join(kws), meta)
 		sec_boost = 0.15 if (sec_pref and md.get("section") == sec_pref) else 0.0
 		src_boost = _extractor_bonus(md)
-		score = (base + meta_boost + sec_boost + src_boost) * _len_penalty(len(d.page_content))
+
+		# Date/timeline boost: if query mentions a month/day or ISO date and doc contains it
+		date_boost = 0.0
+		text_l = d.page_content.lower()
+		try:
+			if iso_in_q and iso_in_q.group(0) in text_l:
+				date_boost += 0.25
+			if month_in_q and month_in_q in text_l:
+				date_boost += 0.18
+				if day_in_q and re.search(rf"\b{month_in_q}\s+{day_in_q}(?:st|nd|rd|th)?\b", text_l):
+					date_boost += 0.17
+		except Exception:
+			pass
+
+
+		# Metadata token boost for dates (from attach_metadata)
+		tokens_boost = 0.0
+		try:
+			months_md = [str(x).lower() for x in (md.get("month_tokens") or [])]
+			days_md = [str(x) for x in (md.get("day_tokens") or [])]
+			if month_in_q and months_md and month_in_q in months_md:
+				tokens_boost += 0.12
+			if day_in_q and days_md and day_in_q in days_md:
+				tokens_boost += 0.12
+		except Exception:
+			pass
+
+		score = (base + meta_boost + sec_boost + src_boost + date_boost + tokens_boost) * _len_penalty(len(d.page_content))
 		scored.append((score, len(d.page_content), d))
 
 	# Sort and dedupe by (file,page,section,anchor/path)

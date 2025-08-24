@@ -38,7 +38,7 @@ def _setup_ragas_llm():
 	if try_openai_first:
 		try:
 			from langchain_openai import ChatOpenAI
-			openai_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+			openai_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
 			llm = ChatOpenAI(model=openai_model, temperature=0)
 			print(f"[RAGAS LLM] Using OpenAI model: {openai_model}")
 			return llm
@@ -157,36 +157,71 @@ def run_eval(dataset):
 				result = evaluate(ds, metrics=metrics, llm=llm, embeddings=emb)  # type: ignore
 		except Exception as e:
 			raise RuntimeError(f"RAGAS evaluation failed: {e}") from e
-	# RAGAS returns an EvaluationResult with dict-like access in most versions
+	# Build summary robustly from per-question outputs
+	def _mean_safe(vals):
+		vals2 = []
+		for v in vals:
+			try:
+				fv = float(v)
+				if not (isinstance(fv, float) and (fv != fv)):
+					vals2.append(fv)
+			except Exception:
+				pass
+		return float(sum(vals2)/len(vals2)) if vals2 else float("nan")
+
+	faith = relev = cprec = crec = float("nan")
+	# Preferred: use to_pandas per-question and average
 	try:
-		as_dict = {str(k): float(v) for k, v in dict(result).items()}  # type: ignore
-		faith = as_dict.get("faithfulness", float("nan"))
-		relev = as_dict.get("answer_relevancy", float("nan"))
-		cprec = as_dict.get("context_precision", float("nan"))
-		crec = as_dict.get("context_recall", float("nan"))
+		if hasattr(result, "to_pandas"):
+			df = result.to_pandas()  # type: ignore
+			faith = _mean_safe(df.get("faithfulness", []))
+			relev = _mean_safe(df.get("answer_relevancy", []))
+			cprec = _mean_safe(df.get("context_precision", []))
+			crec = _mean_safe(df.get("context_recall", []))
+			return {
+				"faithfulness": faith,
+				"answer_relevancy": relev,
+				"context_precision": cprec,
+				"context_recall": crec,
+			}
 	except Exception:
-		try:
-			faith = float(result["faithfulness"])  # type: ignore[index]
-		except Exception:
-			faith = float("nan")
-		try:
-			relev = float(result["answer_relevancy"])  # type: ignore[index]
-		except Exception:
-			relev = float("nan")
-		try:
-			cprec = float(result["context_precision"])  # type: ignore[index]
-		except Exception:
-			cprec = float("nan")
-		try:
-			crec = float(result["context_recall"])  # type: ignore[index]
-		except Exception:
-			crec = float("nan")
-	return {
-		"faithfulness": faith,
-		"answer_relevancy": relev,
-		"context_precision": cprec,
-		"context_recall": crec,
-	}
+		pass
+	# Next: try dict-like summary
+	try:
+		raw = dict(result)  # type: ignore
+		as_dict = {str(k): raw[k] for k in raw.keys()}
+		faith = float(as_dict["faithfulness"]) if "faithfulness" in as_dict else float("nan")
+		relev = float(as_dict["answer_relevancy"]) if "answer_relevancy" in as_dict else float("nan")
+		cprec = float(as_dict["context_precision"]) if "context_precision" in as_dict else float("nan")
+		crec = float(as_dict["context_recall"]) if "context_recall" in as_dict else float("nan")
+		return {
+			"faithfulness": faith,
+			"answer_relevancy": relev,
+			"context_precision": cprec,
+			"context_recall": crec,
+		}
+	except Exception:
+		pass
+	# Finally: handle .results list shape
+	try:
+		items = list(getattr(result, "results") or [])
+		faith = _mean_safe([r.get("faithfulness") for r in items])
+		relev = _mean_safe([r.get("answer_relevancy") for r in items])
+		cprec = _mean_safe([r.get("context_precision") for r in items])
+		crec = _mean_safe([r.get("context_recall") for r in items])
+		return {
+			"faithfulness": faith,
+			"answer_relevancy": relev,
+			"context_precision": cprec,
+			"context_recall": crec,
+		}
+	except Exception:
+		return {
+			"faithfulness": float("nan"),
+			"answer_relevancy": float("nan"),
+			"context_precision": float("nan"),
+			"context_recall": float("nan"),
+		}
 
 
 def run_eval_detailed(dataset):

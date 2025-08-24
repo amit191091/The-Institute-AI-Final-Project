@@ -14,7 +14,7 @@ from app.chunking import structure_chunks
 from app.metadata import attach_metadata
 from app.indexing import build_dense_index, build_sparse_retriever, to_documents, dump_chroma_snapshot
 from app.retrieve import apply_filters, build_hybrid_retriever, query_analyzer, rerank_candidates
-from app.agents import answer_needle, answer_summary, answer_table, route_question
+from app.agents import answer_needle, answer_summary, answer_table, route_question, route_question_ex
 from app.ui_gradio import build_ui
 from app.validate import validate_min_pages
 from app.logger import get_logger
@@ -109,7 +109,7 @@ class _LLM:
         if os.getenv("GOOGLE_API_KEY") and not force_openai:
             try:
                 from langchain_google_genai import ChatGoogleGenerativeAI
-                self._backend = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2)
+                self._backend = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.1)
                 self._which = "google"
             except Exception:
                 self._backend = None
@@ -117,8 +117,16 @@ class _LLM:
         if (self._backend is None or force_openai) and os.getenv("OPENAI_API_KEY"):
             try:
                 from langchain_openai import ChatOpenAI
-                model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
-                self._backend = ChatOpenAI(model=model, temperature=0.2)
+                model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
+                # Try modern signature
+                try:
+                    self._backend = ChatOpenAI(model=model, temperature=0.1)  # type: ignore[call-arg]
+                except Exception:
+                    # Fallback to older signature variants
+                    try:
+                        self._backend = ChatOpenAI(model_name=model)  # type: ignore[call-arg]
+                    except Exception:
+                        self._backend = ChatOpenAI()  # type: ignore[call-arg]
                 self._which = "openai"
             except Exception:
                 self._backend = None
@@ -218,11 +226,12 @@ def build_pipeline(paths: List[Path]):
 def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None) -> str:
     log = get_logger()
     qa = query_analyzer(question)
+    q_exec = qa.get("canonical") or question
     # Compatible retrieval call
     try:
-        candidates = hybrid.invoke(question)
+        candidates = hybrid.invoke(q_exec)
     except Exception:
-        candidates = hybrid.invoke(question)
+        candidates = hybrid.invoke(q_exec)
     # enforce rerank pool size
     candidates = candidates[: settings.K_TOP_K] # rerank TOP K
     filtered = apply_filters(candidates, qa["filters"])  # metadata filters
@@ -233,22 +242,22 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
         sec = None
     if sec and not filtered:
         filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
-    top_docs = rerank_candidates(question, filtered, top_n=settings.CONTEXT_TOP_N)
-    route = route_question(question)
+    top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
+    route, rtrace = route_question_ex(question)
     # Logging: route, filters, counts, scores
     def _doc_head(d):
         md = getattr(d, "metadata", {}) or {}
         return f"{md.get('file_name')} p{md.get('page')} {md.get('section')}#{md.get('anchor', '')}"
 
     def _score(d):
-        base = lexical_overlap(question, d.page_content)
+        base = lexical_overlap(q_exec, d.page_content)
         meta_text = " ".join(map(str, (getattr(d, "metadata", {}) or {}).values()))
         boost = 0.2 * lexical_overlap(" ".join(qa["keywords"]), meta_text)
         return round(base + boost, 4)
 
     log.info(
         "Q: %s | route=%s | keywords=%s | filters=%s | pool=%d | filtered=%d | using=%d",
-        question,
+        q_exec,
         route,
         qa["keywords"],
         qa["filters"],
@@ -272,6 +281,7 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
             "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "question": question,
             "route": route,
+            "router_trace": rtrace,
             "keywords": qa["keywords"],
             "filters": qa["filters"],
             "contexts": [
@@ -297,10 +307,11 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
     """Answer a question and also return the contexts used (top_docs)."""
     log = get_logger()
     qa = query_analyzer(question)
+    q_exec = qa.get("canonical") or question
     try:
-        candidates = hybrid.invoke(question)
+        candidates = hybrid.invoke(q_exec)
     except Exception:
-        candidates = hybrid.invoke(question)
+        candidates = hybrid.invoke(q_exec)
     candidates = candidates[: settings.K_TOP_K]
     filtered = apply_filters(candidates, qa["filters"])  # type: ignore[index]
     try:
@@ -309,7 +320,7 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
         sec = None
     if sec and not filtered:
         filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
-    top_docs = rerank_candidates(question, filtered, top_n=settings.CONTEXT_TOP_N)
+    top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
     # Fallbacks to avoid empty contexts for evaluation
     if not top_docs:
         # Use raw candidates if available
@@ -440,7 +451,7 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         norm_q = norm_q.strip(".,:;!?-—\u2013\u2014\"'()[]{}")
         gts = gt_map.get(norm_q, [])
         if not gts and gt_map:
-            # fuzzy match to the closest GT question key
+            # fuzzy match to the closest GT question key (slightly lower threshold to reduce misses)
             keys = list(gt_map.keys())
             best = None
             best_score = 0.0
@@ -448,8 +459,13 @@ def run_evaluation(docs, hybrid, llm: _LLM):
                 s = difflib.SequenceMatcher(None, norm_q, k).ratio()
                 if s > best_score:
                     best_score = s; best = k
-            if best is not None and best_score >= 0.88:
+            if best is not None and best_score >= 0.75:
                 gts = gt_map.get(best, [])
+        # Fallback: use QA file's provided answer as ground truth if still missing
+        if (not gts) and isinstance(row.get("answer"), (str, int, float)):
+            ans_txt = str(row["answer"]).strip()
+            if ans_txt:
+                gts = [ans_txt]
         if gts:
             any_gt = True
         # Pick a single reference string for metrics that require it (e.g., context_precision)
@@ -469,16 +485,14 @@ def run_evaluation(docs, hybrid, llm: _LLM):
     if not rows_out:
         print("No evaluation rows to process.")
         return
-    ds = {"question": [], "answer": [], "contexts": [], "reference": []}
-    if any_gt:
-        ds["ground_truths"] = []  # type: ignore[index]
+    # Always include ground_truths so context_recall can be computed when available or from QA answers
+    ds = {"question": [], "answer": [], "contexts": [], "reference": [], "ground_truths": []}
     for r in rows_out:
         ds["question"].append(r["question"])
         ds["answer"].append(r["answer"])
         ds["contexts"].append(r["contexts"])
         ds["reference"].append(r.get("reference", ""))
-        if any_gt:
-            ds["ground_truths"].append(r.get("ground_truths", []))  # type: ignore[index]
+        ds["ground_truths"].append(r.get("ground_truths", []))  # type: ignore[index]
     # Run RAGAS
     try:
         summary, per_q = run_eval_detailed(ds)

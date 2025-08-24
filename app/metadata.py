@@ -54,6 +54,53 @@ def extract_entities(text: str) -> List[str]:
 	return sorted(set(out))
 
 
+def extract_date_tokens(text: str) -> Dict[str, List[str]]:
+	"""Extract month/day tokens from text to help date-specific retrieval.
+	Returns lowercase month names and day numbers as strings.
+	"""
+	if not text:
+		return {"month_tokens": [], "day_tokens": []}
+	months = [
+		"january","february","march","april","may","june","july","august","september","october","november","december"
+	]
+	low = text.lower()
+	month_tokens: List[str] = []
+	day_tokens: List[str] = []
+	# month names
+	for m in months:
+		if m in low:
+			month_tokens.append(m)
+	# patterns like "June 13" or "June 13th"
+	for m in months:
+		for md in re.findall(rf"{m}\\s+(\\d{{1,2}})(?:st|nd|rd|th)?", low):
+			day_tokens.append(md)
+	# ISO dates 2023-06-13 -> month/day
+	for y, mo, da in re.findall(r"(20\\d{2})-(\\d{2})-(\\d{2})", low):
+		try:
+			mo_i = int(mo)
+			da_i = int(da)
+			if 1 <= mo_i <= 12:
+				month_tokens.append(months[mo_i - 1])
+			if 1 <= da_i <= 31:
+				day_tokens.append(str(da_i))
+		except Exception:
+			pass
+	# simple slashed dates like 6/13 or 13/6 (ambiguous; record day if <=31)
+	for a, b in re.findall(r"\b(\d{1,2})/(\d{1,2})(?:/(?:20)?\d{2})?\b", low):
+		try:
+			ai = int(a); bi = int(b)
+			if 1 <= ai <= 12 and 1 <= bi <= 31:
+				day_tokens.append(str(bi))
+			elif 1 <= bi <= 12 and 1 <= ai <= 31:
+				day_tokens.append(str(ai))
+		except Exception:
+			pass
+	# dedupe
+	month_tokens = sorted(set(month_tokens))
+	day_tokens = sorted(set(day_tokens))
+	return {"month_tokens": month_tokens, "day_tokens": day_tokens}
+
+
 def extract_incident(text: str) -> Dict[str, Optional[str]]:
 	itype = None
 	if re.search(r"\bfail(ure|ed)|fracture|fatigue|overheat|seiz(e|ure)\b", text, re.I):
@@ -76,6 +123,7 @@ def extract_incident(text: str) -> Dict[str, Optional[str]]:
 def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | None = None) -> Dict:
 	ents = extract_entities(chunk["content"])
 	inc = extract_incident(chunk["content"])
+	date_toks = extract_date_tokens(chunk["content"]) if chunk.get("content") else {"month_tokens": [], "day_tokens": []}
 	metadata = {
 		"file_name": chunk["file_name"],
 		"page": chunk.get("page"),
@@ -85,8 +133,8 @@ def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | No
 		"extractor": chunk.get("extractor"),
 		"table_number": chunk.get("table_number"),
 		"table_label": chunk.get("table_label"),
-	"table_md_path": chunk.get("table_md_path"),
-	"table_csv_path": chunk.get("table_csv_path"),
+		"table_md_path": chunk.get("table_md_path"),
+		"table_csv_path": chunk.get("table_csv_path"),
 		"table_row_range": chunk.get("table_row_range"),
 		"table_col_names": chunk.get("table_col_names"),
 		"client_id": client_id,
@@ -97,6 +145,8 @@ def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | No
 		"incident_type": inc["IncidentType"],
 		"incident_date": inc["IncidentDate"],
 		"amount_range": inc["AmountRange"],
+		"month_tokens": date_toks.get("month_tokens", []),
+		"day_tokens": date_toks.get("day_tokens", []),
 	}
 	return {"page_content": chunk["content"], "metadata": metadata}
 
