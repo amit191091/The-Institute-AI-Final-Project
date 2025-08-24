@@ -1,4 +1,4 @@
-from typing import List, Protocol
+from typing import List, Protocol, Tuple, Dict
 
 from langchain.schema import Document
 
@@ -17,14 +17,126 @@ class LLMCallable(Protocol):
 		...
 
 
-def route_question(q: str) -> str:
+def simplify_question(q: str) -> Dict:
+	"""Return a very simple, mostly-binary intent and a canonical query string.
+	No LLM, just regex/keywords. Keys:
+	  - canonical: str
+	  - wants_date, wants_table, wants_figure, wants_summary, wants_value, wants_exact: bool
+	  - table_number, figure_number, case_id, target_attr, event: optional str
+	"""
+	import re
+	ql = (q or "").lower()
+	out: Dict[str, object] = {
+		"canonical": "",
+		"wants_date": False,
+		"wants_table": False,
+		"wants_figure": False,
+		"wants_summary": False,
+		"wants_value": False,
+		"wants_exact": False,
+		"table_number": None,
+		"figure_number": None,
+		"case_id": None,
+		"target_attr": None,
+		"event": None,
+	}
+	# Flags
+	out["wants_exact"] = any(w in ql for w in ("exact", "precise"))
+	out["wants_summary"] = any(w in ql for w in ("summary", "summarize", "overview", "conclusion", "overall"))
+	out["wants_table"] = ("table" in ql) or bool(re.search(r"\bwear depth\b|\brms\b|\bfme\b|\bcrest factor\b", ql))
+	out["wants_figure"] = any(w in ql for w in ("figure", "fig ", "image", "graph", "plot"))
+	out["wants_date"] = any(w in ql for w in ("when", "date", "day")) or bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b", ql))
+	out["wants_value"] = any(w in ql for w in ("what is", "value", "how much", "amount")) or out["wants_table"]
+
+	# Extract specifics
+	mt = re.search(r"\btable\s*(\d{1,2})\b", ql)
+	if mt:
+		out["table_number"] = mt.group(1)
+	mf = re.search(r"\bfigure\s*(\d{1,2})\b", ql)
+	if mf:
+		out["figure_number"] = mf.group(1)
+	mc = re.search(r"\b(w\d{1,3})\b", ql)
+	if mc:
+		out["case_id"] = mc.group(1).upper()
+
+	# Attribute
+	if "wear depth" in ql:
+		out["target_attr"] = "wear depth"
+	elif re.search(r"\brms\b", ql):
+		out["target_attr"] = "rms"
+	elif "crest factor" in ql:
+		out["target_attr"] = "crest factor"
+	elif re.search(r"\bfme\b", ql):
+		out["target_attr"] = "fme"
+
+	# Event for date-style questions
+	if any(w in ql for w in ("failure", "failed")):
+		out["event"] = "failure date"
+	elif any(w in ql for w in ("measurement", "measuerment", "measured")) and any(w in ql for w in ("start", "started", "begin")):
+		out["event"] = "measurement start date"
+	elif any(w in ql for w in ("initial wear", "onset of wear", "first wear")):
+		out["event"] = "initial wear date"
+	elif any(w in ql for w in ("healthy",)) and any(w in ql for w in ("through", "until")):
+		out["event"] = "healthy through date"
+
+	# Build canonical
+	canonical = ""
+	if out["wants_table"] and out.get("case_id"):
+		attr = out.get("target_attr") or "value"
+		canonical = f"table lookup: {attr} for case {out['case_id']}"
+	elif out["wants_table"] and out.get("table_number"):
+		attr = out.get("target_attr") or "value"
+		canonical = f"table {out['table_number']} {attr}"
+	elif out["wants_figure"] and out.get("figure_number"):
+		canonical = f"figure {out['figure_number']}"
+	elif out["wants_date"]:
+		ev = out.get("event") or "date in timeline"
+		if out["wants_exact"]:
+			canonical = f"exact {ev}"
+		else:
+			canonical = ev
+	elif out["wants_summary"]:
+		canonical = "summary of report"
+	else:
+		# Strip filler words to keep it minimal
+		qq = re.sub(r"\b(please|kindly|could you|can you|what is|find|tell me)\b", " ", ql)
+		qq = re.sub(r"\s+", " ", qq).strip()
+		canonical = qq[:120]
+	out["canonical"] = canonical
+	return out
+
+
+def route_question_ex(q: str) -> Tuple[str, Dict]:
+	"""Return (route, trace) where trace explains which rule fired.
+	Routes: summary | table | needle
+	"""
 	ql = q.lower()
-	if any(w in ql for w in ("summarize", "overview", "overall", "conclusion", "brief")):
-		return "summary"
-	# Include figure/image cues to route to table/figure handler
-	if any(w in ql for w in ("table", "chart", "value", "figure", "fig ", "image", "graph", "plot")):
-		return "table"
-	return "needle"
+	simp = simplify_question(q)
+	trace: Dict = {"matched": [], "route": None, "simplified": simp}
+	# Summary cues
+	if simp.get("wants_summary"):
+		trace["matched"].append("summary_keywords")
+		trace["route"] = "summary"
+		return "summary", trace
+	if any(m in ql for m in ("timeline", "chronology", "when did", "what happened on", "what happend on")) or simp.get("wants_date"):
+		trace["matched"].append("timeline_date")
+		trace["route"] = "summary"
+		return "summary", trace
+	# Table/Figure cues
+	if simp.get("wants_table") or any(w in ql for w in ("table", "chart", "value", "figure", "fig ", "image", "graph", "plot")):
+		trace["matched"].append("table_figure_keywords")
+		trace["route"] = "table"
+		return "table", trace
+	# Default
+	trace["matched"].append("fallback_needle")
+	trace["route"] = "needle"
+	return "needle", trace
+
+
+def route_question(q: str) -> str:
+	# Backward-compatible wrapper
+	r, _ = route_question_ex(q)
+	return r
 
 
 def render_context(docs: List[Document], max_chars: int = 8000) -> str:

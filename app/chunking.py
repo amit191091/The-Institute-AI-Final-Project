@@ -25,12 +25,37 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 		kind = getattr(el, "category", getattr(el, "type", "Text")) or "Text"
 		md = getattr(el, "metadata", None)
 		page = getattr(md, "page_number", None) if md is not None else None
-		anchor = getattr(md, "id", None) if md is not None else None
+		# Derive a robust, non-null anchor
+		# Priority: explicit table/figure anchors -> element id -> file-based stems -> fallback
+		table_anchor = getattr(md, "table_anchor", None) if md is not None else None
+		figure_anchor = getattr(md, "figure_anchor", None) if md is not None else None
+		anchor = table_anchor or figure_anchor
+		if anchor is None:
+			anchor = getattr(md, "id", None) if md is not None else None
 		extractor = getattr(md, "extractor", None) if md is not None else None
 		table_md_path = getattr(md, "table_md_path", None) if md is not None else None
 		table_csv_path = getattr(md, "table_csv_path", None) if md is not None else None
 		table_number = getattr(md, "table_number", None) if md is not None else None
 		table_label = getattr(md, "table_label", None) if md is not None else None
+		# If still no anchor, derive from known file paths or numbering
+		if anchor is None:
+			try:
+				if table_number is not None and page is not None:
+					anchor = f"table-{int(table_number):02d}"
+			except Exception:
+				pass
+		if anchor is None and table_md_path:
+			try:
+				import os as _os
+				anchor = _os.path.splitext(_os.path.basename(str(table_md_path)))[0]
+			except Exception:
+				pass
+		if anchor is None and table_csv_path:
+			try:
+				import os as _os
+				anchor = _os.path.splitext(_os.path.basename(str(table_csv_path)))[0]
+			except Exception:
+				pass
 		raw_text = (getattr(el, "text", "") or "").strip()
 
 		section_type = classify_section_type(str(kind), raw_text)
@@ -58,6 +83,15 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				content = truncate_to_tokens(content, 800)
 			if trace:
 				log.debug("CHUNK-OUT[%d]: section=Table tokens≈%d anchor=%s", idx, tok, anchor)
+			# Final fallback for table anchor if still None
+			if anchor is None:
+				try:
+					if table_number is not None:
+						anchor = f"table-{int(table_number):02d}"
+					elif page is not None:
+						anchor = f"p{int(page)}-table-{idx}"
+				except Exception:
+					anchor = f"table-{idx}"
 			chunks.append(
 				{
 					"file_name": file_path,
@@ -97,6 +131,16 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 						img_path = m.group(1).strip()
 				except Exception:
 					pass
+			# Derive figure anchor from image path or page index
+			if anchor is None:
+				try:
+					if img_path:
+						import os as _os
+						anchor = _os.path.splitext(_os.path.basename(str(img_path)))[0]
+					elif page is not None:
+						anchor = f"fig-p{int(page)}-{idx}"
+				except Exception:
+					anchor = f"figure-{idx}"
 			
 			tok = approx_token_len(content)
 			if tok > 800:
@@ -117,6 +161,15 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			)
 			continue		# Textual sections (headers/paragraphs/timeline/analysis/conclusion)
 		content = simple_summarize(raw_text, ratio=0.05)
+		# Fallback anchor for text content if missing
+		if anchor is None:
+			try:
+				if page is not None:
+					anchor = f"p{int(page)}-el{idx}"
+				else:
+					anchor = f"el-{idx}"
+			except Exception:
+				anchor = f"el-{idx}"
 		chunks.append(
 			{
 				"file_name": file_path,

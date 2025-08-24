@@ -2,8 +2,10 @@ import gradio as gr
 import pandas as pd
 import json
 from pathlib import Path
+import difflib
+import re
 
-from app.agents import answer_needle, answer_summary, answer_table, route_question
+from app.agents import answer_needle, answer_summary, answer_table, route_question, route_question_ex
 from app.retrieve import apply_filters, query_analyzer, rerank_candidates
 from app.eval_ragas import run_eval, pretty_metrics
 from app.logger import get_logger
@@ -12,6 +14,26 @@ from app.logger import get_logger
 def _render_router_info(route: str, top_docs):
 	heads = [f"[{d.metadata.get('file_name')} p{d.metadata.get('page')} {d.metadata.get('section')}]" for d in top_docs[:3]]
 	return f"Route: {route} | Top contexts: {'; '.join(heads)}"
+
+
+def _rows_to_df(rows):
+	"""Convert list of row lists to a pandas DataFrame with stable columns."""
+	cols = [
+		"file",
+		"page",
+		"section",
+		"anchor",
+		"words",
+		"table_md",
+		"table_csv",
+		"image",
+		"preview",
+	]
+	try:
+		return pd.DataFrame(rows or [], columns=cols)
+	except Exception:
+		# Fallback: best-effort DataFrame without strict columns
+		return pd.DataFrame(rows or [])
 
 
 def _extract_table_figure_context(docs):
@@ -29,7 +51,7 @@ def _extract_table_figure_context(docs):
 		if md_path and Path(str(md_path)).exists():
 			try:
 				content = Path(str(md_path)).read_text(encoding="utf-8")
-				link_line = f"(table files: [markdown]({md_path})" + (f" | [csv]({csv_path})" if csv_path else ")")
+				link_line = f"(table files: [markdown]({md_path})" + (f" | [csv]({csv_path})" if csv_path else "") + ")"
 				out.append(f"{head}\n{link_line}\n\n{content}")
 				continue
 			except Exception:
@@ -79,24 +101,33 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				break
 		return rows
 
-	def _rows_to_df(rows):
-		cols = ["file", "page", "section", "anchor", "words", "table_md", "table_csv", "image_path", "preview"]
-		try:
-			return pd.DataFrame(rows, columns=cols)
-		except Exception:
-			# graceful fallback
-			return pd.DataFrame([], columns=cols)
+	# Auto-loaded ground-truths and QA answer maps (normalized by question)
+	gt_map = {"__loaded__": False, "map": {}, "norm": {}}
+	qa_map = {"__loaded__": False, "map": {}, "norm": {}}
 
-	# Optional ground-truths map loaded from a JSON/JSONL file once via UI
-	gt_map = {"__loaded__": False, "map": {}}
+	def _norm_q(s: str) -> str:
+		if not s:
+			return ""
+		s = str(s).lower().strip()
+		s = re.sub(r"\s+", " ", s)
+		return s.strip(".,:;!?-—\u2013\u2014\"'()[]{}")
 
-	def _load_gt_file(path: str):
+	def _load_gt_file(path: str | dict | object):
+		# Normalize to a path: accept string, dict(File), or object with .name
+		if isinstance(path, dict):
+			path = path.get("name") or path.get("path") or ""
+		elif hasattr(path, "name"):
+			try:
+				path = getattr(path, "name")
+			except Exception:
+				path = str(path)
 		if not path:
 			return "(no ground-truth file loaded)"
 		try:
-			p = Path(path)
+			path_str = str(path)
+			p = Path(path_str)
 			if not p.exists():
-				return f"(file not found: {path})"
+				return f"(file not found: {path_str})"
 			# minimal loader compatible with our main util
 			rows = []
 			if p.suffix.lower() == ".jsonl":
@@ -129,11 +160,56 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					m[str(q)] = [str(gts)]
 			gt_map["__loaded__"] = True
 			gt_map["map"] = m
-			return f"Loaded {len(m)} ground truths from {path}"
+			gt_map["norm"] = { _norm_q(k): v for k, v in m.items() }
+			sample = ", ".join(list(m.keys())[:2])
+			return f"Loaded {len(m)} ground truths from {path_str}. Sample keys: {sample}"
 		except Exception as e:
 			return f"(failed to load: {e})"
 
-	# Auto-load default ground truths if file exists in known locations
+	def _load_qa_file(path: str | dict | object):
+		# Load QA json/jsonl mapping question -> answer
+		if isinstance(path, dict):
+			path = path.get("name") or path.get("path") or ""
+		elif hasattr(path, "name"):
+			try:
+				path = getattr(path, "name")
+			except Exception:
+				path = str(path)
+		if not path:
+			return "(no QA file loaded)"
+		try:
+			p = Path(str(path))
+			if not p.exists():
+				return f"(QA file not found: {p})"
+			rows = []
+			if p.suffix.lower() == ".jsonl":
+				with open(p, "r", encoding="utf-8") as f:
+					for line in f:
+						line=line.strip()
+						if not line:
+							continue
+						try:
+							rows.append(json.loads(line))
+						except Exception:
+							pass
+			else:
+				rows = json.load(open(p, "r", encoding="utf-8"))
+			m = {}
+			for r in rows or []:
+				if not isinstance(r, dict):
+					continue
+				q = r.get("question") or r.get("q")
+				a = r.get("answer") or r.get("reference")
+				if q and a:
+					m[str(q)] = str(a)
+			qa_map["__loaded__"] = True
+			qa_map["map"] = m
+			qa_map["norm"] = { _norm_q(k): v for k, v in m.items() }
+			return f"Loaded {len(m)} QA pairs from {p}"
+		except Exception as e:
+			return f"(failed to load QA: {e})"
+
+	# Auto-load default ground truths and QA if files exist
 	try:
 		for _cand in [Path("gear_wear_ground_truth.json"), Path("data")/"gear_wear_ground_truth.json"]:
 			if _cand.exists():
@@ -142,8 +218,16 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				break
 	except Exception:
 		pass
+	try:
+		for _cand in [Path("gear_wear_qa.jsonl"), Path("data")/"gear_wear_qa.jsonl", Path("gear_wear_qa.json"), Path("data")/"gear_wear_qa.json"]:
+			if _cand.exists():
+				msg = _load_qa_file(str(_cand))
+				log.info("QA auto-load: %s", msg)
+				break
+	except Exception:
+		pass
 
-	def on_ask(q, ground_truth, debug_toggle):
+	def on_ask(q, debug_toggle):
 		qa = query_analyzer(q)
 		cands = hybrid.invoke(q)
 		dense_docs = []
@@ -164,8 +248,15 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		if sec and not filtered:
 			filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
 		top_docs = rerank_candidates(q, filtered, top_n=8)
-		r = route_question(q)
-		router_info = _render_router_info(r, top_docs)
+		# Fallbacks to avoid empty contexts for metrics/answering
+		if not top_docs:
+			# Use unfiltered candidates
+			top_docs = (cands or [])[:8]
+		if not top_docs:
+			# Last resort use first few indexed docs
+			top_docs = docs[:8]
+		r, rtrace = route_question_ex(q)
+		router_info = _render_router_info(r, top_docs) + f" | Agent: {r} | Rules: {', '.join(rtrace.get('matched', []))}"
 		trace = f"Keywords: {qa['keywords']} | Filters: {qa['filters']}"
 		debug_block = ""
 		if debug_toggle:
@@ -177,31 +268,63 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				+ "Hybrid candidates (pre-filter):\n" + _fmt_docs(cands)
 			)
 		if r == "summary":
-			ans = answer_summary(llm, top_docs, q)
+			ans_raw = answer_summary(llm, top_docs, q)
+			out = f"{router_info}\n\n{ans_raw}\n\n(trace: {trace}){debug_block}"
 		elif r == "table":
 			table_ctx = _extract_table_figure_context(top_docs)
-			ans = answer_table(llm, top_docs, q)
-			ans = f"{router_info}\n\nTable/Figure context preview:\n{table_ctx}\n\n---\n\n{ans}\n\n(trace: {trace}){debug_block}"
+			ans_raw = answer_table(llm, top_docs, q)
+			out = f"{router_info}\n\nTable/Figure context preview:\n{table_ctx}\n\n---\n\n{ans_raw}\n\n(trace: {trace}){debug_block}"
 		else:
-			ans = answer_needle(llm, top_docs, q)
-		out = f"{router_info}\n\n{ans}\n\n(trace: {trace}){debug_block}"
+			ans_raw = answer_needle(llm, top_docs, q)
+			out = f"{router_info}\n\n{ans_raw}\n\n(trace: {trace}){debug_block}"
 
-		# Compute optional metrics
+		# Always compute metrics per query using GT/QA maps with fuzzy matching and QA fallback
 		metrics_txt = ""
-		# Use provided ground_truth, else try to match from loaded map
-		if (ground_truth and ground_truth.strip()) or (gt_map.get("__loaded__") and gt_map["map"].get(q)):
-			try:
-				gts = [ground_truth] if ground_truth and ground_truth.strip() else gt_map["map"].get(q, [])
-				dataset = {
-					"question": [q],
-					"answer": [ans],
-					"contexts": [[d.page_content for d in top_docs]],
-					"ground_truths": [gts],
-				}
-				m = run_eval(dataset)
-				metrics_txt = pretty_metrics(m)
-			except Exception as e:
-				metrics_txt = f"(metrics failed: {e})"
+		try:
+			gts = []
+			nq = _norm_q(q)
+			# Exact GT match
+			if gt_map.get("__loaded__") and nq in gt_map.get("norm", {}):
+				gts = gt_map["norm"][nq]
+			# Fuzzy GT if not exact
+			elif gt_map.get("__loaded__") and gt_map.get("norm"):
+				keys = list(gt_map["norm"].keys())
+				best = None; best_s = 0.0
+				for k in keys:
+					s = difflib.SequenceMatcher(None, nq, k).ratio()
+					if s > best_s:
+						best_s = s; best = k
+				if best is not None and best_s >= 0.75:
+					gts = gt_map["norm"][best]
+			# QA fallback
+			if not gts and qa_map.get("__loaded__"):
+				if nq in qa_map.get("norm", {}):
+					gts = [qa_map["norm"][nq]]
+				else:
+					keys = list(qa_map["norm"].keys())
+					best = None; best_s = 0.0
+					for k in keys:
+						s = difflib.SequenceMatcher(None, nq, k).ratio()
+						if s > best_s:
+							best_s = s; best = k
+					if best is not None and best_s >= 0.75:
+						gts = [qa_map["norm"][best]]
+			ref = gts[0] if isinstance(gts, list) and gts else ""
+			dataset = {
+				"question": [q],
+				"answer": [ans_raw],
+				"contexts": [[d.page_content for d in top_docs]],
+				"ground_truths": [gts],
+				"reference": [ref],
+			}
+			m = run_eval(dataset)
+			metrics_txt = pretty_metrics(m)
+			# If all metrics are NaN, hint about API keys
+			vals = [str(m.get(k)) for k in ("faithfulness","answer_relevancy","context_precision","context_recall")]
+			if all(v == 'nan' for v in vals):
+				metrics_txt += "\n(note: metrics require OPENAI_API_KEY or GOOGLE_API_KEY for RAGAS)"
+		except Exception as e:
+			metrics_txt = f"(metrics failed: {e})"
 
 		# Logging + audit
 		log.info("Q: %s", q)
@@ -213,6 +336,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 			entry = {
 				"question": q,
 				"route": r,
+				"router_trace": rtrace,
 				"answer": out,
 				"metrics": metrics_txt,
 				"contexts": [
@@ -236,20 +360,13 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		with gr.Tabs():
 			with gr.Tab("Ask"):
 				q = gr.Textbox(label="Question", placeholder="Ask about figures, tables, procedures, conclusions…")
-				gt = gr.Textbox(label="Ground truth (optional)")
 				dbg = gr.Checkbox(label="Show retrieval debug", value=False)
 				btn = gr.Button("Ask", variant="primary")
 				# Render answer as Markdown so tables display nicely
 				ans = gr.Markdown()
 				metrics = gr.Textbox(label="Metrics", lines=3)
-				btn.click(on_ask, inputs=[q, gt, dbg], outputs=[ans, metrics])
+				btn.click(on_ask, inputs=[q, dbg], outputs=[ans, metrics])
 
-			with gr.Tab("Eval Settings"):
-				gr.Markdown("#### Optional: Load a ground-truth file to auto-compute metrics for matching questions")
-				gt_file = gr.Textbox(label="Ground-truth file path (.json or .jsonl)")
-				load_btn = gr.Button("Load ground truths")
-				load_status = gr.Markdown()
-				load_btn.click(_load_gt_file, inputs=[gt_file], outputs=[load_status])
 
 			with gr.Tab("Figures"):
 				# Build a gallery of extracted figures
