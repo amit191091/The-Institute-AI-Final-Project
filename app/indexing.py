@@ -1,13 +1,51 @@
-from typing import List
+from typing import List, Any, Dict
 import os
 from pathlib import Path
 
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
 
 
 def to_documents(records: List[dict]) -> List[Document]:
 	return [Document(page_content=r["page_content"], metadata=r["metadata"]) for r in records]
+
+
+def _sanitize_metadata(md: Dict[str, Any] | None) -> Dict[str, Any]:
+	"""Ensure metadata values are only str, int, float, bool, or None for vector stores like Chroma.
+	Lists/tuples and dicts are JSON-serialized; non-serializable fallbacks become str().
+	"""
+	if not md:
+		return {}
+	out: Dict[str, Any] = {}
+	for k, v in md.items():
+		if v is None or isinstance(v, (str, int, float, bool)):
+			out[k] = v
+		elif isinstance(v, (list, tuple)):
+			try:
+				if all((x is None) or isinstance(x, (str, int, float, bool)) for x in v):
+					out[k] = ", ".join("" if x is None else str(x) for x in v)
+				else:
+					import json as _json
+					out[k] = _json.dumps(v, ensure_ascii=False)
+			except Exception:
+				out[k] = str(v)
+		elif isinstance(v, dict):
+			try:
+				import json as _json
+				out[k] = _json.dumps(v, ensure_ascii=False)
+			except Exception:
+				out[k] = str(v)
+		else:
+			out[k] = str(v)
+	return out
+
+
+def _sanitize_docs(docs: List[Document]) -> List[Document]:
+	sanitized: List[Document] = []
+	for d in docs:
+		md = getattr(d, "metadata", None) or {}
+		sanitized.append(Document(page_content=d.page_content, metadata=_sanitize_metadata(md)))
+	return sanitized
 
 
 def build_dense_index(docs: List[Document], embedding_fn):
@@ -17,32 +55,34 @@ def build_dense_index(docs: List[Document], embedding_fn):
 	# Lazy import to avoid OS-specific failures at import time
 	try:
 		from langchain_community.vectorstores import Chroma
+		# Sanitize metadata to avoid Chroma upsert errors on complex types
+		sdocs = _sanitize_docs(docs)
 		persist_dir = os.getenv("RAG_CHROMA_DIR")
 		collection = os.getenv("RAG_CHROMA_COLLECTION", None)
 		if persist_dir:
 			Path(persist_dir).mkdir(parents=True, exist_ok=True)
 			if collection:
-				vs = Chroma.from_documents(documents=docs, embedding=embedding_fn, persist_directory=persist_dir, collection_name=collection)
+				vs = Chroma.from_documents(documents=sdocs, embedding=embedding_fn, persist_directory=persist_dir, collection_name=collection)
 			else:
-				vs = Chroma.from_documents(documents=docs, embedding=embedding_fn, persist_directory=persist_dir)
+				vs = Chroma.from_documents(documents=sdocs, embedding=embedding_fn, persist_directory=persist_dir)
 			try:
 				vs.persist()
 			except Exception:
 				pass
 			return vs
 		else:
-			return Chroma.from_documents(documents=docs, embedding=embedding_fn)
+			return Chroma.from_documents(documents=sdocs, embedding=embedding_fn)
 	except Exception:
 		# Fallback pure-Python: DocArray, then FAISS
 		try:
 			from langchain_community.vectorstores import DocArrayInMemorySearch
 
-			return DocArrayInMemorySearch.from_documents(docs, embedding=embedding_fn)
+			return DocArrayInMemorySearch.from_documents(_sanitize_docs(docs), embedding=embedding_fn)
 		except Exception as e:
 			try:
 				from langchain_community.vectorstores import FAISS
 
-				return FAISS.from_documents(docs, embedding_fn)
+				return FAISS.from_documents(_sanitize_docs(docs), embedding_fn)
 			except Exception as e2:
 				raise RuntimeError(f"Failed to initialize vector store: {e2}")
 

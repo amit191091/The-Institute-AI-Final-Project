@@ -46,7 +46,7 @@ def _fmt_docs(docs, max_items=8):
 	return "\n\n---\n\n".join(out) if out else "(none)"
 
 
-def build_ui(docs, hybrid, llm, debug=None):
+def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 	log = get_logger()
 	# Precompute unique sections for filters
 	section_values = sorted({(d.metadata or {}).get("section") or "" for d in docs})
@@ -86,6 +86,62 @@ def build_ui(docs, hybrid, llm, debug=None):
 		except Exception:
 			# graceful fallback
 			return pd.DataFrame([], columns=cols)
+
+	# Optional ground-truths map loaded from a JSON/JSONL file once via UI
+	gt_map = {"__loaded__": False, "map": {}}
+
+	def _load_gt_file(path: str):
+		if not path:
+			return "(no ground-truth file loaded)"
+		try:
+			p = Path(path)
+			if not p.exists():
+				return f"(file not found: {path})"
+			# minimal loader compatible with our main util
+			rows = []
+			if p.suffix.lower() == ".jsonl":
+				with open(p, "r", encoding="utf-8") as f:
+					for line in f:
+						line=line.strip()
+						if not line:
+							continue
+						try:
+							rows.append(json.loads(line))
+						except Exception:
+							pass
+			else:
+				rows = json.load(open(p, "r", encoding="utf-8"))
+				if isinstance(rows, dict):
+					rows = [{"question": k, "ground_truths": v} for k, v in rows.items()]
+			m = {}
+			for r in rows or []:
+				if not isinstance(r, dict):
+					continue
+				q = r.get("question") or r.get("q") or r.get("prompt") or r.get("key")
+				gts = r.get("ground_truths") or r.get("ground_truth") or r.get("answers") or r.get("answer") or r.get("value")
+				if not q:
+					continue
+				if isinstance(gts, str):
+					m[str(q)] = [gts]
+				elif isinstance(gts, list):
+					m[str(q)] = [str(x) for x in gts]
+				elif gts is not None:
+					m[str(q)] = [str(gts)]
+			gt_map["__loaded__"] = True
+			gt_map["map"] = m
+			return f"Loaded {len(m)} ground truths from {path}"
+		except Exception as e:
+			return f"(failed to load: {e})"
+
+	# Auto-load default ground truths if file exists in known locations
+	try:
+		for _cand in [Path("gear_wear_ground_truth.json"), Path("data")/"gear_wear_ground_truth.json"]:
+			if _cand.exists():
+				msg = _load_gt_file(str(_cand))
+				log.info("GT auto-load: %s", msg)
+				break
+	except Exception:
+		pass
 
 	def on_ask(q, ground_truth, debug_toggle):
 		qa = query_analyzer(q)
@@ -129,20 +185,24 @@ def build_ui(docs, hybrid, llm, debug=None):
 		else:
 			ans = answer_needle(llm, top_docs, q)
 		out = f"{router_info}\n\n{ans}\n\n(trace: {trace}){debug_block}"
+
+		# Compute optional metrics
 		metrics_txt = ""
-		if ground_truth and ground_truth.strip():
+		# Use provided ground_truth, else try to match from loaded map
+		if (ground_truth and ground_truth.strip()) or (gt_map.get("__loaded__") and gt_map["map"].get(q)):
 			try:
+				gts = [ground_truth] if ground_truth and ground_truth.strip() else gt_map["map"].get(q, [])
 				dataset = {
 					"question": [q],
 					"answer": [ans],
 					"contexts": [[d.page_content for d in top_docs]],
-					"ground_truth": [ground_truth],
-					"ground_truths": [[ground_truth]],
+					"ground_truths": [gts],
 				}
 				m = run_eval(dataset)
 				metrics_txt = pretty_metrics(m)
 			except Exception as e:
 				metrics_txt = f"(metrics failed: {e})"
+
 		# Logging + audit
 		log.info("Q: %s", q)
 		log.info("Answer: %s", out)
@@ -184,6 +244,13 @@ def build_ui(docs, hybrid, llm, debug=None):
 				metrics = gr.Textbox(label="Metrics", lines=3)
 				btn.click(on_ask, inputs=[q, gt, dbg], outputs=[ans, metrics])
 
+			with gr.Tab("Eval Settings"):
+				gr.Markdown("#### Optional: Load a ground-truth file to auto-compute metrics for matching questions")
+				gt_file = gr.Textbox(label="Ground-truth file path (.json or .jsonl)")
+				load_btn = gr.Button("Load ground truths")
+				load_status = gr.Markdown()
+				load_btn.click(_load_gt_file, inputs=[gt_file], outputs=[load_status])
+
 			with gr.Tab("Figures"):
 				# Build a gallery of extracted figures
 				fig_paths = [d.metadata.get("image_path") for d in docs if d.metadata.get("section") == "Figure" and d.metadata.get("image_path")]
@@ -221,7 +288,7 @@ def build_ui(docs, hybrid, llm, debug=None):
 				refresh.click(_on_refresh, inputs=[sec_dd, qbox], outputs=[df])
 				# initial load handled via value above
 
-		return demo
+	return demo
 
 	# Fallback just in case – should not reach here
 	return demo

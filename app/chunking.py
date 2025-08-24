@@ -26,8 +26,11 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 		md = getattr(el, "metadata", None)
 		page = getattr(md, "page_number", None) if md is not None else None
 		anchor = getattr(md, "id", None) if md is not None else None
+		extractor = getattr(md, "extractor", None) if md is not None else None
 		table_md_path = getattr(md, "table_md_path", None) if md is not None else None
 		table_csv_path = getattr(md, "table_csv_path", None) if md is not None else None
+		table_number = getattr(md, "table_number", None) if md is not None else None
+		table_label = getattr(md, "table_label", None) if md is not None else None
 		raw_text = (getattr(el, "text", "") or "").strip()
 
 		section_type = classify_section_type(str(kind), raw_text)
@@ -61,6 +64,9 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 					"page": page,
 					"section_type": section_type or "Table",
 					"anchor": anchor or None,
+					"extractor": extractor,
+					"table_number": table_number,
+					"table_label": table_label,
 					"table_row_range": row_range,
 					"table_col_names": col_names,
 					"table_md_path": table_md_path,
@@ -103,6 +109,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 					"page": page,
 					"section_type": section_type or "Figure",
 					"anchor": anchor or None,
+					"extractor": extractor,
 					"image_path": img_path,
 					"content": content.strip(),
 					"keywords": extract_keywords(content),
