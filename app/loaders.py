@@ -589,7 +589,7 @@ def _try_extract_images(path: Path):
 							page_text = _getText("text")
 						except Exception:
 							page_text = ""
-				figure_summary = _generate_figure_summary(page_text, pno + 1, img_index)
+				figure_summary = _generate_figure_summary(str(page_text), pno + 1, img_index)
 				
 				elements.append(
 					SimpleNamespace(
