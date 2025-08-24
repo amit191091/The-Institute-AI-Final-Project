@@ -64,11 +64,21 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = setti
 	kws = set(re.findall(r"[A-Za-z0-9°%]+", query.lower()))
 	# domain synonyms for overlap
 	syn = {
-		"gear": ["tooth","teeth","mesh","gmf","transmission"],
-		"ratio": ["gear","transmission","18/35","18:35"],
-		"module": ["mod","m="],
-		"lubricant": ["oil","15w/40","15w-40"],
-		"rms": ["rootmean","amplitude","level"],
+		"gear": ["tooth","teeth","mesh","gmf","transmission","sprocket","pinion"],
+		"ratio": ["gear","transmission","18/35","18:35","gear ratio","speed ratio"],
+		"module": ["mod","m=","gear module","tooth module"],
+		"lubricant": ["oil","15w/40","15w-40","lubrication","grease"],
+		"rms": ["rootmean","amplitude","level","vibration level"],
+		"wear": ["damage","degradation","erosion","abrasion","fatigue"],
+		"depth": ["thickness","measurement","size","dimension"],
+		"failure": ["breakdown","malfunction","defect","issue","problem"],
+		"vibration": ["oscillation","shaking","tremor","frequency"],
+		"teeth": ["tooth","gear teeth","sprocket teeth","pinion teeth"],
+		"transmission": ["gearbox","drive","power transmission","speed reduction"],
+		"measurement": ["reading","value","data","result","finding"],
+		"parameter": ["setting","configuration","specification","property"],
+		"analysis": ["examination","investigation","study","assessment"],
+		"case": ["instance","example","scenario","situation","occurrence"]
 	}
 	expanded = set(kws)
 	for k, alts in syn.items():
@@ -78,10 +88,32 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = setti
 	
 	scored = []
 	for d in candidates:
-		base = lexical_overlap(query_lex, d.page_content.lower())
-		meta = " ".join(map(str, d.metadata.values()))
-		boost = settings.METADATA_BOOST_FACTOR * lexical_overlap(" ".join(kws), meta)
-		score = base + boost
+		# Enhanced scoring with multiple factors
+		content_lower = d.page_content.lower()
+		meta_text = " ".join(map(str, d.metadata.values())).lower()
+		
+		# Base lexical overlap
+		base = lexical_overlap(query_lex, content_lower)
+		
+		# Enhanced metadata boost
+		meta_boost = settings.METADATA_BOOST_FACTOR * lexical_overlap(" ".join(kws), meta_text)
+		
+		# Length penalty for very long documents (favor concise, relevant content)
+		length_penalty = min(1.0, 500 / max(len(content_lower), 1))
+		
+		# Section type bonus
+		section_bonus = 0.0
+		if d.metadata.get("section") == "Table" and any(term in query.lower() for term in ["table", "data", "value", "measurement", "parameter"]):
+			section_bonus = 0.1
+		elif d.metadata.get("section") == "Figure" and any(term in query.lower() for term in ["figure", "image", "plot", "graph", "diagram"]):
+			section_bonus = 0.1
+		
+		# Final score
+		score = base + meta_boost + section_bonus
+		score *= length_penalty
+		
 		scored.append((score, len(d.page_content), d))
+	
+	# Sort by score (descending), then by content length (ascending for concise results)
 	scored.sort(key=lambda x: (-x[0], x[1]))
 	return [d for _, __, d in scored[:top_n]]

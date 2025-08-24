@@ -162,11 +162,10 @@ def build_ui(docs, hybrid, llm, debug=None):
 			except Exception as e:
 				metrics_txt = f"(evaluation failed: {e})"
 		
-		router_info = _render_router_info(r, top_docs)
-		out = f"{router_info}\n\n{ans}\n\n(trace: {qa})"
+		out = ans
 		
 		if debug_toggle:
-			debug_block = f"\n\n--- DEBUG ---\nDense: {len(dense_docs)} docs\nSparse: {len(sparse_docs)} docs\nFiltered: {len(filtered)} docs\nTop: {len(top_docs)} docs"
+			debug_block = f"\n\n--- DEBUG ---\nCandidates: {len(cands)} docs\nFiltered: {len(filtered)} docs\nTop: {len(top_docs)} docs\nRoute: {r}"
 			out += debug_block
 		
 		# Logging + audit

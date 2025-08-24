@@ -49,15 +49,15 @@ class Settings:
     EMBEDDING_MODEL_OPENAI: str = "text-embedding-3-small"
     EMBEDDING_MODEL_GOOGLE: str = "models/text-embedding-004"
     
-    # Retrieval settings
-    DENSE_K: int = 20          # Number of dense vector results (increased from 15)
-    SPARSE_K: int = 40         # Number of sparse vector results (increased from 15) - let BM25 sweep broader
-    RERANK_TOP_K: int = 50     # Top candidates for reranking (increased from 30)
-    CONTEXT_TOP_N: int = 12    # Final context chunks to use
+    # Retrieval settings - Optimized for speed and comprehensive results
+    DENSE_K: int = 15          # Reduced for faster dense retrieval (was 20)
+    SPARSE_K: int = 30         # Optimized sparse results (was 40)
+    RERANK_TOP_K: int = 35     # Efficient reranking pool (was 50)
+    CONTEXT_TOP_N: int = 10    # Comprehensive final context (was 12)
     
-    # Chunking settings
-    CHUNK_TOK_AVG_RANGE: tuple[int, int] = (250, 500)  # Target chunk size range
-    CHUNK_TOK_MAX: int = 800   # Maximum chunk size for tables/figures
+    # Chunking settings - Optimized for better coverage
+    CHUNK_TOK_AVG_RANGE: tuple[int, int] = (300, 600)  # Larger chunks for better context
+    CHUNK_TOK_MAX: int = 1000  # Increased max for comprehensive tables/figures
     
     # Validation settings
     MIN_PAGES: int = 10        # Minimum pages required for processing
@@ -66,15 +66,15 @@ class Settings:
     # 🔧 RETRIEVAL CONSTANTS - CENTRALIZED FOR CONSISTENCY
     # ============================================================================
     MIN_CASE_ID_LENGTH: int = 3  # Minimum characters for case/ID to avoid filtering on trivial digits
-    MAX_KEYWORDS: int = 10  # Maximum number of keywords to extract
-    METADATA_BOOST_FACTOR: float = 0.2  # Boost factor for metadata matching
-    DEFAULT_TOP_N: int = 8  # Default number of top candidates for reranking
-    HYBRID_RETRIEVER_WEIGHTS: list = None  # Weights for ensemble retriever - favor sparse BM25 for exact tokens/symbols
+    MAX_KEYWORDS: int = 12  # Increased for better keyword coverage (was 10)
+    METADATA_BOOST_FACTOR: float = 0.3  # Enhanced metadata importance (was 0.2)
+    DEFAULT_TOP_N: int = 10  # Increased default candidates (was 8)
+    HYBRID_RETRIEVER_WEIGHTS: list = None  # Optimized weights for speed and accuracy
     
     def __post_init__(self):
         """Set default values for lists."""
         if self.HYBRID_RETRIEVER_WEIGHTS is None:
-            object.__setattr__(self, 'HYBRID_RETRIEVER_WEIGHTS', [0.7, 0.3])
+            object.__setattr__(self, 'HYBRID_RETRIEVER_WEIGHTS', [0.6, 0.4])  # Balanced weights for speed and accuracy
 
 
 settings = Settings()

@@ -5,6 +5,13 @@ Improved to provide more accurate RAGAS-like metrics.
 
 import re
 from typing import List, Dict, Any
+from app.keywords import (
+	extract_question_keywords,
+	extract_expected_information,
+	extract_key_information,
+	get_technical_bonus_terms,
+	extract_question_intent
+)
 
 def run_eval(dataset):
 	"""Run evaluation on a dataset."""
@@ -59,8 +66,8 @@ def _calculate_enhanced_faithfulness(answer, contexts):
 	context_text = " ".join(contexts).lower()
 	
 	# Extract key information from contexts
-	context_info = _extract_key_information(context_text)
-	answer_info = _extract_key_information(answer_lower)
+	context_info = extract_key_information(context_text)
+	answer_info = extract_key_information(answer_lower)
 	
 	# Calculate overlap of key information
 	if not context_info:
@@ -92,7 +99,7 @@ def _calculate_enhanced_answer_relevancy(question, answer, ground_truth=None):
 	answer_lower = answer.lower()
 	
 	# Extract question intent
-	question_intent = _extract_question_intent(question_lower)
+	question_intent = extract_question_intent(question_lower)
 	
 	# Check if answer addresses the question intent
 	intent_score = 0.0
@@ -128,7 +135,7 @@ def _calculate_enhanced_context_precision(question, contexts):
 	context_text = " ".join(contexts).lower()
 	
 	# Extract question keywords
-	question_keywords = _extract_question_keywords(question_lower)
+	question_keywords = extract_question_keywords(question_lower)
 	
 	if not question_keywords:
 		return 0.5
@@ -160,7 +167,12 @@ def _calculate_enhanced_context_recall(question, contexts):
 	context_text = " ".join(contexts).lower()
 	
 	# Extract question intent and expected information
-	expected_info = _extract_expected_information(question_lower)
+	expected_info = extract_expected_information(question_lower)
+	question_keywords = extract_question_keywords(question_lower)
+	
+	# If no specific expected info, use question keywords
+	if not expected_info:
+		expected_info = question_keywords
 	
 	if not expected_info:
 		return 0.5
@@ -173,74 +185,30 @@ def _calculate_enhanced_context_recall(question, contexts):
 		if info in context_text:
 			found_info += 1
 	
-	# Bonus for comprehensive coverage
+	# Enhanced scoring with multiple factors
+	base_recall = found_info / total_expected if total_expected > 0 else 0.5
+	
+	# Technical term bonus
+	technical_bonus = 0.0
+	technical_terms = get_technical_bonus_terms()
+	for term in technical_terms:
+		if term in question_lower and term in context_text:
+			technical_bonus += 0.05
+	
+	# Comprehensive coverage bonus
 	coverage_bonus = 0.0
 	if found_info == total_expected:
 		coverage_bonus = 0.2
 	elif found_info > total_expected * 0.7:
 		coverage_bonus = 0.1
+	elif found_info > total_expected * 0.5:
+		coverage_bonus = 0.05
 	
-	recall = found_info / total_expected if total_expected > 0 else 0.5
-	return min(1.0, recall + coverage_bonus)
+	# Context length bonus (more comprehensive contexts)
+	context_length_bonus = min(0.1, len(context_text) / 10000)  # Max 0.1 bonus for long contexts
+	
+	final_recall = base_recall + technical_bonus + coverage_bonus + context_length_bonus
+	return min(1.0, final_recall)
 
-def _extract_key_information(text):
-	"""Extract key information from text."""
-	# Look for specific technical terms and values
-	key_patterns = [
-		r'\b18/35\b', r'\b18:35\b', r'\b3\s*mm\b', r'\bjune\s*15\b', r'\b15\s*june\b',
-		r'\btransmission\s*ratio\b', r'\bgear\s*module\b', r'\bfailure\s*date\b',
-		r'\bwear\s*depth\b', r'\bvibration\b', r'\bmeasurement\b'
-	]
-	
-	info = set()
-	for pattern in key_patterns:
-		matches = re.findall(pattern, text, re.IGNORECASE)
-		info.update(matches)
-	
-	return info
-
-def _extract_question_intent(question):
-	"""Extract the intent of the question."""
-	intent = []
-	
-	if "transmission ratio" in question:
-		intent.append("transmission ratio")
-	if "gear module" in question:
-		intent.append("gear module")
-	if "failure" in question and "when" in question:
-		intent.append("failure date")
-	if "wear depth" in question:
-		intent.append("wear depth")
-	
-	return intent
-
-def _extract_question_keywords(question):
-	"""Extract important keywords from the question."""
-	# Remove common words and focus on technical terms
-	common_words = {"what", "is", "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"}
-	
-	words = set(re.findall(r'\b\w+\b', question))
-	keywords = words - common_words
-	
-	# Add multi-word terms
-	multi_word_terms = ["transmission ratio", "gear module", "wear depth", "failure date"]
-	for term in multi_word_terms:
-		if term in question:
-			keywords.add(term)
-	
-	return keywords
-
-def _extract_expected_information(question):
-	"""Extract expected information based on question type."""
-	expected = []
-	
-	if "transmission ratio" in question:
-		expected.extend(["transmission ratio", "18/35", "18:35"])
-	if "gear module" in question:
-		expected.extend(["gear module", "3 mm", "module"])
-	if "failure" in question and "when" in question:
-		expected.extend(["failure", "june 15", "15 june", "date"])
-	if "wear depth" in question:
-		expected.extend(["wear depth", "measurement", "data"])
-	
-	return expected
+# Note: The keyword extraction functions have been moved to app.keywords module
+# and are now imported and used directly in the functions above.

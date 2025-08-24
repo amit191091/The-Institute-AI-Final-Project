@@ -93,7 +93,8 @@ def _matches_csv_target(file_name: str, csv_targets: List[str]) -> bool:
 def render_context(docs: List[Document], max_chars: int = 8000) -> str:
 	out, n = [], 0
 	for d in docs:
-		piece = f"[{d.metadata.get('file_name')} p{d.metadata.get('page')}] {d.page_content}".strip()
+		# Remove document path information from context
+		piece = d.page_content.strip()
 		n += len(piece)
 		if n > max_chars:
 			break
