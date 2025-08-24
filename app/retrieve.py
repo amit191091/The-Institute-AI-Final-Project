@@ -3,7 +3,7 @@ import re
 from typing import Dict, List
 from app.logger import get_logger
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain.retrievers import EnsembleRetriever
 
 
@@ -44,8 +44,18 @@ def apply_filters(docs: List[Document], filters: Dict) -> List[Document]:
 
 
 def build_hybrid_retriever(dense_store, sparse_retriever, dense_k: int = 10):
+	"""Create an ensemble retriever with tunable weights via env vars.
+	Defaults favor sparse slightly for keyword-heavy tech PDFs.
+	"""
 	dense = dense_store.as_retriever(search_kwargs={"k": dense_k})
-	return EnsembleRetriever(retrievers=[sparse_retriever, dense], weights=[0.5, 0.5])
+	try:
+		sw = float(os.getenv("RAG_SPARSE_WEIGHT", "0.6"))
+		dw = float(os.getenv("RAG_DENSE_WEIGHT", "0.4"))
+		total = (sw + dw) or 1.0
+		sw, dw = sw / total, dw / total
+	except Exception:
+		sw, dw = 0.6, 0.4
+	return EnsembleRetriever(retrievers=[sparse_retriever, dense], weights=[sw, dw])
 
 
 def lexical_overlap(a: str, b: str) -> float:
@@ -56,22 +66,74 @@ def lexical_overlap(a: str, b: str) -> float:
 
 
 def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) -> List[Document]:
-	kws = set(re.findall(r"[A-Za-z0-9°%]+", query.lower()))
+	ql = query.lower()
+	kws = set(re.findall(r"[A-Za-z0-9°%]+", ql))
+	# Section preference based on query intent
+	sec_pref = None
+	if "table" in ql:
+		sec_pref = "Table"
+	elif any(w in ql for w in ("figure", "image", "fig ", "plot", "graph", "photo")):
+		sec_pref = "Figure"
+
+	def _len_penalty(n: int) -> float:
+		# Mild penalty for very short or extremely long contexts
+		if n < 200:
+			return 0.9
+		if n > 3000:
+			return 0.9
+		return 1.0
+
+	def _extractor_bonus(md: dict) -> float:
+		if md.get("section") != "Table":
+			return 0.0
+		ext = str(md.get("extractor", ""))
+		if ext.startswith("pdfplumber"):
+			return 0.08
+		if ext.startswith("tabula"):
+			return 0.05
+		if ext.startswith("camelot"):
+			return 0.03
+		if ext.startswith("synth"):
+			return 0.0
+		return 0.0
+
 	scored = []
 	for d in candidates:
+		md = d.metadata or {}
 		base = lexical_overlap(query, d.page_content)
-		meta = " ".join(map(str, d.metadata.values()))
-		boost = 0.2 * lexical_overlap(" ".join(kws), meta)
-		score = base + boost
+		meta = " ".join(map(str, md.values()))
+		meta_boost = 0.2 * lexical_overlap(" ".join(kws), meta)
+		sec_boost = 0.15 if (sec_pref and md.get("section") == sec_pref) else 0.0
+		src_boost = _extractor_bonus(md)
+		score = (base + meta_boost + sec_boost + src_boost) * _len_penalty(len(d.page_content))
 		scored.append((score, len(d.page_content), d))
+
+	# Sort and dedupe by (file,page,section,anchor/path)
 	scored.sort(key=lambda x: (-x[0], x[1]))
+	seen = set()
+	unique: List[Document] = []
+	for s, ln, d in scored:
+		md = d.metadata or {}
+		key = (
+			md.get("file_name"),
+			md.get("page"),
+			md.get("section"),
+			md.get("anchor") or md.get("table_md_path") or md.get("table_csv_path") or md.get("image_path")
+		)
+		if key in seen:
+			continue
+		seen.add(key)
+		unique.append(d)
+		if len(unique) >= top_n:
+			break
+
 	try:
 		if os.getenv("RAG_TRACE", "0").lower() in ("1", "true", "yes") or os.getenv("RAG_TRACE_RETRIEVAL", "0").lower() in ("1", "true", "yes"):
 			log = get_logger()
-			for i, (s, ln, d) in enumerate(scored[:top_n], start=1):
+			for i, d in enumerate(unique[:top_n], start=1):
 				md = d.metadata or {}
-				log.debug("RERANK[%d]: score=%.4f len=%d %s p%s %s", i, s, ln, md.get("file_name"), md.get("page"), md.get("section"))
+				log.debug("RERANK[%d]: %s p%s %s", i, md.get("file_name"), md.get("page"), md.get("section"))
 	except Exception:
 		pass
-	return [d for _, __, d in scored[:top_n]]
+	return unique[:top_n]
 

@@ -19,6 +19,10 @@ from app.ui_gradio import build_ui
 from app.validate import validate_min_pages
 from app.logger import get_logger
 from app.retrieve import lexical_overlap
+from app.eval_ragas import run_eval_detailed, pretty_metrics
+import json
+import math
+import difflib
 def _clean_run_outputs():
     """Delete prior run artifacts so new extraction overwrites files.
     Cleans: data/images, data/elements, logs/queries.jsonl, logs/elements/*.jsonl
@@ -73,6 +77,7 @@ def _discover_input_paths() -> List[Path]:
 
 def _get_embeddings():
     """Prefer Google embeddings, fallback to OpenAI."""
+    force_openai = (os.getenv("FORCE_OPENAI_ONLY", "").strip().lower() in ("1", "true", "yes"))
     try:
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
     except Exception:
@@ -82,7 +87,9 @@ def _get_embeddings():
     except Exception:
         OpenAIEmbeddings = None  # type: ignore
 
-    if os.getenv("GOOGLE_API_KEY") and GoogleGenerativeAIEmbeddings is not None:
+    if force_openai and os.getenv("OPENAI_API_KEY") and OpenAIEmbeddings is not None:
+        return OpenAIEmbeddings(model=settings.EMBEDDING_MODEL_OPENAI)
+    if os.getenv("GOOGLE_API_KEY") and GoogleGenerativeAIEmbeddings is not None and not force_openai:
         return GoogleGenerativeAIEmbeddings(model=settings.EMBEDDING_MODEL_GOOGLE)
     if os.getenv("OPENAI_API_KEY") and OpenAIEmbeddings is not None:
         return OpenAIEmbeddings(model=settings.EMBEDDING_MODEL_OPENAI)
@@ -97,20 +104,19 @@ class _LLM:
     def __init__(self) -> None:
         self._backend = None
         self._which = None
-        # Prefer Google Gemini
-        if os.getenv("GOOGLE_API_KEY"):
+        force_openai = (os.getenv("FORCE_OPENAI_ONLY", "").strip().lower() in ("1", "true", "yes"))
+        # Prefer Google Gemini unless forced OpenAI
+        if os.getenv("GOOGLE_API_KEY") and not force_openai:
             try:
                 from langchain_google_genai import ChatGoogleGenerativeAI
-
                 self._backend = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2)
                 self._which = "google"
             except Exception:
                 self._backend = None
-        # Fallback to OpenAI
-        if self._backend is None and os.getenv("OPENAI_API_KEY"):
+        # Fallback to OpenAI (or forced)
+        if (self._backend is None or force_openai) and os.getenv("OPENAI_API_KEY"):
             try:
                 from langchain_openai import ChatOpenAI
-
                 model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
                 self._backend = ChatOpenAI(model=model, temperature=0.2)
                 self._which = "openai"
@@ -287,8 +293,232 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     return ans
 
 
+def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
+    """Answer a question and also return the contexts used (top_docs)."""
+    log = get_logger()
+    qa = query_analyzer(question)
+    try:
+        candidates = hybrid.invoke(question)
+    except Exception:
+        candidates = hybrid.invoke(question)
+    candidates = candidates[: settings.K_TOP_K]
+    filtered = apply_filters(candidates, qa["filters"])  # type: ignore[index]
+    try:
+        sec = qa["filters"].get("section")  # type: ignore[index]
+    except Exception:
+        sec = None
+    if sec and not filtered:
+        filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
+    top_docs = rerank_candidates(question, filtered, top_n=settings.CONTEXT_TOP_N)
+    # Fallbacks to avoid empty contexts for evaluation
+    if not top_docs:
+        # Use raw candidates if available
+        top_docs = candidates[: settings.CONTEXT_TOP_N] if candidates else []
+    if not top_docs:
+        # Last resort: take a couple of random-ish docs
+        top_docs = docs[: settings.CONTEXT_TOP_N]
+    route = route_question(question)
+    if route == "summary":
+        ans = answer_summary(llm, top_docs, question)
+    elif route == "table":
+        ans = answer_table(llm, top_docs, question)
+    else:
+        ans = answer_needle(llm, top_docs, question)
+    return ans, top_docs
+
+
+def _load_json_or_jsonl(path: Path):
+    """Load a .json (list/dict) or .jsonl file into a list of dicts."""
+    try:
+        if path.suffix.lower() == ".jsonl":
+            rows = []
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rows.append(json.loads(line))
+                    except Exception:
+                        continue
+            return rows
+        else:
+            obj = json.load(open(path, "r", encoding="utf-8"))
+            if isinstance(obj, list):
+                return obj
+            if isinstance(obj, dict):
+                # Convert mapping to list of {key:..., value:...}
+                return [{"key": k, "value": v} for k, v in obj.items()]
+            return []
+    except Exception:
+        return []
+
+
+def _discover_eval_files():
+    qa_candidates = [
+        Path(os.getenv("RAG_QA_FILE", "")),
+        Path("gear_wear_qa.json"),
+        Path("gear_wear_qa.jsonl"),
+        Path("data")/"gear_wear_qa.json",
+        Path("data")/"gear_wear_qa.jsonl",
+    ]
+    gt_candidates = [
+        Path(os.getenv("RAG_GT_FILE", "")),
+    Path("gear_wear_ground_truth.json"),
+        Path("gear_wear_ground_truth.json"),
+        Path("data")/"gear_wear_ground_truth.json",
+    ]
+    qa = next((p for p in qa_candidates if str(p) and p.exists()), None)
+    gt = next((p for p in gt_candidates if str(p) and p.exists()), None)
+    return qa, gt
+
+
+def _normalize_ground_truth(gt_rows):
+    """Return dict: question -> list[str] ground truths."""
+    mapping = {}
+    import re
+    def _norm(s: str) -> str:
+        s = str(s).lower().strip()
+        s = re.sub(r"\s+", " ", s)
+        # strip common punctuation incl. unicode dashes
+        s = s.strip(".,:;!?-—\u2013\u2014\"'()[]{}")
+        return s
+    for r in gt_rows or []:
+        if not isinstance(r, dict):
+            continue
+        q = r.get("question") or r.get("q") or r.get("prompt") or r.get("key")
+        if not q:
+            continue
+        gts = r.get("ground_truths") or r.get("ground_truth") or r.get("answers") or r.get("answer") or r.get("value")
+        if gts is None:
+            mapping[_norm(q)] = []
+            continue
+        if isinstance(gts, str):
+            mapping[_norm(q)] = [gts]
+        elif isinstance(gts, list):
+            mapping[_norm(q)] = [str(x) for x in gts]
+        else:
+            mapping[_norm(q)] = [str(gts)]
+    return mapping
+
+
+def run_evaluation(docs, hybrid, llm: _LLM):
+    log = get_logger()
+    qa_path, gt_path = _discover_eval_files()
+    if not qa_path:
+        log.warning("Evaluation requested but QA file not found.")
+        return
+    # Prefer OpenAI for RAGAS if available to improve classification stability
+    try:
+        if os.getenv("OPENAI_API_KEY"):
+            os.environ.setdefault("RAGAS_LLM_PROVIDER", "openai")
+    except Exception:
+        pass
+    qa_rows = _load_json_or_jsonl(qa_path)
+    gt_rows = _load_json_or_jsonl(gt_path) if gt_path else []
+    gt_map = _normalize_ground_truth(gt_rows)
+    # Build dataset by answering each question and capturing contexts
+    rows_out = []
+    any_gt = False
+    for i, row in enumerate(qa_rows, start=1):
+        if not isinstance(row, dict):
+            continue
+        q = row.get("question") or row.get("q") or row.get("prompt") or row.get("text")
+        if not q:
+            continue
+        try:
+            ans, ctx_docs = answer_with_contexts(docs, hybrid, llm, q)
+        except Exception:
+            continue
+        ctxs = [getattr(d, "page_content", "") for d in (ctx_docs or []) if getattr(d, "page_content", None)]
+        if not ctxs:
+            # ensure non-empty to satisfy metrics requiring context
+            ctxs = [getattr(docs[0], "page_content", "")] if docs else [""]
+        # normalize question for GT lookup (case/whitespace-insensitive) with fuzzy fallback
+        norm_q = str(q).lower().strip()
+        norm_q = " ".join(norm_q.split())
+        norm_q = norm_q.strip(".,:;!?-—\u2013\u2014\"'()[]{}")
+        gts = gt_map.get(norm_q, [])
+        if not gts and gt_map:
+            # fuzzy match to the closest GT question key
+            keys = list(gt_map.keys())
+            best = None
+            best_score = 0.0
+            for k in keys:
+                s = difflib.SequenceMatcher(None, norm_q, k).ratio()
+                if s > best_score:
+                    best_score = s; best = k
+            if best is not None and best_score >= 0.88:
+                gts = gt_map.get(best, [])
+        if gts:
+            any_gt = True
+        # Pick a single reference string for metrics that require it (e.g., context_precision)
+        ref = (gts[0] if isinstance(gts, list) and gts else "")
+        rows_out.append({
+            "question": q,
+            "answer": ans or "",
+            "contexts": ctxs,
+            "ground_truths": gts,
+            "reference": ref,
+        })
+        try:
+            log.info("EVAL Q[%d]: %s", i, q)
+        except Exception:
+            pass
+    # Build dataset dict with columns; drop ground_truths if none present
+    if not rows_out:
+        print("No evaluation rows to process.")
+        return
+    ds = {"question": [], "answer": [], "contexts": [], "reference": []}
+    if any_gt:
+        ds["ground_truths"] = []  # type: ignore[index]
+    for r in rows_out:
+        ds["question"].append(r["question"])
+        ds["answer"].append(r["answer"])
+        ds["contexts"].append(r["contexts"])
+        ds["reference"].append(r.get("reference", ""))
+        if any_gt:
+            ds["ground_truths"].append(r.get("ground_truths", []))  # type: ignore[index]
+    # Run RAGAS
+    try:
+        summary, per_q = run_eval_detailed(ds)
+    except Exception as e:
+        print(f"RAGAS evaluation failed: {e}")
+        return
+    # Persist (sanitize NaN -> None to keep JSON valid)
+    def _nan_to_none(x):
+        if isinstance(x, float) and math.isnan(x):
+            return None
+        if isinstance(x, list):
+            return [_nan_to_none(v) for v in x]
+        if isinstance(x, dict):
+            return {k: _nan_to_none(v) for k, v in x.items()}
+        return x
+    out_dir = Path("logs"); out_dir.mkdir(exist_ok=True)
+    with open(out_dir/"eval_ragas_summary.json", "w", encoding="utf-8") as f:
+        json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2)
+    with open(out_dir/"eval_ragas_per_question.jsonl", "w", encoding="utf-8") as f:
+        for rec in per_q:
+            f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False) + "\n")
+    # Print detailed per-question results
+    print("RAGAS summary:\n" + pretty_metrics(summary))
+    print("\nPer-question results:")
+    try:
+        for rec in per_q:
+            q = rec.get("question", "")
+            ans = rec.get("answer", "")
+            mets = {k: v for k, v in rec.items() if k not in ("question", "answer", "contexts", "ground_truths")}
+            print("- Q:", q)
+            print("  A:", (ans or "")[:400])
+            print("  metrics:", json.dumps(mets, ensure_ascii=False))
+    except Exception:
+        pass
+
+
 def main() -> None:
-    load_dotenv()
+    print("stating program")
+    # Load .env and override any pre-set env vars to ensure the correct API keys are used
+    load_dotenv(override=True)
     _clean_run_outputs()
     paths = _discover_input_paths()
     if not paths:
@@ -296,6 +526,12 @@ def main() -> None:
         return
     docs, hybrid, debug = build_pipeline(paths)
     llm = _LLM()
+    # Optional: evaluation mode
+    if os.getenv("RAG_EVAL", "").lower() in ("1", "true", "yes"):
+        run_evaluation(docs, hybrid, llm)
+        # If headless during eval, we can exit early
+        if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
+            return
     # Launch Gradio UI
     if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
         print("[HEADLESS] Ingestion complete. Skipping UI launch.")
