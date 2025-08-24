@@ -218,7 +218,7 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     except Exception:
         candidates = hybrid.invoke(question)
     # enforce rerank pool size
-    candidates = candidates[: settings.RERANK_TOP_K]
+    candidates = candidates[: settings.K_TOP_K] # rerank TOP K
     filtered = apply_filters(candidates, qa["filters"])  # metadata filters
     # Fallback: if section filter applied but nothing left, pull from all docs with that section
     try:
