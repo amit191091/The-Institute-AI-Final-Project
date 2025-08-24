@@ -21,61 +21,7 @@ wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# celery beat schedule file
-celerybeat-schedule
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
+# Virtual environments
 .env
 .venv
 env/
@@ -83,21 +29,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
 
 # IDE
 .vscode/
@@ -116,61 +47,34 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-# *.mat  # Commented out to include vibration data .mat files
-*.csv
-*.json
-# *.png  # Commented out to include gear images
-# *.jpg  # Commented out to include gear images
-# *.jpeg  # Commented out to include gear images
-*.gif
-*.bmp
-*.tiff
-*.tif
+logs/
+*.log
+*.tmp
+*.temp
 
-# Keep specific files
-!requirements.txt
-!README.md
-!LICENSE
-!*.py
-!*.md
-!*.txt
+# Data files (optional - you might want to include some)
+# Uncomment if you don't want to include large data files
+# *.pdf
+# *.mat
+# *.csv
+# *.png
+# *.jpg
+# *.jpeg
 
-# Exclude large data directories but keep structure
-# Pictures and Vibrations database/Picture/database/  # Commented out to include gear images database
-# Pictures and Vibrations database/Vibration/database/  # Commented out to include vibration data
-test_output/
-results/
+# Environment variables
+.env.local
+.env.production
 
-# Keep analysis results
-!Pictures and Vibrations database/Picture/*.csv
-!Pictures and Vibrations database/Picture/*.json
-!Pictures and Vibrations database/Picture/*.png
-!Pictures and Vibrations database/Picture/Picture Tools/*.csv
-!Pictures and Vibrations database/Vibration/*.csv
+# Jupyter Notebook
+.ipynb_checkpoints
 
-# RAG System
-RAG/.chroma/
-RAG/__pycache__/
-RAG/app/__pycache__/
+# pytest
+.pytest_cache/
 
-# RAG specific files to ignore (but allow folder structure)
-RAG/**/*.sqlite3
-RAG/**/*.db
-RAG/**/*.log
-RAG/**/*.json
-RAG/**/*.png
-RAG/**/*.md
-RAG/**/*.jpg
-RAG/**/*.jpeg
-RAG/**/*.csv
-RAG/**/*.jsonl
-
-# Keep RAG source code and folder structure
-!RAG/*.py
-!RAG/app/*.py
-!RAG/requirements.txt
-!RAG/data/
-!RAG/data/elements/
-!RAG/data/images/
-!RAG/logs/
-!RAG/**/.gitkeep
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/

@@ -1,0 +1,144 @@
+{
+  "summary": {
+    "total_questions": 15,
+    "correct_answers": 2,
+    "accuracy": 13.333333333333334
+  },
+  "results": [
+    {
+      "id": "q_001",
+      "question": "What is the model number of the gearbox?",
+      "ground_truth": "MG-5025A",
+      "rag_answer": "MG-5025A [Gear wear Failure.pdf p1]",
+      "is_correct": true,
+      "difficulty": "easy",
+      "type": "factual"
+    },
+    {
+      "id": "q_002",
+      "question": "What lubricant was used in the system?",
+      "ground_truth": "2640 semi-synthetic (15W/40)",
+      "rag_answer": "2640 semi-synthetic, 15W/40 viscosity [C:\\Users\\amitl\\Documents\\AI Developers\\PracticeBase\\Final_project\\Gear wear Failure.pdf p1]",
+      "is_correct": true,
+      "difficulty": "easy",
+      "type": "factual"
+    },
+    {
+      "id": "q_003",
+      "question": "What is the sampling rate for the vibration sensors?",
+      "ground_truth": "50 kS/sec",
+      "rag_answer": "50 kHz [C:\\Users\\amitl\\Documents\\AI Developers\\PracticeBase\\Final_project\\Gear wear Failure.pdf p1]",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "factual"
+    },
+    {
+      "id": "q_004",
+      "question": "How many cases are shown in the wear depth table?",
+      "ground_truth": "35 cases (W1-W35) plus Healthy case",
+      "rag_answer": "There is no table provided.  Please provide the table.",
+      "is_correct": false,
+      "difficulty": "medium",
+      "type": "table"
+    },
+    {
+      "id": "q_005",
+      "question": "What brand of accelerometers were used?",
+      "ground_truth": "Dytran 3053B and Honeywell 3010AN",
+      "rag_answer": "Not found in context.",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "factual"
+    },
+    {
+      "id": "q_006",
+      "question": "What is the module value for the gears?",
+      "ground_truth": "3 mm",
+      "rag_answer": "This question cannot be answered from the given source.  While [C:\\Users\\amitl\\Documents\\AI Developers\\PracticeBase\\Final_project\\Gear wear Failure.pdf p11] mentions a table containing \"Module\", the table itself is not provided.",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "factual"
+    },
+    {
+      "id": "q_007",
+      "question": "What happened during the June 13 measurement?",
+      "ground_truth": "The progression culminated in a complete failure. The worn gear tooth fractured under load, resulting in a critical mechanical malfunction.",
+      "rag_answer": "Not found in context.",
+      "is_correct": false,
+      "difficulty": "medium",
+      "type": "analytical"
+    },
+    {
+      "id": "q_008",
+      "question": "What is the wear depth for case W35?",
+      "ground_truth": "932 μm",
+      "rag_answer": "Not found in context.",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "table"
+    },
+    {
+      "id": "q_009",
+      "question": "What type of gears are used in the MG-5025A?",
+      "ground_truth": "Spur gears",
+      "rag_answer": "Not found in context.",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "factual"
+    },
+    {
+      "id": "q_010",
+      "question": "What is the sensitivity of the starboard accelerometer?",
+      "ground_truth": "1783 mV/g",
+      "rag_answer": "Not found in context.",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "factual"
+    },
+    {
+      "id": "q_011",
+      "question": "What is the transmission ratio?",
+      "ground_truth": "18/35 (18 teeth on driving gear, 35 teeth on driven gear)",
+      "rag_answer": "Not found in context.  While the document mentions transmission ratio (𝑧𝑑𝑟𝑖𝑣𝑖𝑛𝑔/𝑧𝑑𝑟𝑖𝑣𝑒𝑛) [C:\\Users\\amitl\\Documents\\AI Developers\\PracticeBase\\Final_project\\Gear wear Failure.pdf p11], the actual value is not provided.",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "factual"
+    },
+    {
+      "id": "q_012",
+      "question": "What is the wear depth for case W1?",
+      "ground_truth": "40 μm",
+      "rag_answer": "Not found in context.",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "table"
+    },
+    {
+      "id": "q_013",
+      "question": "What is the sensitivity of the port accelerometer?",
+      "ground_truth": "Dytran 3053B 1783 has sensitivity of 9.47 mV/g, and Dytran 3053B 1787 has sensitivity of 9.35 mV/g",
+      "rag_answer": "[LLM error] 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-1.5-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n  quota_value: 50\n}\n, links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, retry_delay {\n  seconds: 50\n}\n]\n\nble: part of the contact area had been removed, showing the first physical evidence of surface alteration. This visual cue prompted a closer inspection of the contemporaneous vibration data.\n\nQuestion: What is the sensitivity of the port accelerometer?\nInstructions: Answer with exact values/terms from context. Add a citation [file_name pX]. If not in context, answer 'Not found in context.'\nAnswer:",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "factual"
+    },
+    {
+      "id": "q_014",
+      "question": "What is the wear depth for case W10?",
+      "ground_truth": "294 μm",
+      "rag_answer": "[LLM error] 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-1.5-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n  quota_value: 50\n}\n, links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, retry_delay {\n  seconds: 47\n}\n]\n\n provided context only. If a value is requested, return the exact value with units and a short citation in brackets like [filename pX]. If unknown, say 'Not found in context.'\nContext (citations inline):\n\n\nQuestion: What is the wear depth for case W10?\nInstructions: Answer with exact values/terms from context. Add a citation [file_name pX]. If not in context, answer 'Not found in context.'\nAnswer:",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "table"
+    },
+    {
+      "id": "q_015",
+      "question": "What is the wear depth for case W25?",
+      "ground_truth": "637 μm",
+      "rag_answer": "[LLM error] 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. [violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-1.5-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n  quota_value: 50\n}\n, links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, retry_delay {\n  seconds: 45\n}\n]\n\n provided context only. If a value is requested, return the exact value with units and a short citation in brackets like [filename pX]. If unknown, say 'Not found in context.'\nContext (citations inline):\n\n\nQuestion: What is the wear depth for case W25?\nInstructions: Answer with exact values/terms from context. Add a citation [file_name pX]. If not in context, answer 'Not found in context.'\nAnswer:",
+      "is_correct": false,
+      "difficulty": "easy",
+      "type": "table"
+    }
+  ]
+}

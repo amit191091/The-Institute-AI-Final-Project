@@ -1,0 +1,105 @@
+{
+  "metadata": {
+    "document": "Gear wear Failure.pdf",
+    "created_by": "ground_truth_generator.py",
+    "total_questions": 10,
+    "instructions": [
+      "Fill in the 'ground_truth' field with accurate answers",
+      "Mark 'include': true for questions to include in evaluation",
+      "Add difficulty rating: 'easy', 'medium', 'hard'",
+      "Specify question type: 'factual', 'analytical', 'table', 'figure'"
+    ]
+  },
+  "questions": [
+    {
+      "id": "q_001",
+      "question": "What is the model number of the gearbox?",
+      "ground_truth": "",
+      "include": true,
+      "difficulty": "",
+      "type": "",
+      "notes": ""
+    },
+    {
+      "id": "q_002",
+      "question": "What lubricant was used in the system?",
+      "ground_truth": "",
+      "include": true,
+      "difficulty": "",
+      "type": "",
+      "notes": ""
+    },
+    {
+      "id": "q_003",
+      "question": "What is the sampling rate for the vibration sensors?",
+      "ground_truth": "",
+      "include": true,
+      "difficulty": "",
+      "type": "",
+      "notes": ""
+    },
+    {
+      "id": "q_004",
+      "question": "How many cases are shown in the wear depth table?",
+      "ground_truth": "",
+      "include": true,
+      "difficulty": "",
+      "type": "",
+      "notes": ""
+    },
+    {
+      "id": "q_005",
+      "question": "What brand of accelerometers were used?",
+      "ground_truth": "",
+      "include": true,
+      "difficulty": "",
+      "type": "",
+      "notes": ""
+    },
+    {
+      "id": "q_006",
+      "question": "What is the module value for the gears?",
+      "ground_truth": "",
+      "include": true,
+      "difficulty": "",
+      "type": "",
+      "notes": ""
+    },
+    {
+      "id": "q_007",
+      "question": "What happened during the June 13 measurement?",
+      "ground_truth": "",
+      "include": true,
+      "difficulty": "",
+      "type": "",
+      "notes": ""
+    },
+    {
+      "id": "q_008",
+      "question": "What is the wear depth for case W35?",
+      "ground_truth": "",
+      "include": true,
+      "difficulty": "",
+      "type": "",
+      "notes": ""
+    },
+    {
+      "id": "q_009",
+      "question": "What type of gears are used in the MG-5025A?",
+      "ground_truth": "",
+      "include": true,
+      "difficulty": "",
+      "type": "",
+      "notes": ""
+    },
+    {
+      "id": "q_010",
+      "question": "What is the sensitivity of the starboard accelerometer?",
+      "ground_truth": "",
+      "include": true,
+      "difficulty": "",
+      "type": "",
+      "notes": ""
+    }
+  ]
+}
