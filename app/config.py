@@ -10,6 +10,7 @@ class Settings:
 	EMBEDDING_MODEL_GOOGLE: str = "models/text-embedding-004"
 	DENSE_K: int = 10
 	SPARSE_K: int = 10
+	K_TOP_K: int = 20
 	RERANK_TOP_K: int = 20
 	CONTEXT_TOP_N: int = 8
 	CHUNK_TOK_AVG_RANGE: tuple[int, int] = (250, 500)
