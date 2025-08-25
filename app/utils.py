@@ -1,6 +1,23 @@
 from __future__ import annotations
 
 import math
+import hashlib
+import re
+
+
+def slugify(s: str) -> str:
+	s = (s or "").strip().lower()
+	s = re.sub(r"[^a-z0-9\-_.]+", "-", s)
+	s = re.sub(r"-+", "-", s).strip("-")
+	return s or "doc"
+
+
+def sha1_short(text: str, n: int = 12) -> str:
+	try:
+		h = hashlib.sha1(text.encode("utf-8", errors="ignore")).hexdigest()
+		return h[: max(1, n)]
+	except Exception:
+		return "0" * n
 
 
 def approx_token_len(text: str) -> int:
@@ -49,3 +66,12 @@ def naive_markdown_table(text: str) -> str:
 	fmt = lambda r: "| " + " | ".join(r) + " |"
 	out = [fmt(header), fmt(sep)] + [fmt(r) for r in body]
 	return "\n".join(out)
+
+
+def split_into_sentences(text: str) -> list[str]:
+	if not text:
+		return []
+	# Simple sentence splitter; good enough for chunking boundaries
+	parts = re.split(r"(?<=[.!?])\s+", text.strip())
+	return [p.strip() for p in parts if p.strip()]
+

@@ -169,3 +169,4 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	ctx = render_context(table_docs)
 	prompt = TABLE_SYSTEM + "\n" + TABLE_PROMPT.format(table=ctx, question=question)
 	return llm(prompt).strip()
+

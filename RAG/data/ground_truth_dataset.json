@@ -1,0 +1,465 @@
+{
+  "metadata": {
+    "document": "Gear wear Failure.pdf",
+    "created_by": "ground_truth_generator.py",
+    "total_questions": 50,
+    "instructions": [
+      "Fill in the 'ground_truth' field with accurate answers",
+      "Mark 'include': true for questions to include in evaluation",
+      "Add difficulty rating: 'easy', 'medium', 'hard'",
+      "Specify question type: 'factual', 'analytical', 'table', 'figure', 'temporal'"
+    ]
+  },
+  "questions": [
+    {
+      "id": "q_001",
+      "question": "What is the model number of the gearbox?",
+      "ground_truth": "MG-5025A",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 3 transmission features"
+    },
+    {
+      "id": "q_002",
+      "question": "What lubricant was used in the system?",
+      "ground_truth": "2640 semi-synthetic (15W/40)",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 3 transmission features"
+    },
+    {
+      "id": "q_003",
+      "question": "What is the sampling rate for the vibration sensors?",
+      "ground_truth": "50 kS/sec",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 2 sensors and data acquisition"
+    },
+    {
+      "id": "q_004",
+      "question": "How many cases are shown in the wear depth table?",
+      "ground_truth": "35 cases (W1-W35) plus Healthy case",
+      "include": true,
+      "difficulty": "medium",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    },
+    {
+      "id": "q_005",
+      "question": "What brand of accelerometers were used?",
+      "ground_truth": "Dytran 3053B 1783 and Dytran 3053B 1787",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 2 sensors and data acquisition"
+    },
+    {
+      "id": "q_006",
+      "question": "What is the module value for the gears?",
+      "ground_truth": "3 mm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 3 transmission features"
+    },
+    {
+      "id": "q_007",
+      "question": "What happened during the June 15 measurement?",
+      "ground_truth": "The progression culminated in a complete failure. The worn gear tooth fractured under load, resulting in a critical mechanical malfunction.",
+      "include": true,
+      "difficulty": "medium",
+      "type": "analytical",
+      "notes": "Found in the timeline section"
+    },
+    {
+      "id": "q_008",
+      "question": "What is the wear depth for case W35?",
+      "ground_truth": "932 μm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    },
+    {
+      "id": "q_009",
+      "question": "What type of gears are used in the MG-5025A?",
+      "ground_truth": "Spur gears",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 3 transmission features"
+    },
+    {
+      "id": "q_010",
+      "question": "What are the sensitivities of the accelerometers?",
+      "ground_truth": "Dytran 3053B 1783 has sensitivity of 9.47 mV/g, and Dytran 3053B 1787 has sensitivity of 9.35 mV/g",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 2 sensors and data acquisition"
+    },
+    {
+      "id": "q_011",
+      "question": "What is the transmission ratio?",
+      "ground_truth": "18/35 (18 teeth on driving gear, 35 teeth on driven gear)",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 3 transmission features"
+    },
+    {
+      "id": "q_012",
+      "question": "What is the wear depth for case W1?",
+      "ground_truth": "40 μm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    },
+    {
+      "id": "q_013",
+      "question": "What brand of tachometers were used?",
+      "ground_truth": "Honeywell 3010AN",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 2 sensors and data acquisition"
+    },
+    {
+      "id": "q_014",
+      "question": "What is the wear depth for case W10?",
+      "ground_truth": "294 μm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    },
+    {
+      "id": "q_015",
+      "question": "What is the wear depth for case W25?",
+      "ground_truth": "637 μm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    },
+    {
+      "id": "q_016",
+      "question": "What is the vessel name?",
+      "ground_truth": "INS Haifa",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in the report introduction"
+    },
+    {
+      "id": "q_017",
+      "question": "What is the overall system type?",
+      "ground_truth": "Conventional marine propulsion train with a naval reduction gearbox",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in the system description"
+    },
+    {
+      "id": "q_018",
+      "question": "What was the length of each time record?",
+      "ground_truth": "60 s windows",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in data acquisition section"
+    },
+    {
+      "id": "q_019",
+      "question": "Which operating conditions were used?",
+      "ground_truth": "15 RPS, 45 RPS",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in experimental setup"
+    },
+    {
+      "id": "q_020",
+      "question": "Approximately how many baseline records were acquired?",
+      "ground_truth": "500 records",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in data collection section"
+    },
+    {
+      "id": "q_021",
+      "question": "When was the data-acquisition chain installed?",
+      "ground_truth": "February 13",
+      "include": true,
+      "difficulty": "easy",
+      "type": "temporal",
+      "notes": "Found in timeline section"
+    },
+    {
+      "id": "q_022",
+      "question": "When was the first onset of wear detected?",
+      "ground_truth": "9 April 2023",
+      "include": true,
+      "difficulty": "easy",
+      "type": "temporal",
+      "notes": "Found in timeline section"
+    },
+    {
+      "id": "q_023",
+      "question": "How many teeth are in the tachometer?",
+      "ground_truth": "30",
+      "include": true,
+      "difficulty": "easy",
+      "type": "temporal",
+      "notes": "Found in timeline section"
+    },
+    {
+      "id": "q_024",
+      "question": "Which wear stages are described in the report?",
+      "ground_truth": "Healthy, mild wear, moderate wear, severe wear, failure",
+      "include": true,
+      "difficulty": "medium",
+      "type": "factual",
+      "notes": "Found in wear progression analysis"
+    },
+    {
+      "id": "q_025",
+      "question": "What evidence supports the mild wear detection?",
+      "ground_truth": "Microscope tooth photographs on April 9",
+      "include": true,
+      "difficulty": "medium",
+      "type": "temporal",
+      "notes": "Found in wear detection section"
+    },
+    {
+      "id": "q_026",
+      "question": "What characterizes the severe wear stage?",
+      "ground_truth": "Elevated broadband vibration, transient impulsive responses, pronounced tooth-surface degradation",
+      "include": true,
+      "difficulty": "medium",
+      "type": "analytical",
+      "notes": "Found in wear characterization section"
+    },
+    {
+      "id": "q_027",
+      "question": "When did the mild and moderate wear transition occur?",
+      "ground_truth": "At April 23 afternoon",
+      "include": true,
+      "difficulty": "medium",
+      "type": "temporal",
+      "notes": "Found in timeline section"
+    },
+    {
+      "id": "q_028",
+      "question": "What unit is used for speed in the report?",
+      "ground_truth": "RPS (revolutions per second)",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in experimental setup"
+    },
+    {
+      "id": "q_029",
+      "question": "What are the RMS values for W15 wear case at 15 RPS?",
+      "ground_truth": "[1.30, 1.30, 1.27, 1.24, 1.24, 1.20, 1.19] g",
+      "include": true,
+      "difficulty": "hard",
+      "type": "table",
+      "notes": "From backup database RMS table - records 364-370"
+    },
+    {
+      "id": "q_030",
+      "question": "What are the FME values for W20 wear case at 45 RPS?",
+      "ground_truth": "[550.0, 513.0, 606.0, 630.0, 668.0, 685.0, 627.0, 607.0]",
+      "include": true,
+      "difficulty": "hard",
+      "type": "table",
+      "notes": "From backup database FME table - records 403-410"
+    },
+    {
+      "id": "q_031",
+      "question": "What is the wear depth for case W5?",
+      "ground_truth": "175.0 μm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    },
+    {
+      "id": "q_032",
+      "question": "What is the wear depth for case W15?",
+      "ground_truth": "400 μm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    },
+    {
+      "id": "q_033",
+      "question": "What is the wear depth for case W30?",
+      "ground_truth": "769 μm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    },
+    {
+      "id": "q_034",
+      "question": "Where the accelerometers were mounted?",
+      "ground_truth": "They were mounted on gearbox housings near input and output shafts",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in sensor setup section"
+    },
+    {
+      "id": "q_035",
+      "question": "What is the sensitivity of the port accelerometer Dytran 3053B 1787?",
+      "ground_truth": "9.35 mV/g",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 2 sensors and data acquisition"
+    },
+    {
+      "id": "q_036",
+      "question": "What is the sensitivity of the port accelerometer Dytran 3053B 1783?",
+      "ground_truth": "9.47 mV/g",
+      "include": true,
+      "difficulty": "easy",
+      "type": "factual",
+      "notes": "Found in Table 2 sensors and data acquisition"
+    },
+    {
+      "id": "q_037",
+      "question": "What does Table 1 include?",
+      "ground_truth": "Wear depth per wear case (export table text for precise values)",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in table descriptions"
+    },
+    {
+      "id": "q_038",
+      "question": "What does Figure 1 illustrate?",
+      "ground_truth": "Tooth image progression from healthy to severe wear",
+      "include": true,
+      "difficulty": "easy",
+      "type": "figure",
+      "notes": "Found in figure captions"
+    },
+    {
+      "id": "q_039",
+      "question": "How many wear cases were tracked in total?",
+      "ground_truth": "35 wear cases (W1-W35) plus the Healthy baseline case",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    },
+    {
+      "id": "q_040",
+      "question": "What is the relationship between wear progression and vibration characteristics?",
+      "ground_truth": "As wear progresses from mild to severe, there is an increase in broadband vibration levels and the appearance of transient impulsive responses, indicating deteriorating gear condition",
+      "include": true,
+      "difficulty": "hard",
+      "type": "analytical",
+      "notes": "Found in vibration analysis section"
+    },
+    {
+      "id": "q_041",
+      "question": "Why was the sampling frequency set to 50 kHz?",
+      "ground_truth": "To capture high-frequency vibration components and gear mesh frequencies for detailed analysis of gear condition",
+      "include": true,
+      "difficulty": "medium",
+      "type": "analytical",
+      "notes": "Found in data acquisition setup"
+    },
+    {
+      "id": "q_042",
+      "question": "What are the implications of the 18/35 transmission ratio for gear wear analysis?",
+      "ground_truth": "The 18/35 ratio creates specific gear mesh frequencies that can be monitored for changes indicating wear progression",
+      "include": true,
+      "difficulty": "hard",
+      "type": "analytical",
+      "notes": "Found in transmission analysis"
+    },
+    {
+      "id": "q_043",
+      "question": "What was the duration of the wear monitoring period?",
+      "ground_truth": "From February 13 (installation) to June 15 (failure) - approximately 4 months",
+      "include": true,
+      "difficulty": "medium",
+      "type": "temporal",
+      "notes": "Calculated from timeline data"
+    },
+    {
+      "id": "q_044",
+      "question": "What happened during the April 9 measurement?",
+      "ground_truth": "First onset of wear was detected through microscope tooth photographs, corroborated by vibration changes",
+      "include": true,
+      "difficulty": "medium",
+      "type": "analytical",
+      "notes": "Found in timeline section"
+    },
+    {
+      "id": "q_045",
+      "question": "What was the progression timeline from healthy to failure?",
+      "ground_truth": "Healthy → Mild wear (April 9) → Moderate wear (April 23) → Severe wear → Complete failure (June 15)",
+      "include": true,
+      "difficulty": "medium",
+      "type": "temporal",
+      "notes": "Found in timeline section"
+    },
+    {
+      "id": "q_046",
+      "question": "What are the RMS values for the Healthy case at 15 RPS?",
+      "ground_truth": "[1.05, 1.04, 1.02, 1.06, 1.04, 1.02, 1.02]",
+      "include": true,
+      "difficulty": "hard",
+      "type": "table",
+      "notes": "From backup database RMS table - records 1-7"
+    },
+    {
+      "id": "q_047",
+      "question": "What are the FME values for W10 at 45 RPS?",
+      "ground_truth": "[146.0, 149.0, 160.0, 146.0, 159.0, 153.0, 160.0]",
+      "include": true,
+      "difficulty": "hard",
+      "type": "table",
+      "notes": "From backup database FME table - records 324-330"
+    },
+    {
+      "id": "q_048",
+      "question": "What is the wear depth measurement on tooth 3 for W8?",
+      "ground_truth": "264.5 μm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "From backup database wear depth measurements"
+    },
+    {
+      "id": "q_049",
+      "question": "What is the wear depth for case W8?",
+      "ground_truth": "271.6 μm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    },
+    {
+      "id": "q_050",
+      "question": "What is the wear depth for case W20?",
+      "ground_truth": "487.8 μm",
+      "include": true,
+      "difficulty": "easy",
+      "type": "table",
+      "notes": "Found in Table 1 wear severities dimensions"
+    }
+  ]
+}

@@ -683,7 +683,7 @@ def load_elements(path: Path):
 			if _pdfp:
 				els.extend(_pdfp)
 				get_logger().info("%s: pdfplumber extracted %d tables", path.name, len(_pdfp))
-		# Optional: Camelot table extraction (auto if unset) ג€” adaptive pages
+		# Optional: Camelot table extraction (auto if unset) — adaptive pages
 		if (use_camelot is None) or (use_camelot is True):
 			# Only run Camelot if pdfplumber found too few tables and pages look promising
 			min_tables_target = int(os.getenv("RAG_MIN_TABLES_TARGET", "2"))
@@ -820,7 +820,7 @@ def _synthesize_tables_from_text(els, path: Path):
 		wide_cols = sum(1 for ln in lines[:8] if _re.search(r"\S\s{3,}\S.*\S\s{3,}\S", ln))  # At least 2 wide columns
 		
 		# More data-like patterns (numbers, units, technical terms)
-		has_data_patterns = any(_re.search(r"\b\d+\.?\d*\s*(mm|־¼m|MPa|Hz|ֲ°C|N|kN|rpm|%)\b", ln, _re.I) for ln in lines[:5])
+		has_data_patterns = any(_re.search(r"\b\d+\.?\d*\s*(mm|μm|MPa|Hz|°C|N|kN|rpm|%)\b", ln, _re.I) for ln in lines[:5])
 		has_multiple_columns = any(ln.count("|") >= 3 or ln.count("\t") >= 2 for ln in lines)
 		
 		# Only synthesize if we have strong evidence of tabular data
@@ -1015,7 +1015,7 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 							_s = str(v).strip()
 							if _s:
 								_total_cells += 1
-								if _re.search(r"^[-+]?\d+(?:[.,]\d+)?(?:\s*(?:%|mm|־¼m|MPa|Hz|ֲ°C|N|kN|rpm))?$", _s, _re.I):
+								if _re.search(r"^[-+]?\d+(?:[.,]\d+)?(?:\s*(?:%|mm|μm|MPa|Hz|°C|N|kN|rpm))?$", _s, _re.I):
 									_numeric_cells += 1
 					if cols > 0:
 						empty_col_ratio = sum(1 for x in _nonempty if x == 0) / float(cols)
@@ -1111,3 +1111,4 @@ def _try_extract_images(path: Path):
 		get_logger().warning("Image extraction failed (%s)", e.__class__.__name__)
 		return []
 	return elements
+

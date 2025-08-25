@@ -29,3 +29,4 @@ TABLE_PROMPT = (
 	"Instructions: Use the table/figure only. If computing, show a one-line calculation and cite as [file_name pX table]. If ambiguous, ask for clarification.\n"
 	"Answer:"
 )
+

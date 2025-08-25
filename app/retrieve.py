@@ -3,7 +3,7 @@ import re
 from typing import Dict, List
 from app.logger import get_logger
 
-from langchain_core.documents import Document
+from langchain.schema import Document
 from langchain.retrievers import EnsembleRetriever
 from app.agents import simplify_question
 
@@ -36,7 +36,7 @@ def query_analyzer(q: str) -> Dict:
 		filt["case_id"] = str(simp.get("case_id"))
 	return {
 		"filters": filt,
-		"keywords": re.findall(r"[A-Za-z0-9ֲ°%]+", q)[:10],
+		"keywords": re.findall(r"[A-Za-z0-9°%]+", q)[:10],
 		"canonical": str(simp.get("canonical") or "").strip() or None,
 	}
 
@@ -62,8 +62,8 @@ def build_hybrid_retriever(dense_store, sparse_retriever, dense_k: int = 10):
 	"""
 	dense = dense_store.as_retriever(search_kwargs={"k": dense_k})
 	try:
-		sw = float(os.getenv("RAG_SPARSE_WEIGHT", "0.6"))
-		dw = float(os.getenv("RAG_DENSE_WEIGHT", "0.4"))
+		sw = float(os.getenv("RAG_SPARSE_WEIGHT", "0.65"))
+		dw = float(os.getenv("RAG_DENSE_WEIGHT", "0.35"))
 		total = (sw + dw) or 1.0
 		sw, dw = sw / total, dw / total
 	except Exception:
@@ -80,7 +80,7 @@ def lexical_overlap(a: str, b: str) -> float:
 
 def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) -> List[Document]:
 	ql = query.lower()
-	kws = set(re.findall(r"[A-Za-z0-9ֲ°%]+", ql))
+	kws = set(re.findall(r"[A-Za-z0-9°%]+", ql))
 	# Section preference based on query intent
 	sec_pref = None
 	if "table" in ql:
@@ -194,3 +194,4 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 	except Exception:
 		pass
 	return unique[:top_n]
+

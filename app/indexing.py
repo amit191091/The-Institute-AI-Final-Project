@@ -146,3 +146,4 @@ def build_sparse_retriever(docs: List[Document], k: int = 10):
 	bm25 = BM25Retriever.from_documents(docs)
 	bm25.k = k
 	return bm25
+
