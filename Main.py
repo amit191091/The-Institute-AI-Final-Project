@@ -16,6 +16,7 @@ from app.indexing import build_dense_index, build_sparse_retriever, to_documents
 from app.retrieve import apply_filters, build_hybrid_retriever, query_analyzer, rerank_candidates
 from app.agents import answer_needle, answer_summary, answer_table, route_question, route_question_ex
 from app.ui_gradio import build_ui
+from app.graph import build_graph, render_graph_html
 from app.validate import validate_min_pages
 from app.logger import get_logger
 from app.retrieve import lexical_overlap
@@ -93,8 +94,15 @@ def _get_embeddings():
         return GoogleGenerativeAIEmbeddings(model=settings.EMBEDDING_MODEL_GOOGLE)
     if os.getenv("OPENAI_API_KEY") and OpenAIEmbeddings is not None:
         return OpenAIEmbeddings(model=settings.EMBEDDING_MODEL_OPENAI)
+    # Final fallback: use FakeEmbeddings so app can run without API keys (for local smoke tests)
+    try:
+        from langchain_community.embeddings import FakeEmbeddings  # type: ignore
+        print("[Embeddings] Using FakeEmbeddings fallback (no API keys found)")
+        return FakeEmbeddings(size=1536)
+    except Exception:
+        pass
     raise RuntimeError(
-        "No embedding backend available. Set GOOGLE_API_KEY or OPENAI_API_KEY and install langchain-google-genai or langchain-openai."
+        "No embedding backend available. Set GOOGLE_API_KEY or OPENAI_API_KEY, or ensure langchain_community FakeEmbeddings is available."
     )
 
 
@@ -539,6 +547,14 @@ def main() -> None:
         print("No input files found. Place PDFs/DOCs under data/ or the root PDF.")
         return
     docs, hybrid, debug = build_pipeline(paths)
+    # Build a lightweight graph and render it for UI
+    try:
+        G = build_graph(docs)
+        Path("logs").mkdir(exist_ok=True)
+        graph_html = str(Path("logs")/"graph.html")
+        render_graph_html(G, graph_html)
+    except Exception as e:
+        graph_html = None
     llm = _LLM()
     # Optional: evaluation mode
     if os.getenv("RAG_EVAL", "").lower() in ("1", "true", "yes"):
