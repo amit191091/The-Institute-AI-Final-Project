@@ -4,7 +4,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class Settings:
-	DATA_DIR: Path = Path("data")
+	DATA_DIR: Path = Path("RAG/data")
 	INDEX_DIR: Path = Path("index")
 	EMBEDDING_MODEL_OPENAI: str = "text-embedding-3-small"
 	EMBEDDING_MODEL_GOOGLE: str = "models/text-embedding-004"

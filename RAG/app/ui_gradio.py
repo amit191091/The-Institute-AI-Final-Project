@@ -218,7 +218,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 
 	# Auto-load default ground truths and QA if files exist
 	try:
-		for _cand in [Path("gear_wear_ground_truth.json"), Path("data")/"gear_wear_ground_truth.json"]:
+		for _cand in [Path("gear_wear_ground_truth.json"), Path("RAG/data")/"gear_wear_ground_truth.json"]:
 			if _cand.exists():
 				msg = _load_gt_file(str(_cand))
 				log.info("GT auto-load: %s", msg)
@@ -226,7 +226,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 	except Exception:
 		pass
 	try:
-		for _cand in [Path("gear_wear_qa.jsonl"), Path("data")/"gear_wear_qa.jsonl", Path("gear_wear_qa.json"), Path("data")/"gear_wear_qa.json"]:
+		for _cand in [Path("gear_wear_qa.jsonl"), Path("RAG/data")/"gear_wear_qa.jsonl", Path("gear_wear_qa.json"), Path("RAG/data")/"gear_wear_qa.json"]:
 			if _cand.exists():
 				msg = _load_qa_file(str(_cand))
 				log.info("QA auto-load: %s", msg)
@@ -339,7 +339,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		if metrics_txt:
 			log.info("Metrics:\n%s", metrics_txt)
 		try:
-			Path("logs").mkdir(exist_ok=True)
+			Path("RAG/logs").mkdir(exist_ok=True)
 			entry = {
 				"question": q,
 				"route": r,
@@ -355,7 +355,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					for d in top_docs
 				],
 			}
-			with open(Path("logs")/"queries.jsonl", "a", encoding="utf-8") as f:
+			with open(Path("RAG/logs")/"queries.jsonl", "a", encoding="utf-8") as f:
 				f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 		except Exception:
 			pass
@@ -407,8 +407,8 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 						if build_graph is None or render_graph_html is None:
 							return gr.update(value=""), "(graph module not available; install dependencies: networkx, pyvis)"
 						G = build_graph(docs)
-						Path("logs").mkdir(exist_ok=True)
-						out = Path("logs")/"graph.html"
+						Path("RAG/logs").mkdir(exist_ok=True)
+						out = Path("RAG/logs")/"graph.html"
 						render_graph_html(G, str(out))
 						html_data = out.read_text(encoding="utf-8")
 						# Best-effort inline via iframe srcdoc; also provide a link for full view
@@ -420,7 +420,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 
 				# Initial load if file exists
 				try:
-					graph_html_path = Path("logs")/"graph.html"
+					graph_html_path = Path("RAG/logs")/"graph.html"
 					if graph_html_path.exists():
 						html_data = graph_html_path.read_text(encoding="utf-8")
 						iframe = f"<p><a href='file:///{graph_html_path.resolve().as_posix()}' target='_blank'>Open graph.html in browser</a></p>" \

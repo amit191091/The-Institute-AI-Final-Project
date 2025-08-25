@@ -8,18 +8,18 @@ from datetime import datetime, UTC
 
 from dotenv import load_dotenv
 
-from app.config import settings
-from app.loaders import load_many
-from app.chunking import structure_chunks
-from app.metadata import attach_metadata
-from app.indexing import build_dense_index, build_sparse_retriever, to_documents, dump_chroma_snapshot
-from app.retrieve import apply_filters, build_hybrid_retriever, query_analyzer, rerank_candidates
-from app.agents import answer_needle, answer_summary, answer_table, route_question, route_question_ex
-from app.ui_gradio import build_ui
-from app.validate import validate_min_pages
-from app.logger import get_logger
-from app.retrieve import lexical_overlap
-from app.eval_ragas import run_eval_detailed, pretty_metrics
+from RAG.app.config import settings
+from RAG.app.loaders import load_many
+from RAG.app.chunking import structure_chunks
+from RAG.app.metadata import attach_metadata
+from RAG.app.indexing import build_dense_index, build_sparse_retriever, to_documents, dump_chroma_snapshot
+from RAG.app.retrieve import apply_filters, build_hybrid_retriever, query_analyzer, rerank_candidates
+from RAG.app.agents import answer_needle, answer_summary, answer_table, route_question, route_question_ex
+from RAG.app.ui_gradio import build_ui
+from RAG.app.validate import validate_min_pages
+from RAG.app.logger import get_logger
+from RAG.app.retrieve import lexical_overlap
+from RAG.app.eval_ragas import run_eval_detailed, pretty_metrics
 import json
 import math
 import difflib
@@ -33,7 +33,7 @@ def _clean_run_outputs():
         return
     import shutil
     # Directories
-    for d in (Path("data")/"images", Path("data")/"elements"):
+    for d in (Path("RAG/data")/"images", Path("RAG/data")/"elements"):
         try:
             if d.exists():
                 shutil.rmtree(d)
@@ -50,13 +50,13 @@ def _clean_run_outputs():
         pass
     # Logs: queries.jsonl and logs/elements dumps
     try:
-        q = Path("logs")/"queries.jsonl"
+        q = Path("RAG/logs")/"queries.jsonl"
         if q.exists():
             q.unlink(missing_ok=True)  # type: ignore[arg-type]
     except Exception:
         pass
     try:
-        ed = Path("logs")/"elements"
+        ed = Path("RAG/logs")/"elements"
         if ed.exists():
             shutil.rmtree(ed)
     except Exception:
@@ -175,8 +175,8 @@ def build_pipeline(paths: List[Path]):
     docs = to_documents(records)
     # Write a quick DB snapshot for debugging
     try:
-        Path("logs").mkdir(exist_ok=True)
-        snap_path = Path("logs")/"db_snapshot.jsonl"
+        Path("RAG/logs").mkdir(exist_ok=True)
+        snap_path = Path("RAG/logs")/"db_snapshot.jsonl"
         with open(snap_path, "w", encoding="utf-8") as f:
             for d in docs:
                 md = (d.metadata or {})
@@ -211,7 +211,7 @@ def build_pipeline(paths: List[Path]):
     # If Chroma is persisted, try writing a snapshot
     try:
         if os.getenv("RAG_CHROMA_DIR"):
-            dump_chroma_snapshot(dense, Path("logs")/"chroma_snapshot.jsonl")
+            dump_chroma_snapshot(dense, Path("RAG/logs")/"chroma_snapshot.jsonl")
     except Exception:
         pass
     # expose per-retriever diagnostics
@@ -276,7 +276,7 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
         ans = answer_needle(llm, top_docs, question)
     # Append JSONL trace (lightweight)
     try:
-        log_dir = Path("logs"); log_dir.mkdir(exist_ok=True)
+        log_dir = Path("RAG/logs"); log_dir.mkdir(exist_ok=True)
         entry = {
             "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "question": question,
@@ -370,14 +370,14 @@ def _discover_eval_files():
         Path(os.getenv("RAG_QA_FILE", "")),
         Path("gear_wear_qa.json"),
         Path("gear_wear_qa.jsonl"),
-        Path("data")/"gear_wear_qa.json",
-        Path("data")/"gear_wear_qa.jsonl",
+        Path("RAG/data")/"gear_wear_qa.json",
+        Path("RAG/data")/"gear_wear_qa.jsonl",
     ]
     gt_candidates = [
         Path(os.getenv("RAG_GT_FILE", "")),
     Path("gear_wear_ground_truth.json"),
         Path("gear_wear_ground_truth.json"),
-        Path("data")/"gear_wear_ground_truth.json",
+        Path("RAG/data")/"gear_wear_ground_truth.json",
     ]
     qa = next((p for p in qa_candidates if str(p) and p.exists()), None)
     gt = next((p for p in gt_candidates if str(p) and p.exists()), None)
@@ -508,7 +508,7 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         if isinstance(x, dict):
             return {k: _nan_to_none(v) for k, v in x.items()}
         return x
-    out_dir = Path("logs"); out_dir.mkdir(exist_ok=True)
+    out_dir = Path("RAG/logs"); out_dir.mkdir(exist_ok=True)
     with open(out_dir/"eval_ragas_summary.json", "w", encoding="utf-8") as f:
         json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2)
     with open(out_dir/"eval_ragas_per_question.jsonl", "w", encoding="utf-8") as f:
