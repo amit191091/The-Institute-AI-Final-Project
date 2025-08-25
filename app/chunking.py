@@ -3,7 +3,7 @@ import os
 from app.logger import get_logger
 
 from app.metadata import classify_section_type, extract_keywords
-from app.utils import approx_token_len, simple_summarize, truncate_to_tokens, naive_markdown_table
+from app.utils import approx_token_len, simple_summarize, truncate_to_tokens, naive_markdown_table, split_into_sentences, slugify, sha1_short
 
 
 def structure_chunks(elements, file_path: str) -> List[Dict]:
@@ -21,6 +21,15 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			log.debug("Chunking: %d input elements from %s", len(elements or []), file_path)
 		except Exception:
 			pass
+	# Derive doc_id once per file
+	try:
+		doc_id = slugify(str(os.path.basename(file_path)))
+	except Exception:
+		doc_id = slugify(str(file_path))
+
+	# Track per-page ordinals for deterministic anchors
+	page_ord: Dict[int, int] = {}
+
 	for idx, el in enumerate(elements, start=1):
 		kind = getattr(el, "category", getattr(el, "type", "Text")) or "Text"
 		md = getattr(el, "metadata", None)
@@ -86,18 +95,33 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			# Final fallback for table anchor if still None
 			if anchor is None:
 				try:
-					if table_number is not None:
-						anchor = f"table-{int(table_number):02d}"
-					elif page is not None:
-						anchor = f"p{int(page)}-table-{idx}"
+					if page is not None:
+						page_ord[page] = page_ord.get(page, 0) + 1
+						ordinal = page_ord[page]
+						anchor = f"p{int(page)}-tbl{ordinal}"
+					elif table_number is not None:
+						anchor = f"tbl{int(table_number)}"
 				except Exception:
-					anchor = f"table-{idx}"
+					anchor = f"tbl{idx}"
+			# Build deterministic IDs and metadata
+			chunk_preview = (content or "").splitlines()[0][:200]
+			content_hash = sha1_short(content)
+			chunk_id = f"{doc_id}#p{page}:{section_type or 'Table'}/{anchor}"
+			order_val = None
+			try:
+				order_val = page_ord.get(int(page)) if page is not None else None
+			except Exception:
+				order_val = None
 			chunks.append(
 				{
 					"file_name": file_path,
 					"page": page,
 					"section_type": section_type or "Table",
 					"anchor": anchor or None,
+					"order": order_val,
+					"doc_id": doc_id,
+					"chunk_id": chunk_id,
+					"content_hash": content_hash,
 					"extractor": extractor,
 					"table_number": table_number,
 					"table_label": table_label,
@@ -106,6 +130,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 					"table_md_path": table_md_path,
 					"table_csv_path": table_csv_path,
 					"content": content.strip(),
+					"preview": chunk_preview,
 					"keywords": extract_keywords(content),
 				}
 			)
@@ -147,36 +172,93 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				content = truncate_to_tokens(content, 800)
 			if trace:
 				log.debug("CHUNK-OUT[%d]: section=Figure tokens≈%d img=%s", idx, tok, img_path)
+			chunk_preview = (content or "").splitlines()[0][:200]
+			content_hash = sha1_short(content)
+			if anchor is None:
+				try:
+					if page is not None:
+						page_ord[page] = page_ord.get(page, 0) + 1
+						anchor = f"p{int(page)}-fig{page_ord[page]}"
+					else:
+						anchor = f"fig{idx}"
+				except Exception:
+					anchor = f"fig{idx}"
+			chunk_id = f"{doc_id}#p{page}:{section_type or 'Figure'}/{anchor}"
+			order_val = None
+			try:
+				order_val = page_ord.get(int(page)) if page is not None else None
+			except Exception:
+				order_val = None
 			chunks.append(
 				{
 					"file_name": file_path,
 					"page": page,
 					"section_type": section_type or "Figure",
 					"anchor": anchor or None,
+					"order": order_val,
+					"doc_id": doc_id,
+					"chunk_id": chunk_id,
+					"content_hash": content_hash,
 					"extractor": extractor,
 					"image_path": img_path,
 					"content": content.strip(),
+					"preview": chunk_preview,
 					"keywords": extract_keywords(content),
 				}
 			)
-			continue		# Textual sections (headers/paragraphs/timeline/analysis/conclusion)
-		content = simple_summarize(raw_text, ratio=0.05)
+			continue  # Textual sections handled; go next element
+
+		# Sentence-aware chunking to target 200-500 tokens per chunk
+		sentences = split_into_sentences(raw_text)
+		if not sentences:
+			content = simple_summarize(raw_text, ratio=0.2)
+		else:
+			# Greedy pack sentences until ~350 tokens, cap at 500
+			buf: List[str] = []
+			cur_tokens = 0
+			target = 350
+			max_tokens = 500
+			for s in sentences:
+				s_tok = approx_token_len(s)
+				if cur_tokens + s_tok > max_tokens and buf:
+					break
+				buf.append(s)
+				cur_tokens += s_tok
+				if cur_tokens >= target:
+					break
+			content = " ".join(buf) if buf else raw_text
 		# Fallback anchor for text content if missing
 		if anchor is None:
 			try:
 				if page is not None:
-					anchor = f"p{int(page)}-el{idx}"
+					page_ord[page] = page_ord.get(page, 0) + 1
+					anchor = f"p{int(page)}-t{page_ord[page]}"
 				else:
-					anchor = f"el-{idx}"
+					anchor = f"t{idx}"
 			except Exception:
-				anchor = f"el-{idx}"
+				anchor = f"t{idx}"
+		# Build IDs and metadata hygiene fields
+		content = truncate_to_tokens(content, 500).strip()
+		chunk_preview = (content or "").splitlines()[0][:200]
+		content_hash = sha1_short(content)
+		chunk_id = f"{doc_id}#p{page}:{section_type or 'Text'}/{anchor}"
+		order_val = None
+		try:
+			order_val = page_ord.get(int(page)) if page is not None else None
+		except Exception:
+			order_val = None
 		chunks.append(
 			{
 				"file_name": file_path,
 				"page": page,
 				"section_type": section_type or "Text",
 				"anchor": anchor or None,
-				"content": truncate_to_tokens(content, 500).strip(),
+				"order": order_val,
+				"doc_id": doc_id,
+				"chunk_id": chunk_id,
+				"content_hash": content_hash,
+				"content": content,
+				"preview": chunk_preview,
 				"keywords": extract_keywords(content),
 			}
 		)
