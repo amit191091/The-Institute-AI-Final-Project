@@ -28,7 +28,7 @@ _STOP = set(
 
 
 def extract_keywords(text: str, top_n: int = 10) -> List[str]:
-	words = re.findall(r"[A-Za-z0-9ֲ°%]+", text)
+	words = re.findall(r"[A-Za-z0-9°%]+", text)
 	words = [w for w in words if w.lower() not in _STOP]
 	return words[:top_n]
 
@@ -40,7 +40,7 @@ def extract_entities(text: str) -> List[str]:
 		r"\bBRG[-_ ]?\w+\b",
 		r"\bGEAR[-_ ]?\w+\b",
 		r"\b\d{4}-\d{2}-\d{2}\b",
-		r"\b\d+(?:\.\d+)?\s?(MPa|RPM|ֲ°C|N|kN|mm|Hz|MPH|kW)\b",
+		r"\b\d+(?:\.\d+)?\s?(MPa|RPM|°C|N|kN|mm|Hz|MPH|kW)\b",
 	]
 	out: List[str] = []
 	for p in pats:
@@ -110,7 +110,7 @@ def extract_incident(text: str) -> Dict[str, Optional[str]]:
 	if m:
 		idate = m.group(1)
 	amount_range = None
-	m2 = re.findall(r"(\d+(?:\.\d+)?)\s?(MPa|RPM|ֲ°C|N|kN|mm)", text)
+	m2 = re.findall(r"(\d+(?:\.\d+)?)\s?(MPa|RPM|°C|N|kN|mm)", text)
 	if m2:
 		nums = [float(x[0]) for x in m2]
 		try:
@@ -149,3 +149,4 @@ def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | No
 		"day_tokens": date_toks.get("day_tokens", []),
 	}
 	return {"page_content": chunk["content"], "metadata": metadata}
+
