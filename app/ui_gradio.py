@@ -10,6 +10,7 @@ from app.agents import answer_needle, answer_summary, answer_table, route_questi
 from app.retrieve import apply_filters, query_analyzer, rerank_candidates
 from app.eval_ragas import run_eval, pretty_metrics
 from app.logger import get_logger
+from app.graphdb import run_cypher as _run_cypher  # optional, guarded by try/except in handler
 try:
 	from app.graph import build_graph, render_graph_html
 except Exception:
@@ -395,6 +396,11 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				_graph_view = gr.HTML(value="")
 				_graph_status = gr.Markdown()
 				btn_graph = gr.Button("Generate / Refresh Graph")
+				gr.Markdown("#### Graph DB (Neo4j) — optional")
+				# Prefill with a sample so clicks don't pass an empty string on some Gradio builds
+				cypher = gr.Textbox(label="Cypher query", value="MATCH (n) RETURN n LIMIT 10", placeholder="Type a Cypher query…", lines=2)
+				btn_cypher = gr.Button("Run Cypher")
+				cypher_out = gr.JSON(label="Results")
 
 				def _gen_graph():
 					try:
@@ -425,6 +431,21 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				except Exception:
 					_graph_status.value = "(Graph not available yet – click the button to generate it.)"
 				btn_graph.click(_gen_graph, inputs=[], outputs=[_graph_view, _graph_status])
+
+				def _run_cypher_ui(q:str=""):
+					try:
+						query = (q or "").strip()
+						if not query:
+							return {"error": "empty query", "hint": "Example: MATCH (n) RETURN n LIMIT 10"}
+						rows = _run_cypher(query)  # type: ignore
+						# Return rows directly; gr.JSON can render lists of dicts
+						return rows if rows else {"rows": [], "note": "Query ran, no results returned."}
+					except Exception as e:
+						# Surface config issues clearly (e.g., missing Neo4j env vars)
+						return {"error": str(e)}
+				# Support both click and Enter-to-submit
+				btn_cypher.click(_run_cypher_ui, inputs=[cypher], outputs=[cypher_out])
+				cypher.submit(_run_cypher_ui, inputs=[cypher], outputs=[cypher_out])
 
 			with gr.Tab("DB Explorer"):
 				gr.Markdown("### Browse indexed documents (filters below)")

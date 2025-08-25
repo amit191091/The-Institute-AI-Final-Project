@@ -17,6 +17,7 @@ from app.retrieve import apply_filters, build_hybrid_retriever, query_analyzer, 
 from app.agents import answer_needle, answer_summary, answer_table, route_question, route_question_ex
 from app.ui_gradio import build_ui
 from app.graph import build_graph, render_graph_html
+from app.graphdb import build_graph_db
 from app.validate import validate_min_pages
 from app.logger import get_logger
 from app.retrieve import lexical_overlap
@@ -228,6 +229,13 @@ def build_pipeline(paths: List[Path]):
     except Exception:
         dense_ret = None
     debug = {"dense": dense_ret, "sparse": sparse}
+    # Optional: populate graph database
+    try:
+        if os.getenv("RAG_GRAPH_DB", "").lower() in ("1", "true", "yes"):
+            n = build_graph_db(docs)
+            print(f"[GraphDB] Upserted ~{n} nodes/edges to Neo4j")
+    except Exception as e:
+        print(f"[GraphDB] population failed: {e}")
     return docs, hybrid, debug
 
 

@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Tuple, Sequence, Protocol, runtime_checkable
 import re
 import networkx as nx
 import json
 
-try:
-    from langchain_core.documents import Document
-except Exception:  # fallback type
-    class Document:  # type: ignore
-        page_content: str
-        metadata: dict
+@runtime_checkable
+class DocLike(Protocol):
+    page_content: str
+    metadata: dict
 
 
 def _extract_entities(text: str) -> List[str]:
@@ -36,7 +34,7 @@ def _extract_entities(text: str) -> List[str]:
     return list(ents)
 
 
-def build_graph(docs: List[Document]) -> nx.Graph:
+def build_graph(docs: Sequence[DocLike]) -> nx.Graph:
     """Build a simple undirected graph of entities co-mentioned within the same chunk.
     Nodes: entities and file/page anchors. Edges: co-mentions.
     """
