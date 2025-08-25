@@ -108,7 +108,7 @@ def _export_tables_to_files(elements, path: Path) -> None:
 	Attach file paths back into element.metadata as table_md_path/table_csv_path when possible.
 	Always attempt to produce both formats (md and csv) for convenience.
 	"""
-	base_dir = Path("data") / "elements"
+	base_dir = Path("RAG/data") / "elements"
 	base_dir.mkdir(parents=True, exist_ok=True)
 	# --- helpers for parsing/normalization ---
 	import csv as _csv
@@ -760,7 +760,7 @@ def load_many(paths: List[Path]):
 			# Optional raw elements dump for deep debugging
 			import os, json
 			if os.getenv("RAG_DUMP_ELEMENTS", "").lower() in ("1", "true", "yes"):
-				dump_dir = Path("logs") / "elements"
+				dump_dir = Path("RAG/logs") / "elements"
 				dump_dir.mkdir(parents=True, exist_ok=True)
 				out_path = dump_dir / f"{p.stem}.jsonl"
 				with open(out_path, "w", encoding="utf-8") as f:
@@ -1052,7 +1052,7 @@ def _try_extract_images(path: Path):
 	except Exception:
 		get_logger().debug("PyMuPDF not available; skip image extraction")
 		return []
-	out_dir = Path("data") / "images"
+	out_dir = Path("RAG/data") / "images"
 	out_dir.mkdir(parents=True, exist_ok=True)
 	elements = []
 	try:

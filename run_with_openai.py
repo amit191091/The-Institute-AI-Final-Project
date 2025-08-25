@@ -45,6 +45,10 @@ def run_main():
     """Run the main RAG system."""
     print("\n🚀 Starting RAG system...")
     
+    # Add RAG folder to Python path
+    rag_path = Path(__file__).parent / "RAG"
+    sys.path.insert(0, str(rag_path))
+    
     # Import and run main
     try:
         from Main import main
