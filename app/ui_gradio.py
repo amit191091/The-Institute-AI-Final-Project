@@ -4,11 +4,17 @@ import json
 from pathlib import Path
 import difflib
 import re
+import html as _html
 
 from app.agents import answer_needle, answer_summary, answer_table, route_question, route_question_ex
 from app.retrieve import apply_filters, query_analyzer, rerank_candidates
 from app.eval_ragas import run_eval, pretty_metrics
 from app.logger import get_logger
+try:
+	from app.graph import build_graph, render_graph_html
+except Exception:
+	build_graph = None  # type: ignore
+	render_graph_html = None  # type: ignore
 
 
 def _render_router_info(route: str, top_docs):
@@ -309,7 +315,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 							best_s = s; best = k
 					if best is not None and best_s >= 0.75:
 						gts = [qa_map["norm"][best]]
-			ref = gts[0] if isinstance(gts, list) and gts else ""
+			ref = gts[0] if isinstance(gts, list) and gts else (ans_raw or "")
 			dataset = {
 				"question": [q],
 				"answer": [ans_raw],
@@ -382,6 +388,43 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				gr.Markdown("### Top indexed docs (sample)")
 				sample_docs = [d for d in docs[:12]]
 				gr.Textbox(value=_fmt_docs(sample_docs, max_items=12), label="Sample Contexts", lines=15)
+
+			with gr.Tab("Graph"):
+				gr.Markdown("### Knowledge Graph (auto-built)")
+				# If the Main built a graph, it will be at logs/graph.html
+				_graph_view = gr.HTML(value="")
+				_graph_status = gr.Markdown()
+				btn_graph = gr.Button("Generate / Refresh Graph")
+
+				def _gen_graph():
+					try:
+						if build_graph is None or render_graph_html is None:
+							return gr.update(value=""), "(graph module not available; install dependencies: networkx, pyvis)"
+						G = build_graph(docs)
+						Path("logs").mkdir(exist_ok=True)
+						out = Path("logs")/"graph.html"
+						render_graph_html(G, str(out))
+						html_data = out.read_text(encoding="utf-8")
+						# Best-effort inline via iframe srcdoc; also provide a link for full view
+						iframe = f"<p><a href='file:///{out.resolve().as_posix()}' target='_blank'>Open graph.html in browser</a></p>" \
+								 f"<iframe style='width:100%;height:650px;border:1px solid #ddd' srcdoc=\"{_html.escape(html_data)}\"></iframe>"
+						return gr.update(value=iframe), "Graph updated."
+					except Exception as e:
+						return gr.update(value=""), f"(failed to build graph: {e})"
+
+				# Initial load if file exists
+				try:
+					graph_html_path = Path("logs")/"graph.html"
+					if graph_html_path.exists():
+						html_data = graph_html_path.read_text(encoding="utf-8")
+						iframe = f"<p><a href='file:///{graph_html_path.resolve().as_posix()}' target='_blank'>Open graph.html in browser</a></p>" \
+								 f"<iframe style='width:100%;height:650px;border:1px solid #ddd' srcdoc=\"{_html.escape(html_data)}\"></iframe>"
+						_graph_view.value = iframe
+					else:
+						_graph_status.value = "(Graph not available yet – click the button to generate it.)"
+				except Exception:
+					_graph_status.value = "(Graph not available yet – click the button to generate it.)"
+				btn_graph.click(_gen_graph, inputs=[], outputs=[_graph_view, _graph_status])
 
 			with gr.Tab("DB Explorer"):
 				gr.Markdown("### Browse indexed documents (filters below)")

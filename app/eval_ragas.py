@@ -25,6 +25,55 @@ except Exception:  # pragma: no cover
 
 import os
 import math
+import re
+from typing import List, Tuple
+
+# Optional sklearn for overlap F1
+try:
+	from sklearn.metrics import precision_score, recall_score, f1_score  # type: ignore
+except Exception:  # pragma: no cover
+	precision_score = recall_score = f1_score = None  # type: ignore
+
+
+def _simple_tokens(text: str) -> List[str]:
+	t = (text or "").lower()
+	# keep alphanumerics, collapse whitespace
+	t = re.sub(r"[^a-z0-9]+", " ", t)
+	toks = [w for w in t.split() if len(w) >= 2]
+	return toks
+
+
+def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, float]:
+	"""Compute a simple token-overlap precision/recall/F1 between reference and concatenated contexts.
+	If sklearn is available, use f1_score/precision_score/recall_score over token presence vectors.
+	Otherwise fall back to set-overlap math.
+	"""
+	ref_tokens = set(_simple_tokens(reference or ""))
+	ctx_tokens = set(_simple_tokens("\n".join(contexts or [])))
+	if not ref_tokens and not ctx_tokens:
+		return float("nan"), float("nan"), float("nan")
+	if precision_score is not None:  # use sklearn over the union vocabulary
+		vocab = sorted(ref_tokens.union(ctx_tokens))
+		y_true = [1 if v in ref_tokens else 0 for v in vocab]
+		y_pred = [1 if v in ctx_tokens else 0 for v in vocab]
+		# handle edge cases when all zeros
+		try:
+			p = precision_score(y_true, y_pred, zero_division=0)
+			r = recall_score(y_true, y_pred, zero_division=0)
+			f1 = f1_score(y_true, y_pred, zero_division=0)
+		except Exception:
+			# fallback to set math
+			inter = len(ref_tokens & ctx_tokens)
+			p = inter / max(1, len(ctx_tokens))
+			r = inter / max(1, len(ref_tokens))
+			f1 = (2 * p * r / (p + r)) if (p + r) > 0 else 0.0
+		return float(p), float(r), float(f1)
+	# Set-based fallback
+	inter = len(ref_tokens & ctx_tokens)
+	p = inter / max(1, len(ctx_tokens))
+	r = inter / max(1, len(ref_tokens))
+	f1 = (2 * p * r / (p + r)) if (p + r) > 0 else 0.0
+	return float(p), float(r), float(f1)
 
 def _setup_ragas_llm():
 	"""Setup LLM for RAGAS evaluation - supports both OpenAI and Google."""
@@ -178,12 +227,30 @@ def run_eval(dataset):
 			relev = _mean_safe(df.get("answer_relevancy", []))
 			cprec = _mean_safe(df.get("context_precision", []))
 			crec = _mean_safe(df.get("context_recall", []))
-			return {
+			out = {
 				"faithfulness": faith,
 				"answer_relevancy": relev,
 				"context_precision": cprec,
 				"context_recall": crec,
 			}
+			# Add heuristic overlap metrics if reference/contexts present and ragas metrics are NaN
+			try:
+				refs = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
+				ctxs = dataset.get("contexts") if isinstance(dataset, dict) else dataset["contexts"]
+			except Exception:
+				refs, ctxs = [], []
+			try:
+				if refs and ctxs:
+					p_list, r_list, f1_list = [], [], []
+					for ref, ctx in zip(refs, ctxs):
+						p, r, f1v = overlap_prf1(ref or "", list(ctx or []))
+						p_list.append(p); r_list.append(r); f1_list.append(f1v)
+					out["overlap_precision"] = _mean_safe(p_list)
+					out["overlap_recall"] = _mean_safe(r_list)
+					out["overlap_f1"] = _mean_safe(f1_list)
+			except Exception:
+				pass
+			return out
 	except Exception:
 		pass
 	# Next: try dict-like summary
@@ -194,12 +261,27 @@ def run_eval(dataset):
 		relev = float(as_dict["answer_relevancy"]) if "answer_relevancy" in as_dict else float("nan")
 		cprec = float(as_dict["context_precision"]) if "context_precision" in as_dict else float("nan")
 		crec = float(as_dict["context_recall"]) if "context_recall" in as_dict else float("nan")
-		return {
+		out = {
 			"faithfulness": faith,
 			"answer_relevancy": relev,
 			"context_precision": cprec,
 			"context_recall": crec,
 		}
+		# Add heuristic overlap metrics
+		try:
+			refs = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
+			ctxs = dataset.get("contexts") if isinstance(dataset, dict) else dataset["contexts"]
+			if refs and ctxs:
+				p_list, r_list, f1_list = [], [], []
+				for ref, ctx in zip(refs, ctxs):
+					p, r, f1v = overlap_prf1(ref or "", list(ctx or []))
+					p_list.append(p); r_list.append(r); f1_list.append(f1v)
+				out["overlap_precision"] = _mean_safe(p_list)
+				out["overlap_recall"] = _mean_safe(r_list)
+				out["overlap_f1"] = _mean_safe(f1_list)
+		except Exception:
+			pass
+		return out
 	except Exception:
 		pass
 	# Finally: handle .results list shape
@@ -221,6 +303,9 @@ def run_eval(dataset):
 			"answer_relevancy": float("nan"),
 			"context_precision": float("nan"),
 			"context_recall": float("nan"),
+			"overlap_precision": float("nan"),
+			"overlap_recall": float("nan"),
+			"overlap_f1": float("nan"),
 		}
 
 
@@ -331,7 +416,7 @@ def run_eval_detailed(dataset):
 			m = min(n, getattr(df, "shape", [0])[0])
 			for i in range(m):
 				row = df.iloc[i]
-				per_q.append({
+				rec = {
 					"question": q_list[i] if i < len(q_list) else None,
 					"answer": a_list[i] if i < len(a_list) else None,
 					"reference": r_list[i] if i < len(r_list) else None,
@@ -339,13 +424,23 @@ def run_eval_detailed(dataset):
 					"answer_relevancy": _maybe_float(_pick(row, ["answer_relevancy", "relevancy", "answer_rel"])) ,
 					"context_precision": _maybe_float(_pick(row, ["context_precision", "ctx_precision", "precision"])),
 					"context_recall": _maybe_float(_pick(row, ["context_recall", "ctx_recall", "recall"])),
-				})
+				}
+				# Add overlap metrics per-question
+				try:
+					ref = rec.get("reference") or ""
+					# Use original contexts for this index
+					ctxs = _get_col("contexts")[i] if i < len(_get_col("contexts")) else []
+					p, r, f1v = overlap_prf1(ref, list(ctxs or []))
+					rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
+				except Exception:
+					pass
+				per_q.append(rec)
 		elif hasattr(result, "results"):
 			items = list(getattr(result, "results") or [])
 			m = min(n, len(items))
 			for i in range(m):
 				item = items[i]
-				per_q.append({
+				rec = {
 					"question": q_list[i] if i < len(q_list) else None,
 					"answer": a_list[i] if i < len(a_list) else None,
 					"reference": r_list[i] if i < len(r_list) else None,
@@ -353,7 +448,15 @@ def run_eval_detailed(dataset):
 					"answer_relevancy": _maybe_float(_pick(item, ["answer_relevancy", "relevancy", "answer_rel"])) ,
 					"context_precision": _maybe_float(_pick(item, ["context_precision", "ctx_precision", "precision"])),
 					"context_recall": _maybe_float(_pick(item, ["context_recall", "ctx_recall", "recall"])),
-				})
+				}
+				try:
+					ref = rec.get("reference") or ""
+					ctxs = _get_col("contexts")[i] if i < len(_get_col("contexts")) else []
+					p, r, f1v = overlap_prf1(ref, list(ctxs or []))
+					rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
+				except Exception:
+					pass
+				per_q.append(rec)
 		# If results shorter than dataset, pad remaining with None metrics
 		for i in range(len(per_q), n):
 			per_q.append({
@@ -379,6 +482,13 @@ def run_eval_detailed(dataset):
 		"context_precision": _mean_safe([r.get("context_precision") for r in per_q]),
 		"context_recall": _mean_safe([r.get("context_recall") for r in per_q]),
 	}
+	# Compute overlap metrics summary
+	try:
+		summary["overlap_precision"] = _mean_safe([r.get("overlap_precision") for r in per_q])
+		summary["overlap_recall"] = _mean_safe([r.get("overlap_recall") for r in per_q])
+		summary["overlap_f1"] = _mean_safe([r.get("overlap_f1") for r in per_q])
+	except Exception:
+		pass
 
 	return summary, per_q
 
@@ -398,5 +508,10 @@ def pretty_metrics(m: dict) -> str:
 		f"Context precision: {m.get('context_precision', 'n/a')}",
 		f"Context recall: {m.get('context_recall', 'n/a')}",
 	]
+	# Optional heuristic overlap metrics (no LLM/embeddings required)
+	if any(k in m for k in ("overlap_precision", "overlap_recall", "overlap_f1")):
+		lines.append(f"Overlap precision (heuristic): {m.get('overlap_precision', 'n/a')}")
+		lines.append(f"Overlap recall (heuristic): {m.get('overlap_recall', 'n/a')}")
+		lines.append(f"Overlap F1 (heuristic): {m.get('overlap_f1', 'n/a')}")
 	return "\n".join(lines)
 

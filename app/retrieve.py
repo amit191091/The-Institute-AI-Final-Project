@@ -3,7 +3,7 @@ import re
 from typing import Dict, List
 from app.logger import get_logger
 
-from langchain_core.documents import Document
+from langchain.schema import Document
 from langchain.retrievers import EnsembleRetriever
 from app.agents import simplify_question
 
@@ -62,8 +62,8 @@ def build_hybrid_retriever(dense_store, sparse_retriever, dense_k: int = 10):
 	"""
 	dense = dense_store.as_retriever(search_kwargs={"k": dense_k})
 	try:
-		sw = float(os.getenv("RAG_SPARSE_WEIGHT", "0.6"))
-		dw = float(os.getenv("RAG_DENSE_WEIGHT", "0.4"))
+		sw = float(os.getenv("RAG_SPARSE_WEIGHT", "0.65"))
+		dw = float(os.getenv("RAG_DENSE_WEIGHT", "0.35"))
 		total = (sw + dw) or 1.0
 		sw, dw = sw / total, dw / total
 	except Exception:

@@ -18,3 +18,5 @@ pdfplumber>=0.11.4
 camelot-py[base]>=0.11.0
 # Images extraction via PyMuPDF
 pymupdf>=1.24.9
+networkx>=3.2
+pyvis>=0.3.2
