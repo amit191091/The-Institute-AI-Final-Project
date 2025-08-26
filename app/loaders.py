@@ -372,7 +372,8 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 				continue
 			if ti in assigned:
 				num, cap = assigned[ti]
-				label = f"Table {num}"
+				# Prefer full label including caption text when available
+				label = f"Table {num}: {cap}" if (cap and str(cap).strip()) else f"Table {num}"
 				anchor = f"table-{num:02d}"
 				try:
 					setattr(md, "table_number", int(num))
@@ -388,6 +389,7 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 				num = next_seq
 				next_seq += 1
 				used_nums.add(num)
+				# No discovered caption; keep simple label
 				label = f"Table {num}"
 				anchor = f"table-{num:02d}"
 				try:
