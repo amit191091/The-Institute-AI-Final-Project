@@ -1,5 +1,35 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
+
+
+def load_api_keys_from_files():
+    """Load API keys from txt files if environment variables are not set."""
+    # Load OpenAI API key from file if not in environment
+    if not os.getenv("OPENAI_API_KEY"):
+        openai_key_file = Path("openai_api_key.txt")
+        if openai_key_file.exists():
+            try:
+                with open(openai_key_file, "r") as f:
+                    openai_key = f.read().strip()
+                    if openai_key:
+                        os.environ["OPENAI_API_KEY"] = openai_key
+                        print("[API Keys] Loaded OpenAI API key from file")
+            except Exception as e:
+                print(f"[API Keys] Error loading OpenAI API key from file: {e}")
+    
+    # Load Google API key from file if not in environment
+    if not os.getenv("GOOGLE_API_KEY"):
+        google_key_file = Path("google_api_key.txt")
+        if google_key_file.exists():
+            try:
+                with open(google_key_file, "r") as f:
+                    google_key = f.read().strip()
+                    if google_key:
+                        os.environ["GOOGLE_API_KEY"] = google_key
+                        print("[API Keys] Loaded Google API key from file")
+            except Exception as e:
+                print(f"[API Keys] Error loading Google API key from file: {e}")
 
 
 @dataclass(frozen=True)
