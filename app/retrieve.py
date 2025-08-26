@@ -31,6 +31,11 @@ def query_analyzer(q: str) -> Dict:
 		filt["section"] = "Table"
 	elif bool(simp.get("wants_figure")) or any(w in ql for w in ("figure", "image", "fig ", "photo", "plot", "graph")):
 		filt["section"] = "Figure"
+	# Specific number hints
+	if simp.get("table_number"):
+		filt["table_number"] = str(simp.get("table_number"))
+	if simp.get("figure_number"):
+		filt["figure_number"] = str(simp.get("figure_number"))
 	# Case id from simplifier (e.g., W26)
 	if simp.get("case_id") and "case_id" not in filt:
 		filt["case_id"] = str(simp.get("case_id"))
@@ -44,8 +49,32 @@ def query_analyzer(q: str) -> Dict:
 def apply_filters(docs: List[Document], filters: Dict) -> List[Document]:
 	if not filters:
 		return docs
-	def ok(meta):
-		return all(meta.get(k) == v for k, v in filters.items())
+	def ok(meta: dict):
+		for k, v in (filters or {}).items():
+			if k == "section":
+				if (meta.get("section") or meta.get("section_type")) != v:
+					return False
+			elif k == "figure_number":
+				# Support int/str and fallback to label prefix
+				mn = meta.get("figure_number")
+				if str(mn) == str(v):
+					continue
+				label = str(meta.get("figure_label") or meta.get("caption") or "")
+				import re as _re
+				if not _re.match(rf"^\s*figure\s*{int(str(v))}\b", label, _re.I):
+					return False
+			elif k == "table_number":
+				mn = meta.get("table_number")
+				if str(mn) == str(v):
+					continue
+				label = str(meta.get("table_label") or "")
+				import re as _re
+				if not _re.match(rf"^\s*table\s*{int(str(v))}\b", label, _re.I):
+					return False
+			else:
+				if meta.get(k) != v:
+					return False
+		return True
 	out = [d for d in docs if ok(d.metadata)]
 	try:
 		if os.getenv("RAG_TRACE", "0").lower() in ("1", "true", "yes") or os.getenv("RAG_TRACE_RETRIEVAL", "0").lower() in ("1", "true", "yes"):
@@ -106,8 +135,14 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 	# also support ISO-like dates
 	iso_in_q = re.search(r"20\d{2}-\d{2}-\d{2}", ql)
 
-	def _len_penalty(n: int) -> float:
-		# Mild penalty for very short or extremely long contexts
+	def _len_penalty(n: int, is_figure: bool) -> float:
+		# Loosen penalty for short figure captions so multiple figures can surface
+		if is_figure:
+			if n < 80:
+				return 0.97
+			if n > 2000:
+				return 0.92
+			return 1.0
 		if n < 120:
 			return 0.93
 		if n > 3000:
@@ -134,7 +169,7 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 		base = lexical_overlap(query, d.page_content)
 		meta = " ".join(map(str, md.values()))
 		meta_boost = 0.2 * lexical_overlap(" ".join(kws), meta)
-		sec_boost = 0.15 if (sec_pref and md.get("section") == sec_pref) else 0.0
+		sec_boost = 0.15 if (sec_pref and (md.get("section") or md.get("section_type")) == sec_pref) else 0.0
 		src_boost = _extractor_bonus(md)
 
 		# Date/timeline boost: if query mentions a month/day or ISO date and doc contains it
@@ -163,23 +198,52 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 		except Exception:
 			pass
 
-		score = (base + meta_boost + sec_boost + src_boost + date_boost + tokens_boost) * _len_penalty(len(d.page_content))
+		# Bonus for explicit numbering for figures to reduce ambiguity
+		number_bonus = 0.0
+		try:
+			if (md.get("section") == "Figure" or md.get("section_type") == "Figure") and md.get("figure_number"):
+				number_bonus += 0.08
+			if (md.get("section") == "Table" or md.get("section_type") == "Table") and md.get("table_number"):
+				number_bonus += 0.05
+			# Extra boost if the query asks for a specific Figure/Table number
+			mf = re.search(r"\bfigure\s*(\d{1,3})\b", ql)
+			if mf and str(md.get("figure_number")) == mf.group(1):
+				number_bonus += 0.25
+			mt = re.search(r"\btable\s*(\d{1,3})\b", ql)
+			if mt and str(md.get("table_number")) == mt.group(1):
+				number_bonus += 0.2
+		except Exception:
+			pass
+
+		score = (base + meta_boost + sec_boost + src_boost + date_boost + tokens_boost + number_bonus) * _len_penalty(len(d.page_content), (md.get("section") == "Figure" or md.get("section_type") == "Figure"))
 		scored.append((score, len(d.page_content), d))
 
-	# Sort and dedupe by (file,page,section,anchor/path)
+	# Sort and dedupe by (file,page,section,anchor/path) and collapse near-duplicate figure captions
 	scored.sort(key=lambda x: (-x[0], x[1]))
 	seen = set()
+	seen_fig_captions = set()
 	unique: List[Document] = []
 	for s, ln, d in scored:
 		md = d.metadata or {}
 		key = (
 			md.get("file_name"),
 			md.get("page"),
-			md.get("section"),
+			md.get("section") or md.get("section_type"),
 			md.get("anchor") or md.get("table_md_path") or md.get("table_csv_path") or md.get("image_path")
 		)
 		if key in seen:
 			continue
+		# Collapse duplicates by similar figure captions to surface distinct figures
+		try:
+			if (md.get("section") == "Figure" or md.get("section_type") == "Figure"):
+				cap = (md.get("figure_label") or "").strip().lower()
+				cap_sig = cap[:80]
+				if cap_sig and cap_sig in seen_fig_captions:
+					continue
+				if cap_sig:
+					seen_fig_captions.add(cap_sig)
+		except Exception:
+			pass
 		seen.add(key)
 		unique.append(d)
 		if len(unique) >= top_n:

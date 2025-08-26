@@ -52,7 +52,8 @@ def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, flo
 	ctx_tokens = set(_simple_tokens("\n".join(contexts or [])))
 	if not ref_tokens and not ctx_tokens:
 		return float("nan"), float("nan"), float("nan")
-	if precision_score is not None:  # use sklearn over the union vocabulary
+	# Guard all three to satisfy type checker (each may be None if sklearn missing)
+	if precision_score is not None and recall_score is not None and f1_score is not None:
 		vocab = sorted(ref_tokens.union(ctx_tokens))
 		y_true = [1 if v in ref_tokens else 0 for v in vocab]
 		y_pred = [1 if v in ctx_tokens else 0 for v in vocab]

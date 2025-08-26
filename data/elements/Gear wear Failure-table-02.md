@@ -1,5 +1,5 @@
 <a name="table-02"></a>
-### Table 2: Sensors and data acquisition
+### Table 2: Sensors and data acquisition.: Sensors and data acquisition.
 
 | Sensor |  | Direction and | Brand | Sensitivity | R | Sampling |
 | --- | --- | --- | --- | --- | --- | --- |

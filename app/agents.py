@@ -142,7 +142,20 @@ def route_question(q: str) -> str:
 def render_context(docs: List[Document], max_chars: int = 8000) -> str:
 	out, n = [], 0
 	for d in docs:
-		piece = f"[{d.metadata.get('file_name')} p{d.metadata.get('page')}] {d.page_content}".strip()
+		md = d.metadata or {}
+		sec = md.get('section') or md.get('section_type') or 'Text'
+		extra = ''
+		# Surface numbering cues to help LLM cite correctly
+		if sec == 'Figure' and md.get('figure_number'):
+			extra = f" (Figure {md.get('figure_number')})"
+		if sec == 'Table' and md.get('table_number'):
+			lbl = md.get('table_label')
+			if lbl and isinstance(lbl, str):
+				extra = f" ({lbl})"
+			else:
+				extra = f" (Table {md.get('table_number')})"
+		header = f"[{md.get('file_name')} p{md.get('page')} {sec}{extra}]"
+		piece = f"{header}\n{d.page_content}".strip()
 		n += len(piece)
 		if n > max_chars:
 			break

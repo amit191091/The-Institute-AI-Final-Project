@@ -1,5 +1,5 @@
 <a name="table-01"></a>
-### Table 1: Wear severities dimensions.
+### Table 1: Wear severities dimensions.: Wear severities dimensions.
 
 | Case |  | Wear depth |  | Wear depth |  | Wear depth |  | Wear depth |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

@@ -127,8 +127,13 @@ def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | No
 	metadata = {
 		"file_name": chunk["file_name"],
 		"page": chunk.get("page"),
-		"section": chunk.get("section_type"),
+	# Prefer the explicit section when present (e.g., "Figure", "Table")
+	"section": chunk.get("section") or chunk.get("section_type"),
 		"anchor": chunk.get("anchor"),
+	# Deterministic identifiers to aid traceability/upserts
+	"doc_id": chunk.get("doc_id"),
+	"chunk_id": chunk.get("chunk_id"),
+	"content_hash": chunk.get("content_hash"),
 		"image_path": chunk.get("image_path"),
 		"extractor": chunk.get("extractor"),
 		"table_number": chunk.get("table_number"),
@@ -137,6 +142,15 @@ def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | No
 		"table_csv_path": chunk.get("table_csv_path"),
 		"table_row_range": chunk.get("table_row_range"),
 		"table_col_names": chunk.get("table_col_names"),
+	# Figure metadata (propagate through for UI/filters/snapshot)
+	"figure_number": chunk.get("figure_number"),
+	"figure_order": chunk.get("figure_order"),
+	"figure_label": chunk.get("figure_label"),
+	"figure_caption_original": chunk.get("figure_caption_original"),
+	"figure_number_source": chunk.get("figure_number_source"),
+	"caption_alignment": chunk.get("caption_alignment"),
+	"figure_associated_text_preview": chunk.get("figure_associated_text_preview"),
+	"figure_associated_anchor": chunk.get("figure_associated_anchor"),
 		"client_id": client_id,
 		"case_id": case_id,
 		"keywords": chunk.get("keywords", []),
