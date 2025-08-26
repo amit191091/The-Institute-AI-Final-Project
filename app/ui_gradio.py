@@ -11,6 +11,7 @@ from app.retrieve import apply_filters, query_analyzer, rerank_candidates
 from app.eval_ragas import run_eval, pretty_metrics
 from app.logger import get_logger
 from app.graphdb import run_cypher as _run_cypher  # optional, guarded by try/except in handler
+from app.normalized_loader import load_normalized_docs
 try:
 	from app.graph import build_graph, render_graph_html
 except Exception:
@@ -874,6 +875,16 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				# If the Main built a graph, it will be at logs/graph.html
 				_graph_view = gr.HTML(value="")
 				_graph_status = gr.Markdown()
+				src = gr.Dropdown(
+					choices=[
+						"Docs co-mention (default)",
+						"Normalized graph.json",
+						"Normalized chunks",
+						"Neo4j (live)"
+					],
+					value="Docs co-mention (default)",
+					label="Graph source"
+				)
 				btn_graph = gr.Button("Generate / Refresh Graph")
 				gr.Markdown("#### Graph DB (Neo4j) — optional")
 				# Prefill with a sample so clicks don't pass an empty string on some Gradio builds
@@ -881,11 +892,113 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				btn_cypher = gr.Button("Run Cypher")
 				cypher_out = gr.JSON(label="Results")
 
-				def _gen_graph():
+				def _build_graph_from_normalized_json():
+					from pathlib import Path as _P
+					import json as _json
+					import networkx as _nx
+					p = _P("logs")/"normalized"/"graph.json"
+					if not p.exists():
+						raise RuntimeError("logs/normalized/graph.json not found")
+					data = _json.loads(p.read_text(encoding="utf-8"))
+					G2 = _nx.Graph()
+					def _node_label(n):
+						t = n.get("type")
+						pid = str(n.get("id"))
+						props = n.get("props") or {}
+						if t == "Figure":
+							return props.get("caption") or pid
+						if t == "Table":
+							return props.get("title") or pid
+						if t == "Section":
+							return props.get("title") or pid
+						if t == "Event":
+							return props.get("date") or pid
+						return pid
+					for n in (data.get("nodes") or []):
+						nid = str(n.get("id"))
+						G2.add_node(nid, type=n.get("type"), label=_node_label(n))
+					for e in (data.get("edges") or []):
+						u = str(e.get("from")); v = str(e.get("to"))
+						if u and v:
+							G2.add_edge(u, v, type=e.get("type"))
+					return G2
+
+				def _build_graph_from_normalized_chunks():
+					import networkx as _nx
+					p = "logs/normalized/chunks.jsonl"
+					ndocs = load_normalized_docs(p)
+					if not ndocs:
+						raise RuntimeError("logs/normalized/chunks.jsonl not found or empty")
+					G3 = _nx.Graph()
+					for d in ndocs:
+						md = d.metadata or {}
+						cid = str(md.get("chunk_id") or md.get("anchor") or id(d))
+						clabel = f"chunk:{cid}"
+						G3.add_node(clabel, type="Chunk", label=clabel)
+						# Page linkage
+						file = md.get("file_name"); page = md.get("page")
+						if file and page is not None:
+							pid = f"{file}#p{page}"
+							G3.add_node(pid, type="Page", label=pid)
+							G3.add_edge(clabel, pid, type="ON_PAGE")
+						# Table/Figure linkage
+						if md.get("table_number"):
+							tnode = f"tbl:{int(md['table_number'])}"
+							G3.add_node(tnode, type="Table", label=md.get("table_label") or tnode)
+							G3.add_edge(clabel, tnode, type="REFERS_TO")
+						if md.get("figure_number"):
+							fnode = f"fig:{int(md['figure_number'])}"
+							G3.add_node(fnode, type="Figure", label=md.get("figure_label") or fnode)
+							G3.add_edge(clabel, fnode, type="REFERS_TO")
+					return G3
+
+				def _build_graph_from_neo4j():
+					import networkx as _nx
+					rows = _run_cypher("MATCH (a)-[r]->(b) RETURN a, type(r) as t, b LIMIT 200")  # type: ignore
+					G4 = _nx.Graph()
+					def _nid(x):
+						try:
+							props = x.get("properties") or {}
+							labels = x.get("labels") or []
+							label = labels[0] if labels else "Node"
+							# Prefer stable id keys
+							for k in ("id", "name", "title", "date"):
+								if k in props and props[k]:
+									return f"{label}:{props[k]}"
+							return f"{label}:{props}"  # fallback
+						except Exception:
+							return str(x)
+					for r in rows or []:
+						a = r.get("a") or r.get("A") or r.get("n")
+						b = r.get("b") or r.get("B") or r.get("m")
+						t = r.get("t") or "REL"
+						if not a or not b:
+							continue
+						na = _nid(a); nb = _nid(b)
+						G4.add_node(na, type="Neo4j")
+						G4.add_node(nb, type="Neo4j")
+						G4.add_edge(na, nb, type=str(t))
+					return G4
+
+				def _gen_graph(source_choice: str):
 					try:
-						if build_graph is None or render_graph_html is None:
+						if render_graph_html is None:
 							return gr.update(value=""), "(graph module not available; install dependencies: networkx, pyvis)"
-						G = build_graph(docs)
+						# Select source
+						if source_choice == "Docs co-mention (default)":
+							if build_graph is None:
+								return gr.update(value=""), "(build_graph not available)"
+							G = build_graph(docs)
+						elif source_choice == "Normalized graph.json":
+							G = _build_graph_from_normalized_json()
+						elif source_choice == "Normalized chunks":
+							G = _build_graph_from_normalized_chunks()
+						elif source_choice == "Neo4j (live)":
+							G = _build_graph_from_neo4j()
+						else:
+							if build_graph is None:
+								return gr.update(value=""), "(unknown source)"
+							G = build_graph(docs)
 						Path("logs").mkdir(exist_ok=True)
 						out = Path("logs")/"graph.html"
 						render_graph_html(G, str(out))
@@ -909,7 +1022,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 						_graph_status.value = "(Graph not available yet – click the button to generate it.)"
 				except Exception:
 					_graph_status.value = "(Graph not available yet – click the button to generate it.)"
-				btn_graph.click(_gen_graph, inputs=[], outputs=[_graph_view, _graph_status])
+				btn_graph.click(_gen_graph, inputs=[src], outputs=[_graph_view, _graph_status])
 
 				def _run_cypher_ui(q:str=""):
 					try:

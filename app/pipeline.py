@@ -26,6 +26,7 @@ from app.indexing import (
     to_documents,
     dump_chroma_snapshot,
 )
+from app.normalized_loader import load_normalized_docs  # Optional normalized source
 from app.retrieve import (
     apply_filters,
     build_hybrid_retriever,
@@ -53,6 +54,11 @@ try:
     from app.graphdb import build_graph_db  # type: ignore
 except Exception:  # pragma: no cover
     def build_graph_db(docs):
+        return 0
+try:
+    from app.graphdb_import_normalized import import_normalized_graph  # type: ignore
+except Exception:  # pragma: no cover
+    def import_normalized_graph(graph_path, chunks_path):
         return 0
 from app.validate import validate_min_pages
 from app.logger import get_logger
@@ -212,7 +218,13 @@ def build_pipeline(paths: List[Path]):
     if sec_hist:
         log.info("Section histogram: %s", sorted(sec_hist.items(), key=lambda x: (-x[1], str(x[0]))))
     # vectorization
-    docs = to_documents(records)
+    # Optional: prefer normalized chunks.jsonl if feature flag enabled
+    use_normalized = os.getenv("RAG_USE_NORMALIZED", "0").lower() in ("1", "true", "yes")
+    if use_normalized and (Path("logs") / "normalized" / "chunks.jsonl").exists():
+        docs = load_normalized_docs(Path("logs") / "normalized" / "chunks.jsonl")
+        log.info("Using normalized docs for indexing: %d", len(docs))
+    else:
+        docs = to_documents(records)
     # Write a quick DB snapshot for debugging
     try:
         Path("logs").mkdir(exist_ok=True)
@@ -309,13 +321,30 @@ def build_pipeline(paths: List[Path]):
     except Exception:
         dense_ret = None
     debug = {"dense": dense_ret, "sparse": sparse}
-    # Optional: populate graph database
+    # Optional: populate graph database from current docs (entity co-mention graph)
     try:
         if os.getenv("RAG_GRAPH_DB", "").lower() in ("1", "true", "yes"):
             n = build_graph_db(docs)
             print(f"[GraphDB] Upserted ~{n} nodes/edges to Neo4j")
     except Exception as e:
         print(f"[GraphDB] population failed: {e}")
+
+    # Optional: if normalized graph.json exists and flag enabled, display a quick summary log
+    try:
+        if os.getenv("RAG_USE_NORMALIZED_GRAPH", "0").lower() in ("1", "true", "yes"):
+            gpath = Path("logs") / "normalized" / "graph.json"
+            if gpath.exists():
+                data = json.loads(gpath.read_text(encoding="utf-8"))
+                print(f"[NormalizedGraph] nodes={len(data.get('nodes', []))}, edges={len(data.get('edges', []))}")
+        # Optional: import normalized graph into Neo4j with page/table/figure edges
+        if os.getenv("RAG_IMPORT_NORMALIZED_GRAPH", "0").lower() in ("1", "true", "yes"):
+            gpath = Path("logs") / "normalized" / "graph.json"
+            cpath = Path("logs") / "normalized" / "chunks.jsonl"
+            if gpath.exists() and cpath.exists():
+                n2 = import_normalized_graph(gpath, cpath)
+                print(f"[GraphDB] normalized import result={n2}")
+    except Exception:
+        pass
     return docs, hybrid, debug
 
 
