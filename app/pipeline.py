@@ -12,11 +12,11 @@ import math
 import difflib
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from dotenv import load_dotenv
 
-from app.config import settings
+from app.config import settings, setup_default_env
 from app.loaders import load_many
 from app.chunking import structure_chunks
 from app.metadata import attach_metadata
@@ -27,6 +27,7 @@ from app.indexing import (
     dump_chroma_snapshot,
 )
 from app.normalized_loader import load_normalized_docs  # Optional normalized source
+from app.llamaindex_export import export_llamaindex_for  # Optional: guarded by availability
 from app.retrieve import (
     apply_filters,
     build_hybrid_retriever,
@@ -34,6 +35,7 @@ from app.retrieve import (
     rerank_candidates,
     lexical_overlap,
 )
+from app.reranker_ce import rerank_cross_encoder
 from app.agents import (
     answer_needle,
     answer_summary,
@@ -42,6 +44,11 @@ from app.agents import (
     route_question_ex,
 )
 from app.ui_gradio import build_ui
+try:
+    # Document type for helpers
+    from langchain_core.documents import Document  # type: ignore
+except Exception:  # pragma: no cover
+    from langchain.schema import Document  # type: ignore
 # Optional graph visualization/database modules. Provide no-op fallbacks if missing.
 try:
     from app.graph import build_graph, render_graph_html  # type: ignore
@@ -64,6 +71,61 @@ from app.validate import validate_min_pages
 from app.logger import get_logger
 from app.eval_ragas import run_eval_detailed, pretty_metrics
 
+RAW_DOCS: List[Document] = []
+
+def get_raw_docs() -> List[Document]:
+    return RAW_DOCS
+
+def _match_score(a: dict, b: dict) -> int:
+    score = 0
+    if (a.get("file_name") == b.get("file_name")):
+        score += 2
+    if (a.get("page") == b.get("page")):
+        score += 2
+    if (a.get("section") == b.get("section")):
+        score += 2
+    # exact anchor match best
+    if a.get("anchor") and a.get("anchor") == b.get("anchor"):
+        score += 5
+    # table/figure number
+    for k in ("table_number", "figure_number"):
+        if a.get(k) is not None and a.get(k) == b.get(k):
+            score += 3
+    return score
+
+def enrich_with_raw_tables(docs: List[Document]) -> List[Document]:
+    """Replace shallow normalized Table/Figure docs with raw counterparts when available.
+    We prefer raw chunks that include MARKDOWN/RAW blocks for tables and full captions for figures.
+    """
+    if not docs or not RAW_DOCS:
+        return docs
+    out: List[Document] = []
+    for d in docs:
+        md = d.metadata or {}
+        sec = md.get("section") or md.get("section_type")
+        content = d.page_content or ""
+        needs_upgrade = False
+        if sec == "Table" and "MARKDOWN:" not in content:
+            needs_upgrade = True
+        if sec == "Figure" and "Figure" not in (md.get("figure_label") or "") and len(content) < 100:
+            needs_upgrade = True
+        if not needs_upgrade:
+            out.append(d)
+            continue
+        # find best raw match
+        best: Optional[Document] = None
+        best_s = -1
+        for r in RAW_DOCS:
+            rm = r.metadata or {}
+            if (rm.get("section") or rm.get("section_type")) != sec:
+                continue
+            s = _match_score(md, rm)
+            if s > best_s:
+                best_s = s
+                best = r
+        out.append(best or d)
+    return out
+
 
 def _clean_run_outputs() -> None:
     """Delete prior run artifacts so new extraction overwrites files.
@@ -74,7 +136,7 @@ def _clean_run_outputs() -> None:
     if not flag:
         return
     import shutil
-    # Directories
+    # Selective wiping of large artifact dirs only when explicitly requested
     for d in (Path("data") / "images", Path("data") / "elements"):
         try:
             if d.exists():
@@ -90,7 +152,7 @@ def _clean_run_outputs() -> None:
                 shutil.rmtree(d)
     except Exception:
         pass
-    # Logs: queries.jsonl and logs/elements dumps
+    # Logs: queries.jsonl and logs/elements dumps (always safe to clear)
     try:
         q = Path("logs") / "queries.jsonl"
         if q.exists():
@@ -225,12 +287,43 @@ def build_pipeline(paths: List[Path]):
         log.info("Using normalized docs for indexing: %d", len(docs))
     else:
         docs = to_documents(records)
+    # Always build snapshot from raw records to preserve fine-grained sections (e.g., captions)
+    docs_for_snapshot = to_documents(records)
+    # keep raw docs globally for later enrichment
+    try:
+        global RAW_DOCS
+        RAW_DOCS = docs_for_snapshot
+    except Exception:
+        pass
     # Write a quick DB snapshot for debugging
     try:
         Path("logs").mkdir(exist_ok=True)
         snap_path = Path("logs") / "db_snapshot.jsonl"
+        
+        # Sort documents chronologically by page, then by section order, then by position
+        def _sort_key(doc):
+            md = doc.metadata or {}
+            page = md.get("page", 999999)
+            # Section priority: Title/Header -> Text -> Table -> Figure -> Other
+            section = md.get("section", "")
+            section_priority = {
+                "Title": 0,
+                "Header": 1, 
+                "Text": 2,
+                "Table": 3,
+                "Figure": 4,
+                "TableCaption": 2.5,  # Between Text and Table
+                "FigureCaption": 3.5   # Between Table and Figure
+            }.get(section, 999)
+            
+            # Use element_id or chunk_id for stable ordering within same page/section
+            element_id = md.get("element_id", md.get("chunk_id", ""))
+            return (page, section_priority, element_id)
+
+        sorted_docs = sorted(docs_for_snapshot, key=_sort_key)
+
         with open(snap_path, "w", encoding="utf-8") as f:
-            for d in docs:
+            for d in sorted_docs:
                 md = d.metadata or {}
                 txt = d.page_content or ""
                 sec = md.get("section") or md.get("section_type")
@@ -262,6 +355,10 @@ def build_pipeline(paths: List[Path]):
                                 preview_str = f"Table {table_no}: {summ}" if table_no is not None else summ
                             else:
                                 preview_str = lines[0].strip() if lines else ""
+                    elif sec == "TableCaption":
+                        preview_str = md.get("table_label") or txt
+                    elif sec == "FigureCaption":
+                        preview_str = md.get("figure_label") or txt
                     else:
                         preview_str = (txt or "")[:200]
                 except Exception:
@@ -354,9 +451,9 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     qa = query_analyzer(question)
     q_exec = qa.get("canonical") or question
     try:
-        candidates = hybrid.invoke(q_exec)
+        candidates = hybrid.get_relevant_documents(q_exec)
     except Exception:
-        candidates = hybrid.invoke(q_exec)
+        candidates = hybrid.get_relevant_documents(q_exec)
     candidates = candidates[: settings.K_TOP_K]  # rerank TOP K
     filtered = apply_filters(candidates, qa["filters"])  # metadata filters
     try:
@@ -365,7 +462,11 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
         sec = None
     if sec and not filtered:
         filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
-    top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
+    # Use cross-encoder reranker when enabled
+    if os.getenv("CE_ENABLED", "0").lower() in ("1", "true", "yes"):
+        top_docs = rerank_cross_encoder(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
+    else:
+        top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
     route, rtrace = route_question_ex(question)
 
     def _doc_head(d):
@@ -393,6 +494,7 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     if route == "summary":
         ans = answer_summary(_LLM(), top_docs, question)
     elif route == "table":
+        top_docs = enrich_with_raw_tables(top_docs)
         ans = answer_table(_LLM(), top_docs, question)
     else:
         ans = answer_needle(_LLM(), top_docs, question)
@@ -431,9 +533,9 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
     qa = query_analyzer(question)
     q_exec = qa.get("canonical") or question
     try:
-        candidates = hybrid.invoke(q_exec)
+        candidates = hybrid.get_relevant_documents(q_exec)
     except Exception:
-        candidates = hybrid.invoke(q_exec)
+        candidates = hybrid.get_relevant_documents(q_exec)
     candidates = candidates[: settings.K_TOP_K]
     filtered = apply_filters(candidates, qa["filters"])  # type: ignore[index]
     try:
@@ -442,7 +544,10 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
         sec = None
     if sec and not filtered:
         filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
-    top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
+    if os.getenv("CE_ENABLED", "0").lower() in ("1", "true", "yes"):
+        top_docs = rerank_cross_encoder(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
+    else:
+        top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
     if not top_docs:
         top_docs = candidates[: settings.CONTEXT_TOP_N] if candidates else []
     if not top_docs:
@@ -451,6 +556,7 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
     if route == "summary":
         ans = answer_summary(llm, top_docs, question)
     elif route == "table":
+        top_docs = enrich_with_raw_tables(top_docs)
         ans = answer_table(llm, top_docs, question)
     else:
         ans = answer_needle(llm, top_docs, question)
@@ -474,31 +580,62 @@ def _load_json_or_jsonl(path: Path):
             return rows
         else:
             obj = json.load(open(path, "r", encoding="utf-8"))
+            # list of dicts (common)
             if isinstance(obj, list):
                 return obj
+            # dict mapping id->question or id->{question:..., answer:...}
             if isinstance(obj, dict):
-                return [{"key": k, "value": v} for k, v in obj.items()]
+                rows = []
+                for k, v in obj.items():
+                    if isinstance(v, dict):
+                        row = {"id": k}
+                        row.update(v)
+                        rows.append(row)
+                    else:
+                        rows.append({"id": k, "question": v})
+                return rows
             return []
     except Exception:
         return []
 
 
 def _discover_eval_files():
-    qa_candidates = [
+    def _paths_safe(paths):
+        out = []
+        for p in paths:
+            try:
+                s = str(p)
+                if not s or s == ".":
+                    continue
+                if p.exists():
+                    out.append(p)
+            except Exception:
+                continue
+        return out
+    qa_candidates = _paths_safe([
         Path(os.getenv("RAG_QA_FILE", "")),
         Path("gear_wear_qa.json"),
         Path("gear_wear_qa.jsonl"),
+        Path("gear_wear_qa_context_free.json"),
+        Path("gear_wear_qa_context_free.jsonl"),
         Path("data") / "gear_wear_qa.json",
         Path("data") / "gear_wear_qa.jsonl",
-    ]
-    gt_candidates = [
+        Path("data") / "gear_wear_qa_context_free.json",
+        Path("data") / "gear_wear_qa_context_free.jsonl",
+    ])
+    gt_candidates = _paths_safe([
         Path(os.getenv("RAG_GT_FILE", "")),
         Path("gear_wear_ground_truth.json"),
-        Path("gear_wear_ground_truth.json"),
+        Path("gear_wear_ground_truth.jsonl"),
+        Path("gear_wear_ground_truth_context_free.json"),
+        Path("gear_wear_ground_truth_context_free.jsonl"),
         Path("data") / "gear_wear_ground_truth.json",
-    ]
-    qa = next((p for p in qa_candidates if str(p) and p.exists()), None)
-    gt = next((p for p in gt_candidates if str(p) and p.exists()), None)
+        Path("data") / "gear_wear_ground_truth.jsonl",
+        Path("data") / "gear_wear_ground_truth_context_free.json",
+        Path("data") / "gear_wear_ground_truth_context_free.jsonl",
+    ])
+    qa = qa_candidates[0] if qa_candidates else None
+    gt = gt_candidates[0] if gt_candidates else None
     return qa, gt
 
 
@@ -580,7 +717,7 @@ def run_evaluation(docs, hybrid, llm: _LLM):
                 if s > best_score:
                     best_score = s
                     best = k
-            if best is not None and best_score >= 0.75:
+            if best is not None and best_score >= 0.85:
                 gts = gt_map.get(best, [])
         if (not gts) and isinstance(row.get("answer"), (str, int, float)):
             ans_txt = str(row["answer"]).strip()
@@ -649,12 +786,35 @@ def run() -> None:
     print("stating program")
     # Load .env and override any pre-set env vars to ensure the correct API keys are used
     load_dotenv(override=True)
+    # Set up optimal defaults for clean, fast runs
+    setup_default_env()
     _clean_run_outputs()
     paths = _discover_input_paths()
     if not paths:
         print("No input files found. Place PDFs/DOCs under data/ or the root PDF.")
         return
     docs, hybrid, debug = build_pipeline(paths)
+    # Log GT/QA visibility upfront
+    try:
+        qa, gt = _discover_eval_files()
+        if qa and qa.exists():
+            print(f"[AUTOLOAD] QA file found: {qa}")
+        else:
+            print("[AUTOLOAD] QA file not found")
+        if gt and gt.exists():
+            print(f"[AUTOLOAD] Ground-truth file found: {gt}")
+        else:
+            print("[AUTOLOAD] Ground-truth file not found")
+    except Exception:
+        pass
+    # Optional: LlamaIndex export for comparison (tables/images/chunks under data/elements/llamaindex)
+    try:
+        if os.getenv("RAG_ENABLE_LLAMAINDEX", os.getenv("ENABLE_LLAMA_INDEX", "0")).lower() in ("1", "true", "yes"):
+            n = export_llamaindex_for(paths)
+            if n:
+                print(f"[LlamaIndex] Exported elements for {n} PDFs under data/elements/llamaindex")
+    except Exception:
+        pass
     # Build a lightweight graph and render it for UI
     try:
         G = build_graph(docs)

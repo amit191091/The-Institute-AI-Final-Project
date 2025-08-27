@@ -530,5 +530,46 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 	except Exception:
 		pass
 
+	# New: emit lightweight caption pseudo-chunks for TableCaption/FigureCaption with numbering and labels for snapshot clarity
+	try:
+		new_caps = []
+		for ch in chunks:
+			sec = ch.get("section") or ch.get("section_type")
+			if sec == "Figure" and ch.get("figure_label"):
+				new_caps.append({
+					"file_name": ch.get("file_name"),
+					"page": ch.get("page"),
+					"section_type": "FigureCaption",
+					"section": "FigureCaption",
+					"anchor": f"{ch.get('anchor')}-caption",
+					"doc_id": ch.get("doc_id"),
+					"chunk_id": f"{ch.get('doc_id')}#p{ch.get('page')}:FigureCaption/{ch.get('anchor')}-caption",
+					"content_hash": ch.get("content_hash"),
+					"figure_number": ch.get("figure_number"),
+					"figure_label": ch.get("figure_label"),
+					"content": ch.get("figure_label"),
+					"preview": ch.get("figure_label"),
+					"keywords": ch.get("keywords", []),
+				})
+			elif sec == "Table" and ch.get("table_label"):
+				new_caps.append({
+					"file_name": ch.get("file_name"),
+					"page": ch.get("page"),
+					"section_type": "TableCaption",
+					"section": "TableCaption",
+					"anchor": f"{ch.get('anchor')}-caption",
+					"doc_id": ch.get("doc_id"),
+					"chunk_id": f"{ch.get('doc_id')}#p{ch.get('page')}:TableCaption/{ch.get('anchor')}-caption",
+					"content_hash": ch.get("content_hash"),
+					"table_number": ch.get("table_number"),
+					"table_label": ch.get("table_label"),
+					"content": ch.get("table_label"),
+					"preview": ch.get("table_label"),
+					"keywords": ch.get("keywords", []),
+				})
+		if new_caps:
+			chunks.extend(new_caps)
+	except Exception:
+		pass
 	return chunks
 

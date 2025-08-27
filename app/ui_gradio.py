@@ -1,4 +1,5 @@
 import gradio as gr
+import os
 import pandas as pd
 import json
 from pathlib import Path
@@ -8,6 +9,7 @@ import html as _html
 
 from app.agents import answer_needle, answer_summary, answer_table, route_question_ex
 from app.retrieve import apply_filters, query_analyzer, rerank_candidates
+from app.reranker_ce import rerank_cross_encoder
 from app.eval_ragas import run_eval, pretty_metrics
 from app.logger import get_logger
 from app.graphdb import run_cypher as _run_cypher  # optional, guarded by try/except in handler
@@ -231,7 +233,12 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				if isinstance(obj, list):
 					for it in obj:
 						if isinstance(it, dict):
-							out.append(it)
+							# Only accept items that already look like {question, ground_truths}
+							q = it.get("question") or it.get("q") or it.get("prompt") or it.get("key")
+							g = it.get("ground_truths") or it.get("ground_truth") or it.get("answers") or it.get("answer") or it.get("reference") or it.get("value")
+							if q and g is not None:
+								out.append({"question": q, "ground_truths": g})
+						# If nothing matched, return empty so schema-specific logic (e.g., context_free) can run
 					return out
 				# Case 2: flat mapping {question: [gts]}
 				if isinstance(obj, dict):
@@ -261,7 +268,62 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 
 			rows = _as_list_of_qgt(loaded)
 
-			# If no rows were found (context_free schema), extract facts (especially dates) and synthesize Q->GT pairs
+			# If no rows were found (context_free schema), try to handle the gear_wear format
+			if not rows and isinstance(loaded, list) and loaded and isinstance(loaded[0], dict):
+				first_item = loaded[0]
+				if "id" in first_item and "answer" in first_item:
+					# This is the gear_wear_ground_truth_context_free.json format
+					# Need to match with QA file to get questions
+					for item in loaded:
+						if not isinstance(item, dict):
+							continue
+						item_id = item.get("id")
+						answer = item.get("answer")
+						acceptable_answers = item.get("acceptable_answers", [])
+						
+						if item_id and answer:
+							# Create synthetic question from ID for now
+							question = f"Question {item_id}"
+							
+							# Prepare ground truths list
+							ground_truths = [answer]
+							if acceptable_answers:
+								ground_truths.extend(acceptable_answers)
+							
+							rows.append({
+								"question": question,
+								"ground_truths": ground_truths,
+								"id": item_id
+							})
+					
+					# Try to load corresponding QA file to get actual questions
+					qa_candidates = [
+						Path("data") / "gear_wear_qa_context_free.jsonl",
+						Path("gear_wear_qa_context_free.jsonl"),
+						Path("data") / "gear_wear_qa.jsonl",
+						Path("gear_wear_qa.jsonl")
+					]
+					
+					id_to_question = {}
+					for qa_cand in qa_candidates:
+						if qa_cand.exists():
+							try:
+								with open(qa_cand, "r", encoding="utf-8") as qf:
+									for line in qf:
+										if line.strip():
+											qa_item = json.loads(line)
+											if isinstance(qa_item, dict) and "id" in qa_item and "question" in qa_item:
+												id_to_question[qa_item["id"]] = qa_item["question"]
+								break
+							except Exception:
+								continue
+					
+					# Update rows with actual questions if found
+					for row in rows:
+						if "id" in row and row["id"] in id_to_question:
+							row["question"] = id_to_question[row["id"]]
+
+			# If still no rows, extract facts (especially dates) and synthesize Q->GT pairs
 			if not rows:
 				def _looks_like_date(s: str) -> bool:
 					import re as _re
@@ -384,7 +446,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 			qa_map["__loaded__"] = True
 			qa_map["map"] = m
 			qa_map["norm"] = { _norm_q(k): v for k, v in m.items() }
-			return f"Loaded {len(m)} QA pairs from {p}"
+			return f"Loaded {len(m)} QA questions from {p}"
 		except Exception as e:
 			return f"(failed to load QA: {e})"
 
@@ -459,7 +521,14 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					return bool(_re.match(rf"^\s*table\s*{int(str(tv))}\b", lab, _re.I))
 				return True
 			filtered = [d for d in docs if _fallback_ok(d)]
-		top_docs = rerank_candidates(q, filtered, top_n=8)
+		# Cross-encoder reranker toggle
+		try:
+			if os.getenv("CE_ENABLED", "0").lower() in ("1", "true", "yes"):
+				top_docs = rerank_cross_encoder(q, filtered, top_n=8)
+			else:
+				top_docs = rerank_candidates(q, filtered, top_n=8)
+		except Exception:
+			top_docs = rerank_candidates(q, filtered, top_n=8)
 		# Fallbacks to avoid empty contexts for metrics/answering
 		if not top_docs:
 			# Use unfiltered candidates
@@ -659,7 +728,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					s = difflib.SequenceMatcher(None, nq, k).ratio()
 					if s > best_s:
 						best_s = s; best = k
-				if best is not None and best_s >= 0.75:
+				if best is not None and best_s >= 0.85:
 					gts = gt_map["norm"][best]
 			# QA fallback
 			ref = None
@@ -673,7 +742,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 						s = difflib.SequenceMatcher(None, nq, k).ratio()
 						if s > best_s:
 							best_s = s; best = k
-					if best is not None and best_s >= 0.75:
+					if best is not None and best_s >= 0.85:
 						ref = qa_map["norm"][best]
 			if not ref:
 				ref = (gts[0] if isinstance(gts, list) and gts else ans_raw or "")

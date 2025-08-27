@@ -152,8 +152,138 @@ def _export_tables_to_files(elements, path: Path) -> None:
 				keep_idx.append(j)
 		return [[row[j] for j in keep_idx] for row in norm]
 
+	def _merge_second_header_row(rows: list[list[str]]) -> list[list[str]]:
+		"""If the first body row looks like a continuation of the header (e.g., units
+		or split words like "Rate" under "Sampling"), merge it into the header.
+		Detect by presence of unit patterns or header-ish tokens in row 1.
+		"""
+		if not rows or len(rows) < 2:
+			return rows
+		head = rows[0]
+		row1 = rows[1]
+		w = max(len(head), len(row1))
+		head = head + [""] * (w - len(head))
+		row1 = row1 + [""] * (w - len(row1))
+		import re as _re
+		# Heuristics: units or header continuation words
+		def _is_placeholder(s: str) -> bool:
+			ss = (s or "").strip()
+			return (not ss) or ss.lower() in {"nan", "none", "-"} or bool(_re.match(r"^unnamed:\s*\d+\b", ss, _re.I))
+		unit_or_hdr = lambda s: bool(_re.search(r"\[(?:[^\]]+)\]", (s or ""))) or bool(_re.match(r"^(?:pos|position|dir|direction|brand|sensor|case|type|value|rate|units?|sampling|sensitivity|transmission|ratio)$", (s or "").strip(), _re.I))
+		merged = False
+		# We may need to merge up to two following rows (header continuation + units)
+		for k in (1, 2):
+			if len(rows) <= k:
+				break
+			cont = rows[k]
+			cont = cont + [""] * (w - len(cont))
+			if not any(unit_or_hdr(c) or _is_placeholder(c) for c in cont):
+				continue
+			new_head = []
+			for j in range(w):
+				h = (head[j] or "").strip()
+				c = (cont[j] or "").strip()
+				if _is_placeholder(h):
+					h = ""
+				if _is_placeholder(c):
+					c = ""
+				if h and c:
+					new_head.append(f"{h} {c}")
+				else:
+					new_head.append(h or c)
+			head = new_head
+			merged = True
+		# If we merged any continuation rows, drop them from the table body
+		if merged:
+			# Remove the first 1 or 2 continuation rows depending on what we merged
+			drop = 1 if len(rows) < 3 else 2 if any(unit_or_hdr(c) for c in (rows[2] + [""] * (w - len(rows[2])))) else 1
+			return [head] + rows[1 + drop:]
+		return rows
+
+	def _repair_split_header_tokens(rows: list[list[str]]) -> list[list[str]]:
+		"""Fix common split header tokens without changing column counts.
+		- 'R' + 'Sampling ate [kS/sec]' -> '' + 'Sampling Rate [kS/sec]'
+		- 'Sampling' + 'Rate [kS/sec]' -> '' + 'Sampling Rate [kS/sec]'
+		- Prevent header contamination: if header cell ends with the first body cell token, strip it.
+		"""
+		if not rows or not rows[0]:
+			return rows
+		head = rows[0][:]
+		w = len(head)
+		# Join Sampling Rate variants
+		for j in range(w - 1):
+			left = (head[j] or "").strip()
+			right = (head[j + 1] or "").strip()
+			low_l = left.lower()
+			low_r = right.lower()
+			if left == "R" and low_r.startswith("sampling ate"):
+				head[j] = ""
+				head[j + 1] = right.replace("Sampling ate", "Sampling Rate", 1)
+			elif low_l == "sampling" and low_r.startswith("rate"):
+				head[j] = ""
+				head[j + 1] = f"Sampling {right}" if not right.lower().startswith("sampling ") else right
+		# Prevent header contamination with first data row (e.g., 'Sensor Accelerometer')
+		if len(rows) > 1:
+			body = rows[1]
+			for j in range(min(len(head), len(body))):
+				h = (head[j] or "").strip()
+				b = (body[j] or "").strip()
+				if not h or not b:
+					continue
+				# Strip trailing body token if header looks like 'HeaderName BodyToken'
+				for key in ("sensor", "case", "module", "feature", "direction", "brand", "sensitivity", "sampling", "transmission", "ratio"):
+					if h.lower().startswith(key) and h.endswith(f" {b}"):
+						head[j] = h[: - (len(b) + 1)].strip()
+						break
+		rows[0] = head
+		return rows
+
+	def _compress_sparse_to_feature_value(rows: list[list[str]]) -> list[list[str]]:
+		"""If table has many blank columns per row (common with pdfplumber on ruled tables),
+		compress each row by taking the leftmost non-empty cell as the key (Feature)
+		and the rightmost non-empty cell as the value (Value / Type). Preserve the header
+		as [Feature, Value / Type]. Only apply when this improves density.
+		"""
+		if not rows:
+			return rows
+		# Avoid collapsing structured sensor/spec tables by header keywords
+		head_join = " ".join((rows[0] or [])).lower()
+		if any(k in head_join for k in ["sensitivity", "sampling", "transmission", "ratio", "position", "brand", "direction"]):
+			return rows
+		# Measure sparsity: fraction of empty cells in first few rows
+		import math as _math
+		probe = rows[1: 1 + min(6, max(0, len(rows) - 1))] or rows[: min(6, len(rows))]
+		w = max(len(r) for r in probe)
+		if w <= 2:
+			return rows
+		total = 0
+		empty = 0
+		for r in probe:
+			for c in (r + [""] * (w - len(r))):
+				total += 1
+				if not (c or "").strip():
+					empty += 1
+		# Apply only if very sparse
+		if total == 0 or (empty / total) < 0.45:
+			return rows
+		out = [["Feature", "Value / Type"]]
+		for i, r in enumerate(rows[1:], start=1):
+			cells = [ (c or "").strip() for c in r ]
+			# Skip if row is fully empty
+			if not any(cells):
+				continue
+			# Key: first non-empty; Value: last non-empty (not equal to key)
+			key = next((c for c in cells if c), "")
+			val = next((c for c in reversed(cells) if c and c != key), "")
+			out.append([key, val])
+		return out if len(out) > 1 else rows
+
 	def _normalize_repeated_panel_headers(rows: list[list[str]]) -> list[list[str]] | None:
-		"""Detect patterns like [Case, Wear depth, Case, Wear depth, ...] and fold into two columns.
+		"""Detect patterns like [Case, Wear depth] × N panels and standardize in wide format.
+		- Keep the 2×N columns (do NOT pivot to long).
+		- Replace Unnamed/Nan with 'Case'.
+		- Ensure each Wear column includes units '[μm]' if present in any unit row.
+		- Drop artifact rows like ['Case','nan','Case','nan',...] and unit-only rows.
 		Returns normalized rows or None if no transformation was applied.
 		"""
 		if not rows or not rows[0] or len(rows[0]) < 4:
@@ -164,7 +294,8 @@ def _export_tables_to_files(elements, path: Path) -> None:
 		pairs = []
 		j = 0
 		while j < len(lower) - 1:
-			is_case = lower[j].startswith("case")
+			# Allow Unnamed/Nan placeholders to stand in for Case header
+			is_case = lower[j].startswith("case") or lower[j].startswith("unnamed") or lower[j] in ("", "nan")
 			is_wear = ("wear" in lower[j + 1]) and ("depth" in lower[j + 1])
 			if is_case and is_wear:
 				pairs.append((j, j + 1))
@@ -172,20 +303,40 @@ def _export_tables_to_files(elements, path: Path) -> None:
 			else:
 				j += 1
 		if len(pairs) < 2:
-			return None
-		# Build long-format rows: [Case, Wear depth ...] from each pair, stacked vertically
-		out: list[list[str]] = []
-		# header: take from first pair, preserve units text
-		out_head = [rows[0][pairs[0][0]].strip(), rows[0][pairs[0][1]].strip()]
-		out.append(out_head)
-		for i in range(1, len(rows)):
-			for (a, b) in pairs:
-				val_a = rows[i][a].strip() if a < len(rows[i]) else ""
-				val_b = rows[i][b].strip() if b < len(rows[i]) else ""
-				if not val_a and not val_b:
-					continue
-				out.append([val_a, val_b])
-		return out
+			# Fallback: alternating repeated headings like Wear depth, Wear depth.1, ... with preceding Unnamed columns
+			if all(("wear" in c and "depth" in c) or c.startswith("unnamed") or not c for c in lower) and len(lower) % 2 == 0:
+				pairs = [(k, k + 1) for k in range(0, len(lower), 2)]
+			else:
+				return None
+		# Detect unit text under wear columns in the first few rows
+		unit_text = ""
+		try:
+			for r in rows[1:4]:
+				for _, b in pairs:
+					cell = (r[b] or "").strip()
+					if cell.startswith("[") and cell.endswith("]"):
+						unit_text = cell
+						raise StopIteration
+		except StopIteration:
+			pass
+		# Clean and standardize headers in place
+		new_head = head[:]
+		for a, b in pairs:
+			new_head[a] = "Case"
+			wear = (head[b] or "").strip() or "Wear depth"
+			if unit_text and unit_text not in wear:
+				wear = f"{wear} {unit_text}"
+			new_head[b] = wear
+		# Drop artifact rows: rows with only Case/nan or unit markers
+		drop = 0
+		for r in rows[1:4]:
+			vals = [ (c or "").strip().lower() for c in r ]
+			if all((v in ("", "nan", "case") or v.startswith("[")) for v in vals):
+				drop += 1
+			else:
+				break
+		body = rows[1 + drop:]
+		return [new_head] + body
 
 	def _rows_to_markdown(rows: list[list[str]]) -> str:
 		if not rows:
@@ -231,10 +382,17 @@ def _export_tables_to_files(elements, path: Path) -> None:
 			rows = _parse_csv_rows(text)
 		# Attempt normalization if we have parsed rows
 		if rows:
+			# First: attempt to merge a split multi-line header
+			rows = _merge_second_header_row(rows)
+			# Repair split tokens within header cells (no column count change)
+			rows = _repair_split_header_tokens(rows)
+			# Remove columns that are empty across all rows
 			rows = _remove_empty_cols(rows)
 			norm = _normalize_repeated_panel_headers(rows)
 			if norm:
 				rows = norm
+			# If table remains very sparse (many blank columns), compress to Feature/Value
+			rows = _compress_sparse_to_feature_value(rows)
 		# Write both formats, preferring normalized rows if available
 		md_written = False
 		csv_written = False
@@ -244,14 +402,18 @@ def _export_tables_to_files(elements, path: Path) -> None:
 			lbl = getattr(md_obj, "table_label", None)
 			cap = getattr(md_obj, "table_caption", None)
 			anch = getattr(md_obj, "table_anchor", None)
-			if lbl or cap:
-				title = (lbl or "Table").strip()
-				if cap:
-					title = f"{title}: {cap}"
-				if anch:
-					head_prefix = f"<a name=\"{anch}\"></a>\n### {title}\n\n"
-				else:
-					head_prefix = f"### {title}\n\n"
+			if lbl:
+				# lbl is already in the desired form, e.g., "Table 2: Sensors and data acquisition."
+				title = str(lbl).strip()
+			elif cap:
+				# Build a simple label from caption
+				title = f"Table: {cap}"
+			else:
+				title = "Table"
+			if anch:
+				head_prefix = f"<a name=\"{anch}\"></a>\n### {title}\n\n"
+			else:
+				head_prefix = f"### {title}\n\n"
 		except Exception:
 			head_prefix = ""
 		if rows:
@@ -293,7 +455,10 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 	3) For each caption in order, pick the unassigned table whose text best matches caption tokens.
 	4) Any leftover tables get sequential numbers.
 	Also store table_label, table_caption, table_anchor.
+	Creates separate TableCaption elements for each discovered caption.
 	"""
+	caption_elements = []  # Store caption elements to add to the main list
+	
 	# Map page -> list of (num, caption)
 	page_tables: dict[int, list[tuple[int, str | None]]] = {}
 	try:
@@ -320,12 +485,39 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 					num = int(m.group(1))
 					cap = (m.group(2) or "").strip() or None
 					pairs.append((num, cap))
+					
+					# Create a separate TableCaption element for this caption
+					if cap:
+						label = f"Table {num}: {cap}"
+						import re as _re
+						_slug = _re.sub(r"[^a-z0-9]+", "-", str(cap).strip().lower())
+						_slug = _slug.strip("-")[:80]
+						anchor = f"table-{num:02d}-caption-{_slug}" if _slug else f"table-{num:02d}-caption"
+						
+						caption_element = SimpleNamespace(
+							text=label,
+							category="TableCaption",
+							metadata=SimpleNamespace(
+								page_number=pno + 1,
+								table_number=num,
+								table_label=label,
+								table_caption=cap,
+								table_anchor=anchor,
+								anchor=anchor,
+								section="TableCaption",
+								element_id=f"table-{num:02d}-caption"
+							)
+						)
+						caption_elements.append(caption_element)
 				except Exception:
 					continue
 			if pairs:
 				page_tables[pno + 1] = pairs
 	except Exception:
 		page_tables = {}
+	
+	# Add caption elements to main elements list
+	elements.extend(caption_elements)
 	# Group tables by page
 	by_page: dict[int, list[object]] = {}
 	for e in elements:
@@ -365,7 +557,7 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 			if best_idx is not None and num not in used_nums:
 				assigned[best_idx] = (num, cap)
 				used_nums.add(num)
-		# Assign numbers to tables
+		# Assign numbers to tables and link them to captions
 		for ti, e in enumerate(tables):
 			md = getattr(e, "metadata", None)
 			if md is None:
@@ -374,12 +566,23 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 				num, cap = assigned[ti]
 				# Prefer full label including caption text when available
 				label = f"Table {num}: {cap}" if (cap and str(cap).strip()) else f"Table {num}"
-				anchor = f"table-{num:02d}"
+				# Build a descriptive anchor slug from caption: e.g., 'table-02-sensors-and-data-acquisition'
+				import re as _re
+				if cap and str(cap).strip():
+					_slug = _re.sub(r"[^a-z0-9]+", "-", str(cap).strip().lower())
+					_slug = _slug.strip("-")[:80]
+					anchor = f"table-{num:02d}-{_slug}" if _slug else f"table-{num:02d}"
+					caption_anchor = f"table-{num:02d}-caption-{_slug}" if _slug else f"table-{num:02d}-caption"
+				else:
+					anchor = f"table-{num:02d}"
+					caption_anchor = f"table-{num:02d}-caption"
 				try:
 					setattr(md, "table_number", int(num))
 					setattr(md, "table_label", label)
 					setattr(md, "table_caption", cap)
 					setattr(md, "table_anchor", anchor)
+					setattr(md, "table_associated_anchor", caption_anchor)  # Link to caption
+					setattr(md, "table_associated_text_preview", cap)
 				except Exception:
 					pass
 			else:
@@ -389,7 +592,7 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 				num = next_seq
 				next_seq += 1
 				used_nums.add(num)
-				# No discovered caption; keep simple label
+				# No discovered caption; keep simple label and simple anchor
 				label = f"Table {num}"
 				anchor = f"table-{num:02d}"
 				try:
@@ -434,7 +637,28 @@ def _score_table_candidate(text: str, extractor: str | None, page: int | None) -
 		"synth": 1,
 	}.get((extractor or "").split("-")[0], 1)
 	rows, cols = _estimate_rows_cols_from_text(text)
-	return prio * 100 + rows * 2 + cols
+	# Heuristic: prefer candidates with more actual non-empty cells (data density)
+	def _nonempty_cells(md: str) -> int:
+		try:
+			lines = [ln for ln in (md or "").splitlines() if ln.strip()]
+			count = 0
+			for ln in lines:
+				if ln.strip().startswith("|") and "|" in ln:
+					cells = [c.strip() for c in ln.split("|")]
+					if cells and cells[0] == "":
+						cells = cells[1:]
+					if cells and cells[-1] == "":
+						cells = cells[:-1]
+					# skip separator row like ---
+					if cells and all(c == "---" or not c for c in cells):
+						continue
+					count += sum(1 for c in cells if c and c != "---")
+			return count
+		except Exception:
+			return 0
+	data_cells = _nonempty_cells(text)
+	# Weight: extractor priority primary, then rows/cols, then data density
+	return prio * 100 + rows * 2 + cols + min(data_cells, 500)
 
 
 def _dedupe_and_limit_tables(elements: list, per_page_limit: int = 3) -> list:
@@ -602,9 +826,9 @@ def load_elements(path: Path):
 		if partition_pdf is not None:
 			log = get_logger()
 			# Effective feature toggles (unset means auto and will be attempted)
-			use_hi_res = _env_enabled("RAG_PDF_HI_RES", True)  # default ON
-			use_tabula = _env_enabled("RAG_USE_TABULA", None)  # auto
-			use_pdfplumber = _env_enabled("RAG_USE_PDFPLUMBER", True)  # default ON
+			use_hi_res = _env_enabled("RAG_PDF_HI_RES", None)  # default Off
+			use_tabula = _env_enabled("RAG_USE_TABULA", True)  # auto
+			use_pdfplumber = _env_enabled("RAG_USE_PDFPLUMBER", None)  # default off
 			use_camelot = _env_enabled("RAG_USE_CAMELOT", None)  # auto
 			use_synth = _env_enabled("RAG_SYNTH_TABLES", True)  # default ON
 			use_images = _env_enabled("RAG_EXTRACT_IMAGES", True)  # default ON
@@ -681,7 +905,9 @@ def load_elements(path: Path):
 				get_logger().info("%s: Tabula extracted %d tables", path.name, len(_added))
 	# Optional: pdfplumber table extraction (default ON)
 		if (use_pdfplumber is None) or (use_pdfplumber is True):
-			_pdfp = _try_pdfplumber_tables(path)
+		# if (use_pdfplumber is True):
+			# _pdfp = _try_pdfplumber_tables(path) #in comment to not use pdfplumber all the time.
+			_pdfp = None
 			if _pdfp:
 				els.extend(_pdfp)
 				get_logger().info("%s: pdfplumber extracted %d tables", path.name, len(_pdfp))
@@ -945,7 +1171,7 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 	"""Extract tables using Camelot if available. Requires Ghostscript/Poppler; optional.
 	"""
 	try:
-		import camelot  # type: ignore
+		from camelot.io import read_pdf as camelot_read_pdf  # type: ignore
 	except Exception:
 		get_logger().debug("Camelot not available; skip table extraction")
 		return []
@@ -964,7 +1190,7 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 	for flavor in (flavors or ["lattice", "stream"]):
 		try:
 			# pages can be 'all' or '1,2,3' or '1-3'
-			tables = camelot.read_pdf(
+			tables = camelot_read_pdf(
 				str(path),
 				pages=pages,
 				flavor=flavor,
@@ -1048,15 +1274,70 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 def _try_extract_images(path: Path):
 	"""Extract images from PDF pages as Figure elements using PyMuPDF (fitz).
 	Saves images to data/images and creates proper Figure elements with OCR summaries.
+	Also creates separate FigureCaption elements for each discovered figure caption.
 	"""
 	try:
 		import fitz  # PyMuPDF
 	except Exception:
 		get_logger().debug("PyMuPDF not available; skip image extraction")
 		return []
+	
 	out_dir = Path("data") / "images"
 	out_dir.mkdir(parents=True, exist_ok=True)
 	elements = []
+	caption_elements = []
+	
+	# First pass: extract figure captions from all pages
+	try:
+		doc = fitz.open(str(path))
+		for pno in range(len(doc)):
+			page = doc[pno]
+			page_text = ""
+			_get_text = getattr(page, "get_text", None)
+			if callable(_get_text):
+				try:
+					page_text = _get_text()
+				except Exception:
+					try:
+						page_text = _get_text("text")
+					except Exception:
+						page_text = ""
+			
+			import re as _re
+			text_str: str = page_text if isinstance(page_text, str) else ""
+			
+			# Extract figure captions
+			for m in _re.finditer(r"\bfigure\s*(\d+)\s*[:\.\-\s]*([^\n\r]{0,300})", text_str, _re.I):
+				try:
+					num = int(m.group(1))
+					cap = (m.group(2) or "").strip() or None
+					
+					if cap:
+						label = f"Figure {num}: {cap}"
+						import re as _re
+						_slug = _re.sub(r"[^a-z0-9]+", "-", str(cap).strip().lower())
+						_slug = _slug.strip("-")[:80]
+						anchor = f"figure-{num:02d}-caption-{_slug}" if _slug else f"figure-{num:02d}-caption"
+						
+						caption_element = SimpleNamespace(
+							text=label,
+							category="FigureCaption",
+							metadata=SimpleNamespace(
+								page_number=pno + 1,
+								figure_number=num,
+								figure_label=label,
+								figure_caption=cap,
+								figure_anchor=anchor,
+								anchor=anchor,
+								section="FigureCaption",
+								element_id=f"figure-{num:02d}-caption"
+							)
+						)
+						caption_elements.append(caption_element)
+				except Exception:
+					continue
+	except Exception:
+		pass
 	try:
 		doc = fitz.open(str(path))
 		for pno in range(len(doc)):
@@ -1097,20 +1378,54 @@ def _try_extract_images(path: Path):
 							page_text = ""
 				figure_summary = _generate_figure_summary(str(page_text), pno + 1, img_index)
 				
+				# Try to match this image to a figure caption
+				matched_caption = None
+				for cap_elem in caption_elements:
+					cap_md = getattr(cap_elem, "metadata", None)
+					if cap_md and getattr(cap_md, "page_number", None) == pno + 1:
+						fig_num = getattr(cap_md, "figure_number", None)
+						if fig_num == img_index:  # Simple heuristic: image index matches figure number
+							matched_caption = cap_md
+							break
+				
+				# Create figure element with proper linking
+				if matched_caption:
+					fig_label = getattr(matched_caption, "figure_label", None)
+					fig_caption = getattr(matched_caption, "figure_caption", None)
+					cap_anchor = getattr(matched_caption, "figure_anchor", None)
+					fig_anchor = cap_anchor.replace("-caption", "") if cap_anchor else f"figure-{img_index:02d}"
+				else:
+					fig_label = figure_summary
+					fig_caption = None
+					fig_anchor = f"figure-{img_index:02d}"
+					cap_anchor = None
+				
 				elements.append(
 					SimpleNamespace(
-						text=f"[FIGURE] {figure_summary}\nImage file: {fpath}",
+						text=f"[FIGURE] {fig_label}\nImage file: {fpath}",
 						category="Figure",
 						metadata=SimpleNamespace(
 							page_number=pno + 1, 
-							id=f"img-{path.name}-{pno+1}-{img_index}", 
+							id=f"img-{path.name}-{pno+1}-{img_index}",
+							element_id=f"figure-{img_index:02d}",
 							image_path=str(fpath),
-							figure_summary=figure_summary
+							figure_summary=figure_summary,
+							figure_number=img_index,
+							figure_label=fig_label,
+							figure_caption=fig_caption,
+							figure_anchor=fig_anchor,
+							figure_associated_anchor=cap_anchor,
+							figure_associated_text_preview=fig_caption,
+							anchor=fig_anchor,
+							section="Figure"
 						),
 					)
 				)
 	except Exception as e:
 		get_logger().warning("Image extraction failed (%s)", e.__class__.__name__)
 		return []
-	return elements
+	
+	# Combine figure elements and caption elements
+	all_elements = elements + caption_elements
+	return all_elements
 

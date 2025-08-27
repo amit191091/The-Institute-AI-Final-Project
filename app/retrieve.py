@@ -34,8 +34,16 @@ def query_analyzer(q: str) -> Dict:
 	# Specific number hints
 	if simp.get("table_number"):
 		filt["table_number"] = str(simp.get("table_number"))
+	else:
+		mtn = re.search(r"\btable\s*(\d{1,3})\b", q, re.I)
+		if mtn:
+			filt["table_number"] = mtn.group(1)
 	if simp.get("figure_number"):
 		filt["figure_number"] = str(simp.get("figure_number"))
+	else:
+		mfn = re.search(r"\bfigure\s*(\d{1,3})\b", q, re.I)
+		if mfn:
+			filt["figure_number"] = mfn.group(1)
 	# Case id from simplifier (e.g., W26)
 	if simp.get("case_id") and "case_id" not in filt:
 		filt["case_id"] = str(simp.get("case_id"))

@@ -43,7 +43,8 @@ def simplify_question(q: str) -> Dict:
 	# Flags
 	out["wants_exact"] = any(w in ql for w in ("exact", "precise"))
 	out["wants_summary"] = any(w in ql for w in ("summary", "summarize", "overview", "conclusion", "overall"))
-	out["wants_table"] = ("table" in ql) or bool(re.search(r"\bwear depth\b|\brms\b|\bfme\b|\bcrest factor\b", ql))
+	# include common misspelling 'transmition'
+	out["wants_table"] = ("table" in ql) or bool(re.search(r"\bwear depth\b|\brms\b|\bfme\b|\bcrest factor\b|\btransmission ratio\b|\btransmition ratio\b|\bgear ratio\b|\bzdriving\s*/\s*zdriven\b", ql))
 	out["wants_figure"] = any(w in ql for w in ("figure", "fig ", "image", "graph", "plot"))
 	out["wants_date"] = any(w in ql for w in ("when", "date", "day")) or bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b", ql))
 	out["wants_value"] = any(w in ql for w in ("what is", "value", "how much", "amount")) or out["wants_table"]
@@ -68,6 +69,14 @@ def simplify_question(q: str) -> Dict:
 		out["target_attr"] = "crest factor"
 	elif re.search(r"\bfme\b", ql):
 		out["target_attr"] = "fme"
+	elif re.search(r"\b(transmission ratio|transmition ratio|gear ratio|zdriving/zdriven|z driving/z driven|z_driving/z_driven)\b", ql):
+		out["target_attr"] = "transmission ratio"
+		out["wants_table"] = True
+	else:
+		# Fuzzy fallback: any mention of ratio with transmission/gear stem implies table lookup
+		if ("ratio" in ql) and ("transm" in ql or "gear" in ql or "zdriv" in ql):
+			out["target_attr"] = "transmission ratio"
+			out["wants_table"] = True
 
 	# Event for date-style questions
 	if any(w in ql for w in ("failure", "failed")):
@@ -123,7 +132,7 @@ def route_question_ex(q: str) -> Tuple[str, Dict]:
 		trace["route"] = "summary"
 		return "summary", trace
 	# Table/Figure cues
-	if simp.get("wants_table") or any(w in ql for w in ("table", "chart", "value", "figure", "fig ", "image", "graph", "plot")):
+	if simp.get("wants_table") or any(w in ql for w in ("table", "chart", "value", "figure", "fig ", "image", "graph", "plot", "gear ratio", "transmission ratio", "transmition ratio", "zdriving/zdriven")):
 		trace["matched"].append("table_figure_keywords")
 		trace["route"] = "table"
 		return "table", trace
@@ -170,6 +179,11 @@ def answer_summary(llm: LLMCallable, docs: List[Document], question: str) -> str
 
 
 def answer_needle(llm: LLMCallable, docs: List[Document], question: str) -> str:
+	# Deterministic extraction for common numeric lookups before LLM
+	val = _try_extract_transmission_ratio(docs)
+	if val:
+		cite = _first_table_citation(docs)
+		return f"Transmission ratio: {val}{(' ' + cite) if cite else ''}"
 	ctx = render_context(docs)
 	prompt = NEEDLE_SYSTEM + "\n" + NEEDLE_PROMPT.format(context=ctx, question=question)
 	return llm(prompt).strip()
@@ -179,7 +193,116 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	table_docs = [d for d in docs if d.metadata.get("section") in ("Table", "Figure")] or docs
 	# Sort to push most table-like content first
 	table_docs = table_docs + [d for d in docs if d not in table_docs]
+	# Deterministic extraction for common numeric lookups
+	val = _try_extract_transmission_ratio(table_docs)
+	if val:
+		cite = _first_table_citation(table_docs)
+		return f"Transmission ratio: {val}{(' ' + cite) if cite else ''}"
 	ctx = render_context(table_docs)
 	prompt = TABLE_SYSTEM + "\n" + TABLE_PROMPT.format(table=ctx, question=question)
 	return llm(prompt).strip()
+
+
+# --- Helpers ---------------------------------------------------------------
+
+def _first_table_citation(docs: List[Document]) -> str:
+	for d in docs:
+		md = d.metadata or {}
+		if (md.get("section") or md.get("section_type")) == "Table":
+			fn = md.get("file_name")
+			pg = md.get("page")
+			tn = md.get("table_number")
+			if tn:
+				try:
+					tn = int(tn)
+				except Exception:
+					pass
+			label = md.get("table_label")
+			if label:
+				return f"[{fn} p{pg} {label}]"
+			if tn:
+				return f"[{fn} p{pg} Table {tn}]"
+			return f"[{fn} p{pg} Table]"
+	return ""
+
+
+def _try_extract_transmission_ratio(docs: List[Document]) -> str | None:
+	import re
+	for d in docs:
+		pc = d.page_content or ""
+		txt = pc.lower()
+		# 1) Direct regex search anywhere
+		pats = [
+			r"transmission\s+ratio[^\n\r\|]*\|\s*([0-9]+\s*/\s*[0-9]+)",
+			r"transmission\s+ratio[^\n\r]*?([0-9]+\s*[:/]\s*[0-9]+)",
+			r"gear\s+ratio[^\n\r]*?([0-9]+\s*[:/]\s*[0-9]+)",
+			r"\bzdriving\s*/\s*zdriven\b[^\n\r]*?([0-9]+\s*/\s*[0-9]+)",
+		]
+		for p in pats:
+			m = re.search(p, txt, re.I)
+			if m:
+				return m.group(1).replace(" ", "")
+		# 2) Parse MARKDOWN block explicitly
+		try:
+			md_block = None
+			m1 = re.search(r"\bMARKDOWN:\s*(.+?)\nRAW:\s*", pc, flags=re.S)
+			if m1:
+				md_block = m1.group(1)
+			if not md_block:
+				# fallback: use entire text to parse rows
+				md_block = pc
+			# Iterate markdown rows
+			for line in md_block.splitlines():
+				if '|' not in line:
+					continue
+				# normalize and split markdown row
+				parts = [c.strip().lower() for c in line.strip().strip('|').split('|')]
+				if not parts:
+					continue
+				# find label cell
+				label = parts[0]
+				if any(k in label for k in ("transmission ratio", "gear ratio", "zdriving", "zdriven")):
+					# value is next non-empty cell
+					for cell in parts[1:]:
+						valm = re.search(r"([0-9]+\s*[:/]\s*[0-9]+)", cell)
+						if valm:
+							return valm.group(1).replace(" ", "")
+			# 3) Load external table files if present in metadata (no need for upstream enrichment)
+			try:
+				md = getattr(d, 'metadata', {}) or {}
+				paths = []
+				if md.get('table_md_path'):
+					paths.append(md.get('table_md_path'))
+				if md.get('table_csv_path'):
+					paths.append(md.get('table_csv_path'))
+				for pth in paths:
+					try:
+						from pathlib import Path as _P
+						p = _P(str(pth))
+						if not p.exists():
+							continue
+						text = p.read_text(encoding='utf-8', errors='ignore').lower()
+						# Try direct pattern first
+						m = re.search(r"\b(transmission|gear)\s+ratio[^\n\r]*?([0-9]+\s*[:/]\s*[0-9]+)", text, re.I)
+						if m:
+							return m.group(2).replace(" ", "")
+						# Otherwise scan markdown rows
+						for line in text.splitlines():
+							if '|' not in line:
+								continue
+							parts = [c.strip().lower() for c in line.strip().strip('|').split('|')]
+							if not parts:
+								continue
+							if any(k in parts[0] for k in ("transmission ratio", "gear ratio", "zdriving", "zdriven")):
+								for cell in parts[1:]:
+									mv = re.search(r"([0-9]+\s*[:/]\s*[0-9]+)", cell)
+									if mv:
+										return mv.group(1).replace(" ", "")
+					except Exception:
+						continue
+			except Exception:
+				pass
+		except Exception:
+			pass
+	return None
 

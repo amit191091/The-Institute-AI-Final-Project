@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 import re
 
-SECTION_ENUM = {"Summary", "Timeline", "Table", "Figure", "Analysis", "Conclusion", "Text"}
+SECTION_ENUM = {"Summary", "Timeline", "Table", "Figure", "Analysis", "Conclusion", "Text", "TableCaption", "FigureCaption"}
 
 
 def classify_section_type(kind: str, text: str) -> str:
@@ -15,8 +15,12 @@ def classify_section_type(kind: str, text: str) -> str:
 		return "Summary"
 	if k == "table":
 		return "Table"
+	if k == "tablecaption":
+		return "TableCaption"
 	if k in ("figure", "image"):
 		return "Figure"
+	if k == "figurecaption":
+		return "FigureCaption"
 	if any(w in t for w in ("analysis", "method", "procedure", "results", "discussion")):
 		return "Analysis"
 	return "Text"

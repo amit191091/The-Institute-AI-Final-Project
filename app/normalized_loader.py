@@ -23,7 +23,9 @@ def _coerce_int(x: Any) -> int | None:
 
 def _section_from_type(ctype: str, section_title: str | None) -> str:
     t = (ctype or "").lower()
-    if t.startswith("figure_"):
+    if t == "figure_caption":
+        return "FigureCaption"
+    if t == "figure" or t == "image":
         return "Figure"
     if t == "table_data":
         return "Table"

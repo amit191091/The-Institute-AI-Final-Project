@@ -1,40 +1,46 @@
-{"id": "Q1", "question": "What gearbox model is investigated in the report?", "answer": "MG-5025A.", "metadata": {"type": "factoid", "difficulty": "easy", "expected_entities": ["MG-5025A"]}}
-{"id": "Q2", "question": "Which vessel does the gearbox belong to?", "answer": "INS Haifa.", "metadata": {"type": "factoid", "difficulty": "easy", "expected_entities": ["INS Haifa"]}}
-{"id": "Q3", "question": "What steady speeds were used for data acquisition?", "answer": "15 RPS and 45 RPS.", "metadata": {"type": "factoid", "difficulty": "easy"}}
-{"id": "Q4", "question": "What is the record duration and sampling rate for each vibration capture?", "answer": "60 seconds at 50 kHz.", "metadata": {"type": "factoid", "difficulty": "easy"}}
-{"id": "Q5", "question": "What lubricant was in service?", "answer": "2640 semi-synthetic, 15W/40.", "metadata": {"type": "factoid", "difficulty": "easy"}}
-{"id": "Q6", "question": "Through what date was the gearbox considered Healthy?", "answer": "Through 8 April 2023.", "metadata": {"type": "temporal", "difficulty": "easy"}}
-{"id": "Q7", "question": "On what date did initial wear appear?", "answer": "9 April 2023.", "metadata": {"type": "temporal", "difficulty": "easy"}}
-{"id": "Q8", "question": "On which date did functional failure occur?", "answer": "15 June 2023.", "metadata": {"type": "temporal", "difficulty": "easy"}}
-{"id": "Q9", "question": "How many wear cases were tracked in total?", "answer": "35 wear cases.", "metadata": {"type": "numeric", "difficulty": "easy"}}
-{"id": "Q10", "question": "Which accelerometer model was used?", "answer": "Dytran 3053B.", "metadata": {"type": "factoid", "difficulty": "easy", "expected_entities": ["Dytran 3053B"]}}
-{"id": "Q11", "question": "What are the accelerometer sensitivities for the starboard and port shafts?", "answer": "Starboard: 1783 mV/g; Port: 1787 mV/g.", "metadata": {"type": "numeric", "difficulty": "medium"}}
-{"id": "Q12", "question": "How many teeth does each tachometer use?", "answer": "30 teeth.", "metadata": {"type": "numeric", "difficulty": "easy"}}
-{"id": "Q13", "question": "What is the transmission ratio between the driving and driven gears?", "answer": "18/35.", "metadata": {"type": "numeric", "difficulty": "easy"}}
-{"id": "Q14", "question": "What gear type is specified for the investigated gearbox?", "answer": "Spur gears.", "metadata": {"type": "factoid", "difficulty": "easy"}}
-{"id": "Q15", "question": "What is the module value for the gear?", "answer": "Module 3.", "metadata": {"type": "numeric", "difficulty": "easy"}}
-{"id": "Q16", "question": "Which figure plots RMS versus wear depth?", "answer": "Figure 2.", "metadata": {"type": "reference", "difficulty": "easy"}}
-{"id": "Q17", "question": "Which figure shows FFT spectrograms with GMF harmonics labeled?", "answer": "Figure 3.", "metadata": {"type": "reference", "difficulty": "easy"}}
-{"id": "Q18", "question": "Which figure shows normalized FME against wear depth?", "answer": "Figure 4.", "metadata": {"type": "reference", "difficulty": "easy"}}
-{"id": "Q19", "question": "What is the wear depth at W1?", "answer": "40 μm.", "metadata": {"type": "numeric", "difficulty": "easy"}}
-{"id": "Q20", "question": "What is the wear depth at W15?", "answer": "400 μm.", "metadata": {"type": "numeric", "difficulty": "easy"}}
-{"id": "Q21", "question": "What is the wear depth at W25?", "answer": "608 μm.", "metadata": {"type": "numeric", "difficulty": "easy"}}
-{"id": "Q22", "question": "What is the wear depth at W35?", "answer": "932 μm.", "metadata": {"type": "numeric", "difficulty": "easy"}}
-{"id": "Q23", "question": "Describe the symptom evolution from early to late stages.", "answer": "Early: mild RMS increase and occasional impulses; middle: sustained RMS growth with frequent impulses and debris circulation; late: high RMS with dense, tall impact trains due to macropitting/spall propagation.", "metadata": {"type": "descriptive", "difficulty": "medium"}}
-{"id": "Q24", "question": "Why were 15 RPS runs useful alongside 45 RPS?", "answer": "They provided qualitatively similar diagnostic features at lower absolute amplitudes, helpful for controlled checks with less operational impact.", "metadata": {"type": "explanation", "difficulty": "medium"}}
-{"id": "Q25", "question": "Summarize the likely failure mechanism.", "answer": "Progressive surface distress on a loaded flank—scuffing → pitting → macropitting/spall—accelerated by local film breakdown and debris re-entrainment, possibly influenced by alignment or load-sharing imperfections.", "metadata": {"type": "explanation", "difficulty": "medium"}}
-{"id": "Q26", "question": "What collection cadence is recommended when a trend is suspected?", "answer": "Collect three back-to-back 60 s records at each of 15 and 45 RPS, repeating every 10–15 minutes for an hour.", "metadata": {"type": "procedural", "difficulty": "medium"}}
-{"id": "Q27", "question": "Which metrics should be tracked for monitoring?", "answer": "RMS, peak, crest factor, and an impulsiveness index per sensor.", "metadata": {"type": "list", "difficulty": "easy"}}
-{"id": "Q28", "question": "State the alert thresholds for RMS and crest factor.", "answer": "RMS: baseline + 6 dB; Crest factor: +25% over a 7-day rolling average.", "metadata": {"type": "numeric", "difficulty": "medium"}}
-{"id": "Q29", "question": "What rapid escalation criterion should trigger immediate inspection planning?", "answer": "Multiple one-minute records within a day showing repeating high-amplitude impact trains.", "metadata": {"type": "procedural", "difficulty": "medium"}}
-{"id": "Q30", "question": "Name two non-signal recommendations to reduce recurrence risk.", "answer": "Check alignment/contact pattern and enhance oil filtration/ferrous debris trending.", "metadata": {"type": "list", "difficulty": "medium"}}
-{"id": "Q31", "question": "What qualitative change was noted around April 23?", "answer": "Multiple macropits with audible rasp and longer impulsive sequences.", "metadata": {"type": "temporal", "difficulty": "medium"}}
-{"id": "Q32", "question": "What was characteristic of the signal around May 30?", "answer": "More continuous roughness—elevated baseline with many superimposed smaller impacts.", "metadata": {"type": "temporal", "difficulty": "medium"}}
-{"id": "Q33", "question": "What happened on June 4 based on imagery and time records?", "answer": "Elongated spalls along the line of action with dense impact trains and sustained roughness.", "metadata": {"type": "temporal", "difficulty": "medium"}}
-{"id": "Q34", "question": "What change occurred by June 8?", "answer": "Another step up in peaks and crest factor, with little quiet time between impact groups.", "metadata": {"type": "temporal", "difficulty": "medium"}}
-{"id": "Q35", "question": "What were the observed symptoms on the failure day?", "answer": "Sharp vibration jump, repeated very high peaks, longer impact trains with brief lulls, and audible grinding.", "metadata": {"type": "temporal", "difficulty": "medium"}}
-{"id": "Q36", "question": "How were records typically spaced during continuous sessions and between dayparts?", "answer": "Back-to-back one-minute records within clusters, 2–10 minute intra-cluster gaps, and multi-hour gaps between dayparts.", "metadata": {"type": "procedural", "difficulty": "medium"}}
-{"id": "Q37", "question": "Which figure visually separates healthy and faulty cases using a dashed line?", "answer": "Figure 3.", "metadata": {"type": "reference", "difficulty": "easy"}}
-{"id": "Q38", "question": "What metric besides RMS is plotted against wear depth?", "answer": "Normalized FME (Frequency Modulation Energy).", "metadata": {"type": "reference", "difficulty": "easy"}}
-{"id": "Q39", "question": "What did the crew consistently report as the wear progressed?", "answer": "Louder gear noise and rising overall vibration level under steady speed.", "metadata": {"type": "descriptive", "difficulty": "easy"}}
-{"id": "Q40", "question": "Give one reason repeated starts and halts can contribute to damage progression.", "answer": "They can amplify contact pattern persistence, accelerating localized damage once initiated.", "metadata": {"type": "explanation", "difficulty": "medium"}}
+{"id": "gwf-v2-001", "question": "On what date was the first onset of wear detected by visual inspection?", "metadata": {"difficulty": "easy", "type": "date"}}
+{"id": "gwf-v2-002", "question": "On what date did the system reach the failure stage?", "metadata": {"difficulty": "easy", "type": "date"}}
+{"id": "gwf-v2-003", "question": "Between which dates did the severe wear stage occur?", "metadata": {"difficulty": "medium", "type": "range"}}
+{"id": "gwf-v2-004", "question": "When did moderate wear begin?", "metadata": {"difficulty": "easy", "type": "date"}}
+{"id": "gwf-v2-005", "question": "Until what date did the healthy baseline extend with no abnormal indications?", "metadata": {"difficulty": "medium", "type": "date"}}
+{"id": "gwf-v2-006", "question": "What is the model of the marine reduction gearbox investigated?", "metadata": {"difficulty": "easy", "type": "single_fact"}}
+{"id": "gwf-v2-007", "question": "Which vessel's propulsion train was monitored?", "metadata": {"difficulty": "easy", "type": "single_fact"}}
+{"id": "gwf-v2-008", "question": "What two steady speeds were used for data acquisition (in RPS)?", "metadata": {"difficulty": "easy", "type": "list"}}
+{"id": "gwf-v2-009", "question": "What was the sampling rate per record?", "metadata": {"difficulty": "easy", "type": "single_fact"}}
+{"id": "gwf-v2-010", "question": "What was the duration of each time record?", "metadata": {"difficulty": "easy", "type": "single_fact"}}
+{"id": "gwf-v2-011", "question": "Which lubricant and viscosity grade were in service?", "metadata": {"difficulty": "medium", "type": "single_fact"}}
+{"id": "gwf-v2-012", "question": "Name the accelerometer model used on the shafts.", "metadata": {"difficulty": "easy", "type": "single_fact"}}
+{"id": "gwf-v2-013", "question": "Which brand and model were used for the tachometer?", "metadata": {"difficulty": "medium", "type": "single_fact"}}
+{"id": "gwf-v2-014", "question": "How many teeth did the tachometer gear have?", "metadata": {"difficulty": "easy", "type": "numeric"}}
+{"id": "gwf-v2-015", "question": "What is the gear type and module size?", "metadata": {"difficulty": "medium", "type": "single_fact"}}
+{"id": "gwf-v2-016", "question": "What is the driving/driven transmission ratio?", "metadata": {"difficulty": "medium", "type": "single_fact"}}
+{"id": "gwf-v2-017", "question": "Which monitoring method provided the earliest reliable indicator of wear onset?", "metadata": {"difficulty": "easy", "type": "concept"}}
+{"id": "gwf-v2-018", "question": "Name two spectral characteristics of the healthy baseline.", "metadata": {"difficulty": "medium", "type": "list"}}
+{"id": "gwf-v2-019", "question": "What two vibration-domain signs accompanied early flank wear during mild wear?", "metadata": {"difficulty": "medium", "type": "list"}}
+{"id": "gwf-v2-020", "question": "At 15 RPS during early wear, what high-frequency behavior was observed?", "metadata": {"difficulty": "medium", "type": "concept"}}
+{"id": "gwf-v2-021", "question": "By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?", "metadata": {"difficulty": "medium", "type": "numeric"}}
+{"id": "gwf-v2-022", "question": "List two hallmark spectral changes that defined the moderate wear stage.", "metadata": {"difficulty": "medium", "type": "list"}}
+{"id": "gwf-v2-023", "question": "During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?", "metadata": {"difficulty": "medium", "type": "numeric"}}
+{"id": "gwf-v2-024", "question": "Name three combined indicators that characterized the severe wear stage.", "metadata": {"difficulty": "hard", "type": "list"}}
+{"id": "gwf-v2-025", "question": "What physical tooth-surface changes typified the transition into severe wear?", "metadata": {"difficulty": "hard", "type": "concept"}}
+{"id": "gwf-v2-026", "question": "Why can RMS energy drop at the moment of failure despite catastrophic damage?", "metadata": {"difficulty": "hard", "type": "why"}}
+{"id": "gwf-v2-027", "question": "Which metric should frequency-domain monitoring emphasize for earlier detection?", "metadata": {"difficulty": "easy", "type": "concept"}}
+{"id": "gwf-v2-028", "question": "What is the recommended action at the severe wear stage?", "metadata": {"difficulty": "easy", "type": "policy"}}
+{"id": "gwf-v2-029", "question": "What is the recommended action at the moderate wear stage?", "metadata": {"difficulty": "easy", "type": "policy"}}
+{"id": "gwf-v2-030", "question": "Which two data sources should be synchronized into a single diagnostic report?", "metadata": {"difficulty": "easy", "type": "list"}}
+{"id": "gwf-v2-031", "question": "Name one AI-driven image task suggested to support objective assessments.", "metadata": {"difficulty": "easy", "type": "open"}}
+{"id": "gwf-v2-032", "question": "What is the wear depth for case W1 (in μm)?", "metadata": {"difficulty": "medium", "type": "numeric"}}
+{"id": "gwf-v2-033", "question": "What is the wear depth for case W13 (in μm)?", "metadata": {"difficulty": "medium", "type": "numeric"}}
+{"id": "gwf-v2-034", "question": "What is the wear depth for case W22 (in μm)?", "metadata": {"difficulty": "medium", "type": "numeric"}}
+{"id": "gwf-v2-035", "question": "What is the wear depth for case W24 (in μm)?", "metadata": {"difficulty": "medium", "type": "numeric"}}
+{"id": "gwf-v2-036", "question": "What is the wear depth for case W25 (in μm)?", "metadata": {"difficulty": "medium", "type": "numeric"}}
+{"id": "gwf-v2-037", "question": "What is the wear depth for case W31 (in μm)?", "metadata": {"difficulty": "medium", "type": "numeric"}}
+{"id": "gwf-v2-038", "question": "What is the wear depth for case W33 (in μm)?", "metadata": {"difficulty": "medium", "type": "numeric"}}
+{"id": "gwf-v2-039", "question": "What is the wear depth for case W35 (in μm)?", "metadata": {"difficulty": "medium", "type": "numeric"}}
+{"id": "gwf-v2-040", "question": "Which wear case corresponds to 294 μm?", "metadata": {"difficulty": "medium", "type": "lookup"}}
+{"id": "gwf-v2-041", "question": "Which wear case corresponds to 466 μm?", "metadata": {"difficulty": "medium", "type": "lookup"}}
+{"id": "gwf-v2-042", "question": "Which wear case corresponds to 744 μm?", "metadata": {"difficulty": "medium", "type": "lookup"}}
+{"id": "gwf-v2-043", "question": "Which wear case corresponds to 579 μm?", "metadata": {"difficulty": "medium", "type": "lookup"}}
+{"id": "gwf-v2-044", "question": "List the health stages in chronological order.", "metadata": {"difficulty": "easy", "type": "ordering"}}
+{"id": "gwf-v2-045", "question": "At which two speeds were both baseline and severe-wear measurements acquired?", "metadata": {"difficulty": "easy", "type": "list"}}
+{"id": "gwf-v2-046", "question": "Name the two primary sensor modalities used to document wear progression.", "metadata": {"difficulty": "easy", "type": "list"}}
