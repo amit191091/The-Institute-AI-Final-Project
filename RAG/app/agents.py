@@ -173,6 +173,17 @@ def answer_needle(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	ctx = render_context(docs)
 	prompt = NEEDLE_SYSTEM + "\n" + NEEDLE_PROMPT.format(context=ctx, question=question)
 	result = llm(prompt).strip()
+	
+	# Try to parse JSON response and extract answer field
+	try:
+		import json
+		parsed = json.loads(result)
+		if isinstance(parsed, dict) and "answer" in parsed:
+			return parsed["answer"]
+	except (json.JSONDecodeError, KeyError):
+		pass
+	
+	# Fallback to original response if JSON parsing fails
 	return result
 
 
@@ -182,5 +193,17 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	table_docs = table_docs + [d for d in docs if d not in table_docs]
 	ctx = render_context(table_docs)
 	prompt = TABLE_SYSTEM + "\n" + TABLE_PROMPT.format(table=ctx, question=question)
-	return llm(prompt).strip()
+	result = llm(prompt).strip()
+	
+	# Try to parse JSON response and extract answer field
+	try:
+		import json
+		parsed = json.loads(result)
+		if isinstance(parsed, dict) and "answer" in parsed:
+			return parsed["answer"]
+	except (json.JSONDecodeError, KeyError):
+		pass
+	
+	# Fallback to original response if JSON parsing fails
+	return result
 

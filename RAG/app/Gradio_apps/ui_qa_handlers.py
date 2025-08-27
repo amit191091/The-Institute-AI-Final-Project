@@ -355,7 +355,8 @@ def on_ask(q, ground_truth="", dbg=False, docs=None, hybrid=None, llm=None, debu
 
 	
 	try:
-		Path("logs").mkdir(exist_ok=True)
+		from RAG.app.config import settings
+		settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
 		entry = {
 			"question": q,
 			"route": r,
@@ -371,7 +372,7 @@ def on_ask(q, ground_truth="", dbg=False, docs=None, hybrid=None, llm=None, debu
 				for d in top_docs
 			],
 		}
-		with open(Path("logs")/"queries.jsonl", "a", encoding="utf-8") as f:
+		with open(settings.LOGS_DIR/"queries.jsonl", "a", encoding="utf-8") as f:
 			f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 	except Exception:
 		pass

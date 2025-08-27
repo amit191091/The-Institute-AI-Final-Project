@@ -21,8 +21,8 @@ Usage:
 # USER CONFIGURATION - CHANGE THESE VALUES HERE
 # =============================================================================
 DEFAULT_QUESTIONS = 40          # Number of questions to evaluate
-DEFAULT_ITERATIONS = 0          # Number of optimization iterations (single run for testing)
-DEFAULT_TARGET_SCORE = 0.85     # Target overall score to achieve (slightly lowered for realism)
+DEFAULT_ITERATIONS = 0          # Number of optimization iterations 
+DEFAULT_TARGET_SCORE = 0.85     # Target overall score to achieve
 # =============================================================================
 
 import os
@@ -90,7 +90,8 @@ class PromptOptimizer:
             run_evaluation(self.docs, self.hybrid, self.llm)
             
             # Load the evaluation results
-            eval_file = Path("logs/eval_ragas_summary.json")
+            from RAG.app.config import settings
+            eval_file = settings.LOGS_DIR / "eval_ragas_summary.json"
             if eval_file.exists():
                 with open(eval_file, 'r', encoding='utf-8') as f:
                     baseline_scores = json.load(f)
@@ -315,7 +316,8 @@ class PromptOptimizer:
             run_evaluation(self.docs, self.hybrid, self.llm)
             
             # Load results
-            eval_file = Path("logs/eval_ragas_summary.json")
+            from RAG.app.config import settings
+            eval_file = settings.LOGS_DIR / "eval_ragas_summary.json"
             if eval_file.exists():
                 with open(eval_file, 'r', encoding='utf-8') as f:
                     scores = json.load(f)

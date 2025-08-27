@@ -737,4 +737,3 @@ def rerank_candidates(q: str, candidates: List[Document], top_n: int = 8) -> Lis
 				top_docs.append(doc)
 	
 	return top_docs[:top_n]
-

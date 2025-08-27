@@ -2,6 +2,7 @@
 from typing import List
 import re
 import os
+import warnings
 from types import SimpleNamespace
 from RAG.app.logger import get_logger
 
@@ -84,6 +85,15 @@ try:
 	from unstructured.partition.pdf import partition_pdf
 	from unstructured.partition.docx import partition_docx
 	from unstructured.partition.text import partition_text
+	
+	# Suppress common OCR warnings globally
+	warnings.filterwarnings("ignore", message="No languages specified")
+	warnings.filterwarnings("ignore", message="defaulting to English")
+	warnings.filterwarnings("ignore", message=".*language.*specified.*")
+	warnings.filterwarnings("ignore", message=".*defaulting.*English.*")
+	warnings.filterwarnings("ignore", message="short text:")
+	warnings.filterwarnings("ignore", message=".*short text.*")
+	
 except Exception:  # pragma: no cover - allow import even if extras missing
 	partition_pdf = partition_docx = partition_text = None  # type: ignore
 
@@ -490,7 +500,7 @@ def _dedupe_and_limit_tables(elements: list, per_page_limit: int = 3) -> list:
 	pruned = len(tables) - len(final_tables)
 	if pruned > 0:
 		try:
-			log.info("Table dedupe/limit: %d -> %d (pruned %d)", len(tables), len(final_tables), pruned)
+			log.debug("Table dedupe/limit: %d -> %d (pruned %d)", len(tables), len(final_tables), pruned)
 		except Exception:
 			pass
 	return non_tables + final_tables
@@ -603,7 +613,7 @@ def load_elements(path: Path):
 			log = get_logger()
 			# Effective feature toggles (unset means auto and will be attempted)
 			use_hi_res = _env_enabled("RAG_PDF_HI_RES", True)  # default ON
-			use_tabula = _env_enabled("RAG_USE_TABULA", None)  # auto
+			use_tabula = _env_enabled("RAG_USE_TABULA", False)  # disabled by default
 			use_pdfplumber = _env_enabled("RAG_USE_PDFPLUMBER", True)  # default ON
 			use_camelot = _env_enabled("RAG_USE_CAMELOT", None)  # auto
 			use_synth = _env_enabled("RAG_SYNTH_TABLES", True)  # default ON
@@ -618,25 +628,31 @@ def load_elements(path: Path):
 				# Pass OCR language(s) using preferred 'languages' kw when available; fallback to 'ocr_languages'
 				lang = (os.getenv("RAG_OCR_LANG", "eng") or "eng").strip()
 				lang_pref = [s.strip() for s in lang.replace("+", ",").split(",") if s.strip()]
-				try:
-					els = partition_pdf(
-						filename=str(path),
-						strategy="hi_res",
-						infer_table_structure=True,
-						languages=lang_pref,
-					)
-				except TypeError:
+				
+				# Suppress OCR language warnings
+				with warnings.catch_warnings():
+					warnings.filterwarnings("ignore", message="No languages specified")
+					warnings.filterwarnings("ignore", message="defaulting to English")
+					
 					try:
 						els = partition_pdf(
 							filename=str(path),
 							strategy="hi_res",
 							infer_table_structure=True,
-							ocr_languages=lang,
+							languages=lang_pref,
 						)
+					except TypeError:
+						try:
+							els = partition_pdf(
+								filename=str(path),
+								strategy="hi_res",
+								infer_table_structure=True,
+								ocr_languages=lang,
+							)
+						except Exception as e:
+							log.warning("hi_res PDF parsing failed (%s); falling back to standard parser", e.__class__.__name__)
 					except Exception as e:
 						log.warning("hi_res PDF parsing failed (%s); falling back to standard parser", e.__class__.__name__)
-				except Exception as e:
-					log.warning("hi_res PDF parsing failed (%s); falling back to standard parser", e.__class__.__name__)
 			# Try standard parser with/without table inference flags
 			if els is None:
 				for kwargs in (
@@ -673,30 +689,41 @@ def load_elements(path: Path):
 						self.metadata = MD(page_number)
 				els.append(_Shim(text, i))
 			get_logger().warning("Using pypdf fallback for PDF parsing (limited structure detection).")
-		# Optional: enrich with Tabula tables (auto if unset)
-		if (use_tabula is None) or (use_tabula is True):
+		# Optional: enrich with Tabula tables (disabled by default due to Java dependency)
+		if use_tabula is True:
 			_added = _try_tabula_tables(path)
 			if _added:
 				els.extend(_added)
-				get_logger().info("%s: Tabula extracted %d tables", path.name, len(_added))
+				get_logger().debug("%s: Tabula extracted %d tables", path.name, len(_added))
 	# Optional: pdfplumber table extraction (default ON)
 		if (use_pdfplumber is None) or (use_pdfplumber is True):
 			_pdfp = _try_pdfplumber_tables(path)
 			if _pdfp:
 				els.extend(_pdfp)
-				get_logger().info("%s: pdfplumber extracted %d tables", path.name, len(_pdfp))
-		# Optional: Camelot table extraction (auto if unset) Γאפ adaptive pages
+				get_logger().debug("%s: pdfplumber extracted %d tables", path.name, len(_pdfp))
+		# Optional: Camelot table extraction (auto if unset) - only when needed
 		if (use_camelot is None) or (use_camelot is True):
 			# Only run Camelot if pdfplumber found too few tables and pages look promising
 			min_tables_target = int(os.getenv("RAG_MIN_TABLES_TARGET", "2"))
 			_pdfp_count = len(_pdfp or []) if isinstance(locals().get("_pdfp"), list) else 0
-			cam_pages = os.getenv("RAG_CAMELOT_PAGES")
-			if not cam_pages:
-				_, cam_pages = _analyze_pdf_pages_for_tables(path)
-			_cam = _try_camelot_tables(path, pages_override=cam_pages)
-			if _pdfp_count < min_tables_target and _cam:
-				els.extend(_cam)
-				get_logger().info("%s: Camelot extracted %d tables (pages=%s)", path.name, len(_cam), cam_pages or "auto-none")
+			
+			# Skip Camelot if pdfplumber already found enough tables
+			if _pdfp_count >= min_tables_target:
+				log.debug("%s: Skipping Camelot - pdfplumber found %d tables (target: %d)", path.name, _pdfp_count, min_tables_target)
+			else:
+				# Only run Camelot if pages look promising for tables
+				cam_pages = os.getenv("RAG_CAMELOT_PAGES")
+				if not cam_pages:
+					_, cam_pages = _analyze_pdf_pages_for_tables(path)
+				
+				# Skip if no promising pages were found
+				if not cam_pages:
+					log.debug("%s: Skipping Camelot - no table-like pages detected", path.name)
+				else:
+					_cam = _try_camelot_tables(path, pages_override=cam_pages)
+					if _cam:
+						els.extend(_cam)
+						get_logger().debug("%s: Camelot extracted %d tables (pages=%s)", path.name, len(_cam), cam_pages or "auto-none")
 		# De-duplicate tables and limit per page to avoid over-extraction noise
 		try:
 			limit = int(os.getenv("RAG_TABLES_PER_PAGE", "3"))
@@ -714,7 +741,7 @@ def load_elements(path: Path):
 				_synth = _synthesize_tables_from_text(els, path)
 				if _synth:
 					els.extend(_synth)
-					get_logger().info("%s: Synthesized %d table-like elements from text", path.name, len(_synth))
+					get_logger().debug("%s: Synthesized %d table-like elements from text", path.name, len(_synth))
 			except Exception:
 				pass
 		# Optional: extract images as figures via PyMuPDF (default ON)
@@ -722,7 +749,7 @@ def load_elements(path: Path):
 			_figs = _try_extract_images(path)
 			if _figs:
 				els.extend(_figs)
-				get_logger().info("%s: Extracted %d images as figures", path.name, len(_figs))
+				get_logger().debug("%s: Extracted %d images as figures", path.name, len(_figs))
 		# Optional: export tables to markdown/csv files and attach paths in metadata
 		try:
 			_export_tables_to_files(els, path)
@@ -760,17 +787,18 @@ def load_many(paths: List[Path]):
 			for c in cats:
 				hist[c] = hist.get(c, 0) + 1
 			if hist:
-				log.info(f"{p.name}: element categories -> {sorted(hist.items(), key=lambda x: (-x[1], x[0]))}")
+				log.debug(f"{p.name}: element categories -> {sorted(hist.items(), key=lambda x: (-x[1], x[0]))}")
 			tables = [getattr(e, "text", "").strip()[:80] for e in els if str(getattr(e, "category", "")).lower() == "table"]
 			figures = [getattr(e, "text", "").strip()[:80] for e in els if str(getattr(e, "category", "")).lower() in ("figure", "image")]
 			if tables:
-				log.info(f"{p.name}: detected {len(tables)} table elements (sample): {tables[:2]}")
+				log.debug(f"{p.name}: detected {len(tables)} table elements (sample): {tables[:2]}")
 			if figures:
-				log.info(f"{p.name}: detected {len(figures)} figure elements (sample): {figures[:2]}")
+				log.debug(f"{p.name}: detected {len(figures)} figure elements (sample): {figures[:2]}")
 			# Optional raw elements dump for deep debugging
 			import os, json
 			if os.getenv("RAG_DUMP_ELEMENTS", "").lower() in ("1", "true", "yes"):
-				dump_dir = Path("logs") / "elements"
+				from RAG.app.config import settings
+				dump_dir = settings.LOGS_DIR / "elements"
 				dump_dir.mkdir(parents=True, exist_ok=True)
 				out_path = dump_dir / f"{p.stem}.jsonl"
 				with open(out_path, "w", encoding="utf-8") as f:
@@ -980,7 +1008,11 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 				process_background=True if flavor == "lattice" else False,
 			)
 		except Exception as e:
-			log.warning("Camelot %s failed (%s)", flavor, e.__class__.__name__)
+			# Suppress common Camelot errors - these are expected for many PDFs
+			if "ValueError" in str(e.__class__.__name__) or "No tables found" in str(e):
+				log.debug("Camelot %s: No tables found or unsupported format (expected for many PDFs)", flavor)
+			else:
+				log.debug("Camelot %s failed (%s)", flavor, e.__class__.__name__)
 			continue
 		for t in getattr(tables, "df", []) or []:
 			try:

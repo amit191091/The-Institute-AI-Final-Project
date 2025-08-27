@@ -48,6 +48,8 @@ Thumbs.db
 
 # Project specific
 logs/
+RAG/logs/
+RAG/index/
 *.log
 *.tmp
 *.temp
