@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 from typing import Optional
-
+from RAG.app.config import settings
 
 _LOGGER: Optional[logging.Logger] = None
 
@@ -22,8 +22,8 @@ def get_logger() -> logging.Logger:
     logger.addHandler(ch)
 
     # File handler
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
+    log_dir = settings.LOGS_DIR
+    log_dir.mkdir(parents=True, exist_ok=True)
     fh = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
     fh.setLevel(os.getenv("RAG_FILE_LOG_LEVEL", "DEBUG"))
     fh.setFormatter(fmt)

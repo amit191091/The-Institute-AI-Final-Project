@@ -285,7 +285,8 @@ def build_graph_tab(docs):
 
         # Initial load if file exists
         try:
-            graph_html_path = Path("logs")/"graph.html"
+            from RAG.app.config import settings
+            graph_html_path = settings.LOGS_DIR/"graph.html"
             if graph_html_path.exists():
                 html_data = graph_html_path.read_text(encoding="utf-8")
                 import html as _html

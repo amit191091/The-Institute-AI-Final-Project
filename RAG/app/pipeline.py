@@ -92,13 +92,13 @@ def _clean_run_outputs() -> None:
         pass
     # Logs: queries.jsonl and logs/elements dumps
     try:
-        q = Path("logs") / "queries.jsonl"
+        q = settings.LOGS_DIR / "queries.jsonl"
         if q.exists():
             q.unlink(missing_ok=True)  # type: ignore[arg-type]
     except Exception:
         pass
     try:
-        ed = Path("logs") / "elements"
+        ed = settings.LOGS_DIR / "elements"
         if ed.exists():
             shutil.rmtree(ed)
     except Exception:
@@ -108,9 +108,14 @@ def _clean_run_outputs() -> None:
 def _discover_input_paths() -> List[Path]:
     """Collect input files: root Gear wear Failure.pdf and files under data/."""
     candidates: List[Path] = []
+    # Check for root PDF first (legacy support)
     root_pdf = Path("Gear wear Failure.pdf")
     if root_pdf.exists():
         candidates.append(root_pdf)
+    # Check for PDF in RAG/data directory
+    rag_pdf = settings.DATA_DIR / "Gear wear Failure.pdf"
+    if rag_pdf.exists():
+        candidates.append(rag_pdf)
     if settings.DATA_DIR.exists():
         for ext in ("*.pdf", "*.docx", "*.doc", "*.txt"):
             candidates.extend(settings.DATA_DIR.glob(ext))
@@ -209,7 +214,7 @@ def build_pipeline(paths: List[Path]):
             pages = sorted(set(pages_list))
             ok, msg = validate_min_pages(len(set(pages)), settings.MIN_PAGES)
             if not ok:
-                print(f"[WARN] {path.name}: {msg}")
+                log.debug(f"{path.name}: {msg}")
         except Exception:
             pass
         chunks = structure_chunks(elements, str(path))
@@ -221,19 +226,19 @@ def build_pipeline(paths: List[Path]):
         sec = (r.get("metadata", {}) or {}).get("section")
         sec_hist[sec] = sec_hist.get(sec, 0) + 1
     if sec_hist:
-        log.info("Section histogram: %s", sorted(sec_hist.items(), key=lambda x: (-x[1], str(x[0]))))
+        log.debug("Section histogram: %s", sorted(sec_hist.items(), key=lambda x: (-x[1], str(x[0]))))
     # vectorization
     # Optional: prefer normalized chunks.jsonl if feature flag enabled
     use_normalized = os.getenv("RAG_USE_NORMALIZED", "0").lower() in ("1", "true", "yes")
-    if use_normalized and (Path("logs") / "normalized" / "chunks.jsonl").exists():
-        docs = load_normalized_docs(Path("logs") / "normalized" / "chunks.jsonl")
+    if use_normalized and (settings.LOGS_DIR / "normalized" / "chunks.jsonl").exists():
+        docs = load_normalized_docs(settings.LOGS_DIR / "normalized" / "chunks.jsonl")
         log.info("Using normalized docs for indexing: %d", len(docs))
     else:
         docs = to_documents(records)
     # Write a quick DB snapshot for debugging
     try:
-        Path("logs").mkdir(exist_ok=True)
-        snap_path = Path("logs") / "db_snapshot.jsonl"
+        settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        snap_path = settings.LOGS_DIR / "db_snapshot.jsonl"
         with open(snap_path, "w", encoding="utf-8") as f:
             for d in docs:
                 md = d.metadata or {}
@@ -302,7 +307,7 @@ def build_pipeline(paths: List[Path]):
         pass
     tbl_cnt = sum(1 for d in docs if (d.metadata or {}).get("section") == "Table")
     fig_cnt = sum(1 for d in docs if (d.metadata or {}).get("section") == "Figure")
-    log.info(
+    log.debug(
         "Ingestion complete: %d files -> %d chunks -> %d documents (tables=%d, figures=%d)",
         len(paths),
         len(records),
@@ -317,7 +322,7 @@ def build_pipeline(paths: List[Path]):
     # If Chroma is persisted, try writing a snapshot
     try:
         if os.getenv("RAG_CHROMA_DIR"):
-            dump_chroma_snapshot(dense, Path("logs") / "chroma_snapshot.jsonl")
+            dump_chroma_snapshot(dense, settings.LOGS_DIR / "chroma_snapshot.jsonl")
     except Exception:
         pass
     # expose per-retriever diagnostics
@@ -330,21 +335,21 @@ def build_pipeline(paths: List[Path]):
     try:
         if os.getenv("RAG_GRAPH_DB", "").lower() in ("1", "true", "yes"):
             n = build_graph_db(docs)
-            print(f"[GraphDB] Upserted ~{n} nodes/edges to Neo4j")
+            log.debug(f"GraphDB: Upserted ~{n} nodes/edges to Neo4j")
     except Exception as e:
         print(f"[GraphDB] population failed: {e}")
 
     # Optional: if normalized graph.json exists and flag enabled, display a quick summary log
     try:
         if os.getenv("RAG_USE_NORMALIZED_GRAPH", "0").lower() in ("1", "true", "yes"):
-            gpath = Path("logs") / "normalized" / "graph.json"
+            gpath = settings.LOGS_DIR / "normalized" / "graph.json"
             if gpath.exists():
                 data = json.loads(gpath.read_text(encoding="utf-8"))
                 print(f"[NormalizedGraph] nodes={len(data.get('nodes', []))}, edges={len(data.get('edges', []))}")
         # Optional: import normalized graph into Neo4j with page/table/figure edges
         if os.getenv("RAG_IMPORT_NORMALIZED_GRAPH", "0").lower() in ("1", "true", "yes"):
-            gpath = Path("logs") / "normalized" / "graph.json"
-            cpath = Path("logs") / "normalized" / "chunks.jsonl"
+            gpath = settings.LOGS_DIR / "normalized" / "graph.json"
+            cpath = settings.LOGS_DIR / "normalized" / "chunks.jsonl"
             if gpath.exists() and cpath.exists():
                 n2 = import_normalized_graph(gpath, cpath)
                 print(f"[GraphDB] normalized import result={n2}")
@@ -402,8 +407,8 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     else:
         ans = answer_needle(_LLM(), top_docs, question)
     try:
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
+        log_dir = settings.LOGS_DIR
+        log_dir.mkdir(parents=True, exist_ok=True)
         entry = {
             "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "question": question,
@@ -657,8 +662,8 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         if isinstance(x, dict):
             return {k: _nan_to_none(v) for k, v in x.items()}
         return x
-    out_dir = Path("logs")
-    out_dir.mkdir(exist_ok=True)
+    out_dir = settings.LOGS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "eval_ragas_summary.json", "w", encoding="utf-8") as f:
         json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2)
     with open(out_dir / "eval_ragas_per_question.jsonl", "w", encoding="utf-8") as f:
@@ -699,8 +704,8 @@ def run() -> None:
     # Build a lightweight graph and render it for UI
     try:
         G = build_graph(docs)
-        Path("logs").mkdir(exist_ok=True)
-        graph_html = str(Path("logs") / "graph.html")
+        settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        graph_html = str(settings.LOGS_DIR / "graph.html")
         render_graph_html(G, graph_html)
     except Exception:
         graph_html = None

@@ -5,6 +5,8 @@ from pathlib import Path
 from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
 
+from RAG.app.config import settings
+
 
 def to_documents(records: List[dict]) -> List[Document]:
 	return [Document(page_content=r["page_content"], metadata=r["metadata"]) for r in records]
@@ -41,16 +43,26 @@ def _sanitize_metadata(md: Dict[str, Any] | None) -> Dict[str, Any]:
 
 
 def _sanitize_docs(docs: List[Document]) -> List[Document]:
-	sanitized: List[Document] = []
-	for d in docs:
-		md = getattr(d, "metadata", None) or {}
-		sanitized.append(Document(page_content=d.page_content, metadata=_sanitize_metadata(md)))
+	"""Sanitize document metadata to avoid Chroma upsert errors on complex types."""
+	sanitized = []
+	for doc in docs:
+		# Create a copy with sanitized metadata
+		clean_metadata = {}
+		if doc.metadata:
+			for k, v in doc.metadata.items():
+				# Convert complex types to strings
+				if isinstance(v, (list, dict, tuple)):
+					clean_metadata[k] = str(v)
+				elif v is not None:
+					clean_metadata[k] = v
+		sanitized.append(Document(page_content=doc.page_content, metadata=clean_metadata))
 	return sanitized
 
 
 def build_dense_index(docs: List[Document], embedding_fn):
 	"""Build a dense index; try Chroma first, fallback to DocArrayInMemorySearch.
 	If env RAG_CHROMA_DIR is set, persist to that directory (and use optional RAG_CHROMA_COLLECTION).
+	Otherwise, use the configured INDEX_DIR.
 	"""
 	# Lazy import to avoid OS-specific failures at import time
 	try:
@@ -59,6 +71,11 @@ def build_dense_index(docs: List[Document], embedding_fn):
 		sdocs = _sanitize_docs(docs)
 		persist_dir = os.getenv("RAG_CHROMA_DIR")
 		collection = os.getenv("RAG_CHROMA_COLLECTION", None)
+		
+		# Use configured INDEX_DIR if no environment variable is set
+		if not persist_dir:
+			persist_dir = str(settings.INDEX_DIR)
+			
 		if persist_dir:
 			Path(persist_dir).mkdir(parents=True, exist_ok=True)
 			if collection:
