@@ -17,7 +17,7 @@ from typing import List, Tuple
 from dotenv import load_dotenv
 
 from app.config import settings
-from app.loaders import load_many
+import app.loaders as loaders
 from app.chunking import structure_chunks
 from app.metadata import attach_metadata
 from app.indexing import (
@@ -193,7 +193,7 @@ def build_pipeline(paths: List[Path]):
     log = get_logger()
     records = []
     # ingest
-    for path, elements in load_many(paths):
+    for path, elements in loaders.load_many(paths):
         # basic ingestion validation: min pages
         try:
             pages_list = [

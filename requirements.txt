@@ -16,8 +16,13 @@ evaluate>=0.4.2
 pdfplumber>=0.11.4
 # Optional table extractor
 camelot-py[base]>=0.11.0
+# Tabula (Java-based) Python bindings
+tabula-py>=2.9.0
 # Images extraction via PyMuPDF
 pymupdf>=1.24.9
 networkx>=3.2
 pyvis>=0.3.2
 neo4j>=5.19.0
+# LlamaParse/LlamaIndex for robust PDF parsing & table extraction
+llama-parse>=0.4.0
+llama-index>=0.10.0
