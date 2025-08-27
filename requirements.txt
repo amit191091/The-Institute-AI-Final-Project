@@ -21,9 +21,25 @@ unstructured[all-docs]>=0.10.0
 pypdf>=3.0.0
 PyMuPDF>=1.23.0
 tabula-py>=2.8.0
+camelot-py[cv]>=0.11.0
+
+# Optional System Dependencies (not installed via pip)
+# Poppler: Required for advanced PDF table extraction (tabula-py, camelot-py)
+# Download from: https://github.com/oschwartz10612/poppler-windows/releases/
+# Extract and add bin/ folder to system PATH
+# Current path: C:\Users\amitl\Downloads\Release-25.07.0-0\poppler-25.07.0\Library\bin
+
+# Environment Variables (optional - set to suppress warnings)
+# RAG_OCR_LANG=eng  # Set OCR language (default: eng for English)
+# RAG_LOG_LEVEL=WARNING  # Reduce verbosity: DEBUG, INFO, WARNING, ERROR (default: INFO)
 
 # Web Interface
 gradio>=4.0.0
+
+# Graph Database and Visualization
+neo4j>=5.0.0
+networkx>=3.0.0
+pyvis>=0.3.0
 
 # Environment and Utilities
 python-dotenv>=1.0.0 
