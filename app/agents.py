@@ -10,6 +10,11 @@ from app.prompts import (
 	TABLE_PROMPT,
 	TABLE_SYSTEM,
 )
+try:
+	import os
+	from app.query_intent import get_intent  # optional LLM-based intent
+except Exception:
+	get_intent = None  # type: ignore
 
 
 class LLMCallable(Protocol):
@@ -44,6 +49,9 @@ def simplify_question(q: str) -> Dict:
 	out["wants_exact"] = any(w in ql for w in ("exact", "precise"))
 	out["wants_summary"] = any(w in ql for w in ("summary", "summarize", "overview", "conclusion", "overall"))
 	out["wants_table"] = ("table" in ql) or bool(re.search(r"\bwear depth\b|\brms\b|\bfme\b|\bcrest factor\b", ql))
+	# Treat instrumentation/sensor inventory and threshold questions as table-style lookups
+	if any(w in ql for w in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation", "threshold", "alert threshold", "limits")):
+		out["wants_table"] = True
 	out["wants_figure"] = any(w in ql for w in ("figure", "fig ", "image", "graph", "plot"))
 	out["wants_date"] = any(w in ql for w in ("when", "date", "day")) or bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b", ql))
 	out["wants_value"] = any(w in ql for w in ("what is", "value", "how much", "amount")) or out["wants_table"]
@@ -68,6 +76,8 @@ def simplify_question(q: str) -> Dict:
 		out["target_attr"] = "crest factor"
 	elif re.search(r"\bfme\b", ql):
 		out["target_attr"] = "fme"
+	elif any(w in ql for w in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation")):
+		out["target_attr"] = "sensors"
 
 	# Event for date-style questions
 	if any(w in ql for w in ("failure", "failed")):
@@ -111,7 +121,7 @@ def route_question_ex(q: str) -> Tuple[str, Dict]:
 	Routes: summary | table | needle
 	"""
 	ql = q.lower()
-	simp = simplify_question(q)
+	simp = (get_intent(q) if get_intent is not None and (os.getenv("RAG_USE_LLM_ROUTER", "0").lower() in ("1","true","yes")) else simplify_question(q))
 	trace: Dict = {"matched": [], "route": None, "simplified": simp}
 	# Summary cues
 	if simp.get("wants_summary"):

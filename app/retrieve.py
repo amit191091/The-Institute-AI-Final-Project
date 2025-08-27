@@ -6,6 +6,10 @@ from app.logger import get_logger
 from langchain.schema import Document
 from langchain.retrievers import EnsembleRetriever
 from app.agents import simplify_question
+try:
+	from app.query_intent import get_intent  # optional LLM router
+except Exception:
+	get_intent = None  # type: ignore
 
 
 def query_analyzer(q: str) -> Dict:
@@ -13,7 +17,7 @@ def query_analyzer(q: str) -> Dict:
 	Also returns a 'canonical' simplified query from a rules-based pre-agent.
 	"""
 	filt: Dict[str, str] = {}
-	simp = simplify_question(q)
+	simp = (get_intent(q) if get_intent is not None and (os.getenv("RAG_USE_LLM_ROUTER", "0").lower() in ("1","true","yes")) else simplify_question(q))
 	# Safer patterns: require word boundaries; avoid matching 'id' inside 'did'
 	# Accept 'case: XYZ' or 'case id: XYZ' or 'client: ABC' but not bare 'id'
 	mcase = re.search(r"\bcase(?:\s*id)?\b[:\-\s]*([A-Za-z0-9_-]{3,})", q, re.I)
@@ -43,6 +47,7 @@ def query_analyzer(q: str) -> Dict:
 		"filters": filt,
 		"keywords": re.findall(r"[A-Za-z0-9°%]+", q)[:10],
 		"canonical": str(simp.get("canonical") or "").strip() or None,
+		"intent": simp,  # expose full simplifier intent for downstream routing/augmentation
 	}
 
 
@@ -116,6 +121,9 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 		sec_pref = "Table"
 	elif any(w in ql for w in ("figure", "image", "fig ", "plot", "graph", "photo")):
 		sec_pref = "Figure"
+	# Sensor/metric/threshold inventory tends to live in tables; bias accordingly
+	if any(w in ql for w in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation", "threshold", "alert threshold", "limits")):
+		sec_pref = "Table"
 
 	# Detect month/day phrases to boost timeline/date matches
 	_months = [
@@ -169,6 +177,12 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 		base = lexical_overlap(query, d.page_content)
 		meta = " ".join(map(str, md.values()))
 		meta_boost = 0.2 * lexical_overlap(" ".join(kws), meta)
+		# Extra boost for instrumentation/threshold queries matching table or metadata
+		if any(w in ql for w in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation")):
+			if (md.get("section") or md.get("section_type")) == "Table":
+				meta_boost += 0.2
+			if any(k in str(meta).lower() for k in ("sensor", "accelerometer", "tachometer")):
+				meta_boost += 0.1
 		sec_boost = 0.15 if (sec_pref and (md.get("section") or md.get("section_type")) == sec_pref) else 0.0
 		src_boost = _extractor_bonus(md)
 

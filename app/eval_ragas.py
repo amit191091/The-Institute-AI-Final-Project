@@ -503,16 +503,28 @@ TARGETS = {
 
 
 def pretty_metrics(m: dict) -> str:
+	def _fmt(x):
+		try:
+			import math as _m
+			if x is None:
+				return "n/a"
+			if isinstance(x, float) and (_m.isnan(x) or _m.isinf(x)):
+				return "n/a"
+			if isinstance(x, (int, float)):
+				return f"{x:.3f}"
+			return str(x)
+		except Exception:
+			return str(x)
 	lines = [
-		f"Faithfulness: {m.get('faithfulness', 'n/a')}",
-		f"Answer relevancy: {m.get('answer_relevancy', 'n/a')}",
-		f"Context precision: {m.get('context_precision', 'n/a')}",
-		f"Context recall: {m.get('context_recall', 'n/a')}",
+		f"Faithfulness: {_fmt(m.get('faithfulness'))}",
+		f"Answer relevancy: {_fmt(m.get('answer_relevancy'))}",
+		f"Context precision: {_fmt(m.get('context_precision'))}",
+		f"Context recall: {_fmt(m.get('context_recall'))}",
 	]
 	# Optional heuristic overlap metrics (no LLM/embeddings required)
 	if any(k in m for k in ("overlap_precision", "overlap_recall", "overlap_f1")):
-		lines.append(f"Overlap precision (heuristic): {m.get('overlap_precision', 'n/a')}")
-		lines.append(f"Overlap recall (heuristic): {m.get('overlap_recall', 'n/a')}")
-		lines.append(f"Overlap F1 (heuristic): {m.get('overlap_f1', 'n/a')}")
+		lines.append(f"Overlap precision (heuristic): {_fmt(m.get('overlap_precision'))}")
+		lines.append(f"Overlap recall (heuristic): {_fmt(m.get('overlap_recall'))}")
+		lines.append(f"Overlap F1 (heuristic): {_fmt(m.get('overlap_f1'))}")
 	return "\n".join(lines)
 

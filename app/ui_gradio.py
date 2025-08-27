@@ -181,8 +181,9 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		return rows
 
 	# Auto-loaded ground-truths and QA answer maps (normalized by question)
-	gt_map = {"__loaded__": False, "map": {}, "norm": {}}
-	qa_map = {"__loaded__": False, "map": {}, "norm": {}}
+	# Additionally keep optional by-id indexes to join context_free datasets (QA has id+question, GT has id->answer)
+	gt_map = {"__loaded__": False, "map": {}, "norm": {}, "by_id": {}}  # type: ignore[dict-item]
+	qa_map = {"__loaded__": False, "map": {}, "norm": {}, "by_id": {}}  # type: ignore[dict-item]
 
 	def _norm_q(s: str) -> str:
 		if not s:
@@ -223,6 +224,43 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				loaded = rows
 			else:
 				loaded = json.load(open(p, "r", encoding="utf-8"))
+
+			# Fast-path: context_free schema detected (top-level id -> {answer, acceptable_answers, ...})
+			if isinstance(loaded, dict) and loaded and all(isinstance(v, dict) for v in loaded.values()):
+				# Build by-id answers list and keep for later join with QA file
+				by_id: dict[str, list[str]] = {}
+				for kid, v in loaded.items():
+					try:
+						ans = v.get("answer")
+						acc = v.get("acceptable_answers")
+						vals: list[str] = []
+						if isinstance(acc, list) and acc:
+							vals = [str(x) for x in acc]
+						elif ans is not None:
+							vals = [str(ans)]
+						if vals:
+							by_id[str(kid)] = vals
+					except Exception:
+						pass
+				# Save by-id map and, if QA by-id exists, join to produce question->GTs
+				if by_id:
+					gt_map["by_id"] = by_id
+					m_joined: dict[str, list[str]] = {}
+					qa_by_id = qa_map.get("by_id") or {}
+					if isinstance(qa_by_id, dict) and qa_by_id:
+						for _id, _q in qa_by_id.items():
+							gts = by_id.get(str(_id))
+							if _q and gts:
+								m_joined[str(_q)] = [str(x) for x in gts]
+						# Update GT maps from join (leave QA loader to set QA map)
+						if m_joined:
+							gt_map["map"] = m_joined
+							gt_map["norm"] = { _norm_q(k): v for k, v in m_joined.items() }
+					gt_map["__loaded__"] = True
+					samplek = list((gt_map.get("map") or {}).keys())[:2]
+					if samplek:
+						return f"Loaded {len(gt_map['map'])} ground truths (joined by id) from {path_str}. Sample keys: {', '.join(samplek)}"
+					return f"Loaded {len(by_id)} GT ids from {path_str} (waiting for QA to join questions)"
 
 			def _as_list_of_qgt(obj):
 				# Normalize various shapes to a list of {question, ground_truths}
@@ -373,17 +411,59 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 							pass
 			else:
 				rows = json.load(open(p, "r", encoding="utf-8"))
-			m = {}
-			for r in rows or []:
-				if not isinstance(r, dict):
-					continue
-				q = r.get("question") or r.get("q")
-				a = r.get("answer") or r.get("reference")
-				if q and a:
-					m[str(q)] = str(a)
+			# Detect context_free QA: rows with id+question but no answers; join with GT by id
+			is_context_free = False
+			if isinstance(rows, list) and rows and all(isinstance(r, dict) and r.get("id") and r.get("question") for r in rows):
+				# Consider it context_free when most rows lack 'answer'/'reference'
+				no_ans = sum(1 for r in rows if not (r.get("answer") or r.get("reference")))
+				is_context_free = (no_ans >= max(1, int(0.8 * len(rows))))
+			m: dict[str, str] = {}
+			if is_context_free:
+				# Build by-id question map
+				by_id_q: dict[str, str] = {}
+				for r in rows:
+					try:
+						_i = str(r.get("id"))
+						_q = str(r.get("question"))
+						if _i and _q:
+							by_id_q[_i] = _q
+					except Exception:
+						pass
+				qa_map["by_id"] = by_id_q
+				# If GT by-id is available, join now to create both QA reference and GT ground_truths keyed by question
+				gt_by_id = gt_map.get("by_id") or {}
+				if isinstance(gt_by_id, dict) and gt_by_id:
+					gt_q_map: dict[str, list[str]] = {}
+					for _id, _q in by_id_q.items():
+						gts = gt_by_id.get(str(_id))
+						if not _q or not gts:
+							continue
+						# Prefer the first value as canonical reference; keep all for ground_truths
+						m[str(_q)] = str(gts[0])
+						gt_q_map[str(_q)] = [str(x) for x in gts]
+					# Update GT maps as well to ensure metrics can find ground_truths by question text
+					if gt_q_map:
+						gt_map["map"] = gt_q_map
+						gt_map["norm"] = { _norm_q(k): v for k, v in gt_q_map.items() }
+						gt_map["__loaded__"] = True
+				else:
+					# No GT yet — store by-id only; references will be filled once GT loads
+					m = {}
+			else:
+				# Standard QA with inline answers
+				for r in rows or []:
+					if not isinstance(r, dict):
+						continue
+					q = r.get("question") or r.get("q")
+					a = r.get("answer") or r.get("reference")
+					if q and a:
+						m[str(q)] = str(a)
 			qa_map["__loaded__"] = True
 			qa_map["map"] = m
 			qa_map["norm"] = { _norm_q(k): v for k, v in m.items() }
+			# If QA was context_free but GT wasn't loaded yet, indicate waiting state in message; else, show count
+			if is_context_free and not (gt_map.get("by_id") and qa_map.get("map")):
+				return f"Loaded {len(qa_map.get('by_id') or {})} QA ids from {p} (waiting for GT to join answers)"
 			return f"Loaded {len(m)} QA pairs from {p}"
 		except Exception as e:
 			return f"(failed to load QA: {e})"
@@ -436,6 +516,15 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		filtered = apply_filters(cands, qa["filters"])
 		# section/number fallback if nothing after filtering
 		sec = qa["filters"].get("section") if qa and qa.get("filters") else None
+		# If user asks for sensors/thresholds, bias toward tables if empty
+		try:
+			intent = (qa or {}).get("intent") or {}
+			q_l = (q or "").lower()
+			wants_instrument = any(w in q_l for w in ("sensor", "sensors", "accelerometer", "tachometer", "threshold", "alert threshold", "limits")) or (intent.get("target_attr") == "sensors")
+			if wants_instrument and not filtered:
+				filtered = [d for d in cands if (d.metadata or {}).get("section") == "Table"]
+		except Exception:
+			pass
 		if sec and not filtered:
 			def _fallback_ok(d):
 				md = d.metadata or {}
@@ -460,6 +549,13 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				return True
 			filtered = [d for d in docs if _fallback_ok(d)]
 		top_docs = rerank_candidates(q, filtered, top_n=8)
+		# Optional cross-encoder reranker for better final ordering
+		try:
+			from app.reranker_ce import rerank as ce_rerank
+			if ce_rerank is not None:
+				top_docs = ce_rerank(q, top_docs, top_n=8)
+		except Exception:
+			pass
 		# Fallbacks to avoid empty contexts for metrics/answering
 		if not top_docs:
 			# Use unfiltered candidates
