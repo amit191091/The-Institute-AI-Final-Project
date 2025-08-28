@@ -6,6 +6,11 @@ from app.logger import get_logger
 from langchain.schema import Document
 from langchain.retrievers import EnsembleRetriever
 from app.agents import simplify_question
+# Optional Cross-Encoder reranker
+try:
+	from app.reranker_ce import rerank as ce_rerank  # type: ignore
+except Exception:  # pragma: no cover
+	ce_rerank = None  # type: ignore
 from app.logger import trace_func
 try:
 	from app.query_intent import get_intent  # optional LLM router
@@ -126,6 +131,12 @@ def lexical_overlap(a: str, b: str) -> float:
 
 @trace_func
 def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) -> List[Document]:
+	# If CE reranker is enabled and available, prefer it
+	try:
+		if os.getenv("RAG_USE_CE_RERANKER", "0").lower() in ("1", "true", "yes") and ce_rerank is not None:
+			return ce_rerank(query, candidates, top_n=top_n)
+	except Exception:
+		pass
 	ql = query.lower()
 	kws = set(re.findall(r"[A-Za-z0-9°%]+", ql))
 	# Section preference based on query intent

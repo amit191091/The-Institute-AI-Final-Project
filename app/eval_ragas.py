@@ -35,6 +35,12 @@ try:
 except Exception:  # pragma: no cover
 	precision_score = recall_score = f1_score = None  # type: ignore
 
+from dotenv import dotenv_values, find_dotenv, load_dotenv
+
+# Load .env file
+load_dotenv()
+
+
 @trace_func
 def _simple_tokens(text: str) -> List[str]:
 	t = (text or "").lower()
@@ -84,13 +90,13 @@ def _setup_ragas_llm():
 	provider = (os.getenv("RAGAS_LLM_PROVIDER") or "").lower().strip()
 	try_openai_first = provider == "openai" or (provider == "" and os.getenv("OPENAI_API_KEY"))
 	try_google_next = provider == "google" or (provider == "" and os.getenv("GOOGLE_API_KEY"))
-
+	open_ai_api = os.getenv("OPENAI_API_KEY")
 	# Prefer OpenAI for RAGAS (compatibility with evaluation prompts)
 	if try_openai_first:
 		try:
 			from langchain_openai import ChatOpenAI
 			openai_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
-			llm = ChatOpenAI(model=openai_model, temperature=0)
+			llm = ChatOpenAI(model=openai_model, temperature=0, api_key=open_ai_api)
 			print(f"[RAGAS LLM] Using OpenAI model: {openai_model}")
 			return llm
 		except Exception as e:

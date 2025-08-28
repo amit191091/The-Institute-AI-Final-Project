@@ -168,6 +168,12 @@ def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | No
 		"amount_range": inc["AmountRange"],
 		"month_tokens": date_toks.get("month_tokens", []),
 		"day_tokens": date_toks.get("day_tokens", []),
+		# hierarchy passthrough
+		"section_id": chunk.get("section_id"),
+		"section_title": chunk.get("section_title"),
+		"section_level": chunk.get("section_level"),
+		"section_parent_id": chunk.get("section_parent_id"),
+		"section_breadcrumbs": chunk.get("section_breadcrumbs"),
 	}
 	return {"page_content": chunk["content"], "metadata": metadata}
 

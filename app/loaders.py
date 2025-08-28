@@ -703,6 +703,25 @@ def load_elements(path: Path) -> List[Element]:
         except Exception:
             pass
 
+    # Persist per-page raw text to files for full-fidelity inspection
+    try:
+        _export_page_text_to_files(elements, path)
+    except Exception as e:
+        try:
+            get_logger().warning(f"page-text export failed: {e}")
+        except Exception:
+            pass
+
+    # Optional: dump all extracted elements (raw, untruncated) to logs/elements for auditing
+    try:
+        if _env_enabled("RAG_DUMP_ELEMENTS", True):
+            _dump_elements_jsonl(elements, path)
+    except Exception as e:
+        try:
+            get_logger().warning(f"elements dump failed: {e}")
+        except Exception:
+            pass
+
     # Log summary
     tables = [e for e in elements if e.category == "table"]
     table_extractors = sorted(set(
@@ -719,6 +738,99 @@ def load_elements(path: Path) -> List[Element]:
         log.info(f"{path.name}: Figure {i} ({fig.metadata.get('extractor', '?')}) -> {fig.metadata.get('image_path', '')}")
 
     return elements
+
+
+# --- Exports and Debug Dumps -------------------------------------------------
+
+def _export_page_text_to_files(elements: List[Element], pdf_path: Path) -> None:
+    """Write per-page raw text files under data/elements/text/<stem>/p{page}.txt.
+
+    This is lossless and does not truncate. If multiple text elements exist per page,
+    they will be appended in order of appearance.
+    """
+    try:
+        out_dir = Path("data") / "elements" / "text" / pdf_path.stem
+        out_dir.mkdir(parents=True, exist_ok=True)
+        # Build map page -> list[text]
+        from collections import defaultdict
+        page_texts = defaultdict(list)
+        for el in elements:
+            if getattr(el, "category", getattr(el, "type", "")) in ("text", "Text"):
+                md = getattr(el, "metadata", None) or {}
+                page = md.get("page_number")
+                if page is None:
+                    continue
+                t = (getattr(el, "text", "") or "")
+                if t:
+                    page_texts[int(page)].append(str(t))
+        # Write files and an index.json
+        import json as _json
+        index = []
+        for page in sorted(page_texts.keys()):
+            fp = out_dir / f"p{int(page)}.txt"
+            try:
+                fp.write_text("\n\n".join(page_texts[page]), encoding="utf-8")
+            except Exception:
+                # Best-effort; continue
+                continue
+            try:
+                txt = fp.read_text(encoding="utf-8")
+                index.append({
+                    "page": int(page),
+                    "chars": len(txt),
+                    "words": len(txt.split()),
+                    "file": fp.as_posix(),
+                })
+            except Exception:
+                index.append({"page": int(page), "file": fp.as_posix()})
+        # Write index.json
+        try:
+            (out_dir / "index.json").write_text(_json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+    except Exception:
+        # Non-fatal
+        pass
+
+
+def _dump_elements_jsonl(elements: List[Element], pdf_path: Path) -> None:
+    """Write all extracted elements as raw JSONL to logs/elements/<stem>-elements.jsonl.
+
+    Fields: category, extractor, page_number, table_number (if any), image_path (if any),
+    and "text" with full content (no truncation).
+    """
+    try:
+        out_dir = Path("logs") / "elements"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{pdf_path.stem}-elements.jsonl"
+        import json as _json
+        with open(out_path, "w", encoding="utf-8") as f:
+            for el in elements:
+                md = getattr(el, "metadata", None) or {}
+                rec = {
+                    "file": pdf_path.name,
+                    "category": getattr(el, "category", getattr(el, "type", "Text")),
+                    "extractor": md.get("extractor"),
+                    "page_number": md.get("page_number"),
+                    "table_number": md.get("table_number"),
+                    "table_md_path": md.get("table_md_path"),
+                    "table_csv_path": md.get("table_csv_path"),
+                    "image_path": md.get("image_path"),
+                    "figure_order": md.get("figure_order"),
+                    "text": (getattr(el, "text", "") or ""),
+                }
+                try:
+                    f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+                except Exception:
+                    # Attempt a minimal fallback if JSON serialization barfs
+                    try:
+                        rec.pop("text", None)
+                        f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+                    except Exception:
+                        pass
+    except Exception:
+        # Non-fatal
+        pass
 
 
 @trace_func

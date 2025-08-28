@@ -308,6 +308,46 @@ def read_snapshot(path: str) -> List[SnapshotRow]:
     return rows
 
 
+@trace_func
+def maybe_upgrade_with_full_text(rows: List[SnapshotRow], full_path: Optional[str]) -> List[SnapshotRow]:
+    """If a full snapshot exists (db_snapshot_full.jsonl), merge its text and metadata into rows.
+    Match on (doc_id, chunk_id, content_hash). Missing keys are left as-is.
+    """
+    if not full_path or not os.path.exists(full_path):
+        return rows
+    index: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    try:
+        with io.open(full_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    key = (str(data.get("doc_id", "")), str(data.get("chunk_id", "")), str(data.get("content_hash", "")))
+                    index[key] = data
+                except Exception:
+                    continue
+    except Exception:
+        return rows
+    out: List[SnapshotRow] = []
+    for r in rows:
+        key = (str(r.doc_id), str(r.chunk_id), str(r.content_hash))
+        full = index.get(key)
+        if full:
+            # inject richer preview if empty
+            if not r.raw.get("preview") and full.get("text"):
+                r.raw["preview"] = str(full.get("text"))[:200]
+            # propagate any missing fields we care about
+            if not r.raw.get("file") and full.get("file"):
+                r.raw["file"] = full.get("file")
+            if not r.raw.get("page") and full.get("page") is not None:
+                r.raw["page"] = full.get("page")
+            # keep section/anchor as-is; they should already exist
+        out.append(r)
+    return out
+
+
 def filter_noise(rows: List[SnapshotRow]) -> List[SnapshotRow]:
     out: List[SnapshotRow] = []
     for r in rows:
@@ -720,10 +760,12 @@ def write_outputs(chunks: List[Dict[str, Any]], graph: Dict[str, Any], out_dir: 
 def main():
     parser = argparse.ArgumentParser(description="Normalize db_snapshot.jsonl → chunks.jsonl + graph.json")
     parser.add_argument("--input", default=os.path.join("logs", "db_snapshot.jsonl"))
+    parser.add_argument("--full", default=os.path.join("logs", "db_snapshot_full.jsonl"), help="Optional path to non-normalized full snapshot (text+metadata)")
     parser.add_argument("--outdir", default=os.path.join("logs", "normalized"))
     args = parser.parse_args()
 
     rows = read_snapshot(args.input)
+    rows = maybe_upgrade_with_full_text(rows, args.full)
     rows = filter_noise(rows)
     chunks, graph = chunks_and_graph(rows)
     write_outputs(chunks, graph, args.outdir)

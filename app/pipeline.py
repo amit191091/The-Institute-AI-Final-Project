@@ -51,6 +51,11 @@ try:
 except Exception:  # pragma: no cover
     def export_llamaindex_for(paths, out_root=None):
         return 0
+try:
+    from app.llamaindex_compare import build_alt_indexes  # type: ignore
+except Exception:  # pragma: no cover
+    def build_alt_indexes(paths, embedding_fn):
+        return {}
 # Optional graph visualization/database modules. Provide no-op fallbacks if missing.
 try:
     from app.graph import build_graph, render_graph_html  # type: ignore
@@ -188,12 +193,12 @@ class _LLM:
                 from langchain_openai import ChatOpenAI
                 model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
                 try:
-                    self._backend = ChatOpenAI(model=model, temperature=0.1)  # type: ignore[call-arg]
+                    self._backend = ChatOpenAI(model=model, temperature=0.1, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                 except Exception:
                     try:
-                        self._backend = ChatOpenAI(model_name=model)  # type: ignore[call-arg]
+                        self._backend = ChatOpenAI(model_name=model, temperature=0.1, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                     except Exception:
-                        self._backend = ChatOpenAI()  # type: ignore[call-arg]
+                        self._backend = ChatOpenAI(model=model, temperature=0.1, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                 self._which = "openai"
             except Exception:
                 self._backend = None
@@ -275,11 +280,12 @@ def build_pipeline(paths: List[Path]):
             docs = expand_table_kv_docs(docs)
     except Exception:
         pass
-    # Write a quick DB snapshot for debugging
+    # Write DB snapshots for debugging
     try:
         Path("logs").mkdir(exist_ok=True)
         snap_path = Path("logs") / "db_snapshot.jsonl"
-        with open(snap_path, "w", encoding="utf-8") as f:
+        full_snap_path = Path("logs") / "db_snapshot_full.jsonl"
+        with open(snap_path, "w", encoding="utf-8") as f, open(full_snap_path, "w", encoding="utf-8") as f_full:
             for d in docs:
                 md = d.metadata or {}
                 txt = d.page_content or ""
@@ -343,6 +349,37 @@ def build_pipeline(paths: List[Path]):
                     "preview": preview_str,
                 }
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+                # Full, non-normalized snapshot record (text + full metadata)
+                try:
+                    full_rec = {
+                        "file": md.get("file_name"),
+                        "page": md.get("page"),
+                        "section": md.get("section") or md.get("section_type"),
+                        "anchor": md.get("anchor"),
+                        "doc_id": md.get("doc_id"),
+                        "chunk_id": md.get("chunk_id"),
+                        "content_hash": md.get("content_hash"),
+                        "metadata": md,  # entire metadata blob for offline inspection
+                        "text": txt,     # full chunk text (untruncated)
+                        "words": len((txt or "").split()),
+                    }
+                    f_full.write(json.dumps(full_rec, ensure_ascii=False) + "\n")
+                except Exception:
+                    # Best-effort: if serialization fails, write a minimal fallback
+                    try:
+                        f_full.write(json.dumps({
+                            "file": md.get("file_name"),
+                            "page": md.get("page"),
+                            "section": md.get("section") or md.get("section_type"),
+                            "anchor": md.get("anchor"),
+                            "doc_id": md.get("doc_id"),
+                            "chunk_id": md.get("chunk_id"),
+                            "content_hash": md.get("content_hash"),
+                            "text": txt,
+                        }, ensure_ascii=False) + "\n")
+                    except Exception:
+                        pass
     except Exception:
         pass
     tbl_cnt = sum(1 for d in docs if (d.metadata or {}).get("section") == "Table")
@@ -401,7 +438,27 @@ def build_pipeline(paths: List[Path]):
                 print(f"[GraphDB] normalized import result={n2}")
     except Exception:
         pass
-    return docs, hybrid, debug
+    # Build alternate indexes for comparison (LlamaIndex exports and/or LlamaParse)
+    alt = {}
+    try:
+        alt = build_alt_indexes(paths, embeddings)
+        # Summarize alt indexes
+        for key, obj in (alt or {}).items():
+            try:
+                get_logger().info("ALT[%s]: docs=%d | dense=%s | sparse=%s", key, len(obj.get("docs", [])), type(obj.get("dense")).__name__, type(obj.get("sparse")).__name__)
+            except Exception:
+                pass
+        # Dump Chroma snapshots for alt dense stores
+        try:
+            for key, obj in (alt or {}).items():
+                vs = obj.get("dense")
+                if vs is not None:
+                    dump_chroma_snapshot(vs, Path("logs") / f"chroma_snapshot_{key}.jsonl")
+        except Exception:
+            pass
+    except Exception:
+        alt = {}
+    return docs, hybrid, {**debug, "alt": alt}
 
 @trace_func
 def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None) -> str:
@@ -501,7 +558,7 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
     qa = query_analyzer(question)
     q_exec = qa.get("canonical") or question
     try:
-        candidates = hybrid.get_relevant_documents(q_exec)
+        candidates = hybrid.invoke(q_exec)
     except Exception:
         candidates = hybrid.invoke(q_exec)
     candidates = candidates[: settings.K_TOP_K]
