@@ -123,7 +123,7 @@ def build_agent_tab(docs, hybrid, llm):
 
         # Maintenance tools
         try:
-            from RAG.app.agent_tools import tool_audit_and_fill_figures as _audit_figs, tool_plan as _plan
+            from RAG.app.Agent_Components.agent_tools import tool_audit_and_fill_figures as _audit_figs, tool_plan as _plan
         except Exception:
             _audit_figs = None
             _plan = None
@@ -259,7 +259,7 @@ def build_inspect_tab(docs):
         sample_docs = [d for d in docs[:12]]
         gr.Textbox(value=_fmt_docs(sample_docs, max_items=12), label="Sample Contexts", lines=15)
 
-def build_graph_tab(docs):
+def create_graph_ui_tab(docs):
     """Build the Graph tab."""
     with gr.Tab("Graph"):
         gr.Markdown("### Knowledge Graph (auto-built)")

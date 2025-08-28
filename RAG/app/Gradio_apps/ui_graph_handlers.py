@@ -6,13 +6,13 @@ import re
 from pathlib import Path
 import gradio as gr
 
-from RAG.app.graphdb import run_cypher as _run_cypher
-from RAG.app.normalized_loader import load_normalized_docs
+from RAG.app.Gradio_apps.graphdb import run_cypher as _run_cypher
+from RAG.app.Data_Management.normalized_loader import load_normalized_docs
 
 try:
-    from RAG.app.graph import build_graph, render_graph_html
+    from RAG.app.Gradio_apps.graph import build_networkx_graph, render_graph_html
 except Exception:
-    build_graph = None  # type: ignore
+    build_networkx_graph = None  # type: ignore
     render_graph_html = None  # type: ignore
 
 
@@ -23,9 +23,9 @@ def _gen_graph(source_choice: str, docs):
             return gr.update(value=""), "(graph module not available; install dependencies: networkx, pyvis)"
         # Select source
         if source_choice == "Docs co-mention (default)":
-            if build_graph is None:
-                return gr.update(value=""), "(build_graph not available)"
-            G = build_graph(docs)
+            if build_networkx_graph is None:
+                return gr.update(value=""), "(build_networkx_graph not available)"
+            G = build_networkx_graph(docs)
         elif source_choice == "Normalized graph.json":
             G = _build_graph_from_normalized_json()
         elif source_choice == "Normalized chunks":
@@ -33,9 +33,9 @@ def _gen_graph(source_choice: str, docs):
         elif source_choice == "Neo4j (live)":
             G = _build_graph_from_neo4j()
         else:
-            if build_graph is None:
+            if build_networkx_graph is None:
                 return gr.update(value=""), "(unknown source)"
-            G = build_graph(docs)
+            G = build_networkx_graph(docs)
         from RAG.app.config import settings
         settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
         out = settings.LOGS_DIR/"graph.html"

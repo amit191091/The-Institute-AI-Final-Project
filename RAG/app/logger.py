@@ -22,7 +22,7 @@ def get_logger() -> logging.Logger:
     logger.addHandler(ch)
 
     # File handler
-    log_dir = settings.LOGS_DIR
+    log_dir = settings.paths.LOGS_DIR
     log_dir.mkdir(parents=True, exist_ok=True)
     fh = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
     fh.setLevel(os.getenv("RAG_FILE_LOG_LEVEL", "DEBUG"))

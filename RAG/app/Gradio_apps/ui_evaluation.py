@@ -3,9 +3,9 @@ Evaluation functionality for the Gradio interface.
 """
 import difflib
 import re
-from RAG.app.agents import answer_needle, answer_summary, answer_table, route_question_ex
+from RAG.app.Agent_Components.agents import answer_needle, answer_summary, answer_table, route_question_ex
 from RAG.app.retrieve import apply_filters, query_analyzer, rerank_candidates
-from RAG.app.eval_ragas import run_eval, pretty_metrics
+from RAG.app.Evaluation_Analysis.evaluation_utils import run_eval, pretty_metrics
 from RAG.app.logger import get_logger
 
 # Enhanced evaluation imports

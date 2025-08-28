@@ -27,15 +27,23 @@ DEFAULT_TARGET_SCORE = 0.85     # Target overall score to achieve
 
 import os
 import json
-import argparse
+import typer
 from pathlib import Path
 from typing import List, Dict, Any
 import time
 
 # Import the RAG pipeline components
-from RAG.app.pipeline import run_evaluation, build_pipeline, _discover_input_paths, _clean_run_outputs
-from RAG.app.eval_ragas import run_eval_detailed, pretty_metrics, TARGETS
-from RAG.app.prompts import NEEDLE_SYSTEM, NEEDLE_PROMPT, TABLE_SYSTEM, TABLE_PROMPT
+try:
+    from RAG.app.pipeline import run_evaluation, build_pipeline
+    from RAG.app.pipeline_modules.pipeline_ingestion import discover_input_paths, clean_run_outputs
+    from RAG.app.Evaluation_Analysis.evaluation_utils import run_eval_detailed, pretty_metrics
+    from RAG.app.config import settings
+    from RAG.app.Agent_Components.prompts import NEEDLE_SYSTEM, NEEDLE_PROMPT, TABLE_SYSTEM, TABLE_PROMPT
+    RAG_AVAILABLE = True
+except ImportError:
+    print("⚠️  RAG system not found. Make sure you're running this from the project root.")
+    RAG_AVAILABLE = False
+
 from dotenv import load_dotenv
 
 
@@ -63,8 +71,8 @@ class PromptOptimizer:
         print("📚 Building RAG pipeline...")
         
         # Clean outputs and discover paths
-        _clean_run_outputs()
-        paths = _discover_input_paths()
+        clean_run_outputs()
+        paths = discover_input_paths()
         
         if not paths:
             print("❌ No input files found. Place PDFs/DOCs under data/ or the root PDF.")
@@ -72,8 +80,8 @@ class PromptOptimizer:
             
         # Build pipeline (docs, hybrid, llm)
         self.docs, self.hybrid, self.debug = build_pipeline(paths)
-        from RAG.app.pipeline import _LLM
-        self.llm = _LLM()
+        from RAG.app.pipeline_modules.pipeline_utils import LLM
+        self.llm = LLM()
         
         print(f"✅ Pipeline built: {len(self.docs)} documents loaded")
         
@@ -177,7 +185,7 @@ class PromptOptimizer:
         
         # Analyze which metrics need improvement
         needs_improvement = {}
-        for metric, target in TARGETS.items():
+        for metric, target in settings.evaluation.EVALUATION_TARGETS.items():
             current = current_scores.get(metric)
             if current is not None and current < target:
                 needs_improvement[metric] = target - current
@@ -399,30 +407,33 @@ class PromptOptimizer:
         print(f"   📋 Summary: {summary_file}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Prompt Optimization for RAG System")
-    parser.add_argument("--questions", type=int, default=DEFAULT_QUESTIONS, 
-                       help=f"Maximum number of questions to evaluate (default: {DEFAULT_QUESTIONS})")
-    parser.add_argument("--iterations", type=int, default=DEFAULT_ITERATIONS,
-                       help=f"Number of optimization iterations (default: {DEFAULT_ITERATIONS})")
-    parser.add_argument("--target-score", type=float, default=DEFAULT_TARGET_SCORE,
-                       help=f"Target overall score to achieve (default: {DEFAULT_TARGET_SCORE})")
+def main(
+    questions: int = typer.Option(DEFAULT_QUESTIONS, "--questions", "-q", 
+                                 help=f"Maximum number of questions to evaluate (default: {DEFAULT_QUESTIONS})"),
+    iterations: int = typer.Option(DEFAULT_ITERATIONS, "--iterations", "-i",
+                                  help=f"Number of optimization iterations (default: {DEFAULT_ITERATIONS})"),
+    target_score: float = typer.Option(DEFAULT_TARGET_SCORE, "--target-score", "-t",
+                                      help=f"Target overall score to achieve (default: {DEFAULT_TARGET_SCORE})")
+):
+    """RAG Prompt Optimizer - Optimize prompts using RAGAS evaluation."""
     
-    args = parser.parse_args()
+    if not RAG_AVAILABLE:
+        typer.echo("❌ RAG system not available. Cannot run optimization.")
+        raise typer.Exit(1)
     
-    print("🎯 RAG Prompt Optimizer")
-    print("=" * 50)
-    print(f"📝 Max questions: {args.questions}")
-    print(f"🔄 Iterations: {args.iterations}")
-    print(f"🎯 Target score: {args.target_score}")
-    print("=" * 50)
+    typer.echo("🎯 RAG Prompt Optimizer")
+    typer.echo("=" * 50)
+    typer.echo(f"📝 Max questions: {questions}")
+    typer.echo(f"🔄 Iterations: {iterations}")
+    typer.echo(f"🎯 Target score: {target_score}")
+    typer.echo("=" * 50)
     
     # Set environment variables for evaluation
     os.environ["RAG_EVAL"] = "1"
     os.environ["RAG_HEADLESS"] = "1"
     
     # Limit questions if specified
-    if args.questions > 0:
+    if questions > 0:
         # Create a temporary limited dataset
         qa_file = Path("RAG/data/gear_wear_qa.jsonl")
         if qa_file.exists():
@@ -431,7 +442,7 @@ def main():
                 all_questions = [json.loads(line) for line in f if line.strip()]
             
             # Take only the first N questions
-            limited_questions = all_questions[:args.questions]
+            limited_questions = all_questions[:questions]
             
             # Create temporary file
             temp_file = Path("temp_limited_qa.jsonl")
@@ -442,23 +453,23 @@ def main():
             # Set environment to use temporary file
             os.environ["RAG_QA_FILE"] = str(temp_file)
             
-            print(f"📋 Using first {args.questions} questions for evaluation")
+            typer.echo(f"📋 Using first {questions} questions for evaluation")
     
     try:
         # Run optimization
-        optimizer = PromptOptimizer(max_questions=args.questions, target_score=args.target_score)
-        results = optimizer.optimize_prompts(iterations=args.iterations)
+        optimizer = PromptOptimizer(max_questions=questions, target_score=target_score)
+        results = optimizer.optimize_prompts(iterations=iterations)
         
-        print("\n🎉 Optimization completed!")
-        print(f"🏆 Best overall score: {results['best_score']:.3f}")
+        typer.echo("\n🎉 Optimization completed!")
+        typer.echo(f"🏆 Best overall score: {results['best_score']:.3f}")
         
-        if results['best_score'] >= args.target_score:
-            print(f"✅ Target score {args.target_score} achieved!")
+        if results['best_score'] >= target_score:
+            typer.echo(f"✅ Target score {target_score} achieved!")
         else:
-            print(f"⚠️  Target score {args.target_score} not reached. Consider more iterations.")
+            typer.echo(f"⚠️  Target score {target_score} not reached. Consider more iterations.")
             
     except Exception as e:
-        print(f"❌ Optimization failed: {e}")
+        typer.echo(f"❌ Optimization failed: {e}")
         import traceback
         traceback.print_exc()
     
@@ -470,4 +481,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)
