@@ -27,7 +27,7 @@ except Exception:  # pragma: no cover
 import os
 import math
 import re
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Dict, Any
 
 # Optional sklearn for overlap F1
 try:
@@ -39,6 +39,44 @@ from dotenv import dotenv_values, find_dotenv, load_dotenv
 
 # Load .env file
 load_dotenv()
+
+# --- Factual metrics helpers -------------------------------------------------
+def _normalize_str(x: Optional[str]) -> str:
+	x = (x or "").strip()
+	x = re.sub(r"\s+", " ", x)
+	return x
+
+def exact_match(ans: Optional[str], ref: Optional[str]) -> float:
+	return 1.0 if _normalize_str(ans).lower() == _normalize_str(ref).lower() and ref not in (None, "") else 0.0
+
+def token_f1(ans: Optional[str], ref: Optional[str]) -> float:
+	a = set(_simple_tokens(ans or ""))
+	b = set(_simple_tokens(ref or ""))
+	if not a and not b:
+		return float("nan")
+	inter = len(a & b)
+	if inter == 0:
+		return 0.0
+	p = inter / max(1, len(a))
+	r = inter / max(1, len(b))
+	return (2 * p * r) / (p + r) if (p + r) > 0 else 0.0
+
+def numeric_with_tolerance(ans: Optional[str], ref: Optional[str], rel_tol: float = 0.02, abs_tol: float = 0.0) -> Optional[float]:
+	"""Return 1.0 if numeric values match within tolerance, else 0.0. If parse fails, return None."""
+	try:
+		def _num(x: str) -> float:
+			# keep digits, dot, minus
+			m = re.findall(r"-?\d+(?:\.\d+)?", x)
+			if not m:
+				raise ValueError("no number")
+			return float(m[0])
+		va = _num(ans or "")
+		vr = _num(ref or "")
+		if abs(va - vr) <= max(abs_tol, rel_tol * max(abs(vr), 1e-9)):
+			return 1.0
+		return 0.0
+	except Exception:
+		return None
 
 
 @trace_func
@@ -96,7 +134,8 @@ def _setup_ragas_llm():
 		try:
 			from langchain_openai import ChatOpenAI
 			openai_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
-			llm = ChatOpenAI(model=openai_model, temperature=0, api_key=open_ai_api)
+			# Rely on environment variable OPENAI_API_KEY; newer langchain_openai expects SecretStr
+			llm = ChatOpenAI(model=openai_model, temperature=0)
 			print(f"[RAGAS LLM] Using OpenAI model: {openai_model}")
 			return llm
 		except Exception as e:
@@ -241,6 +280,27 @@ def run_eval(dataset):
 				"context_precision": cprec,
 				"context_recall": crec,
 			}
+			# Optional factual scoring if columns present
+			try:
+				answers = dataset.get("answer") if isinstance(dataset, dict) else dataset["answer"]
+				references = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
+				facts_em, facts_f1, facts_num = [], [], []
+				for a, r in zip(answers or [], references or []):
+					em = exact_match(a, r)
+					f1v = token_f1(a, r)
+					nv = numeric_with_tolerance(a, r)
+					facts_em.append(em)
+					facts_f1.append(f1v)
+					if nv is not None:
+						facts_num.append(nv)
+				def _m(vals):
+					vs = [v for v in vals if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
+					return float(sum(vs)/len(vs)) if vs else float("nan")
+				out["factual_exact_match"] = _m(facts_em)
+				out["factual_token_f1"] = _m(facts_f1)
+				out["factual_numeric_acc"] = _m(facts_num)
+			except Exception:
+				pass
 			# Add heuristic overlap metrics if reference/contexts present and ragas metrics are NaN
 			try:
 				refs = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
@@ -275,6 +335,27 @@ def run_eval(dataset):
 			"context_precision": cprec,
 			"context_recall": crec,
 		}
+		# Factual metrics aggregation
+		try:
+			answers = dataset.get("answer") if isinstance(dataset, dict) else dataset["answer"]
+			references = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
+			facts_em, facts_f1, facts_num = [], [], []
+			for a, r in zip(answers or [], references or []):
+				em = exact_match(a, r)
+				f1v = token_f1(a, r)
+				nv = numeric_with_tolerance(a, r)
+				facts_em.append(em)
+				facts_f1.append(f1v)
+				if nv is not None:
+					facts_num.append(nv)
+			def _m(vals):
+				vs = [v for v in vals if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
+				return float(sum(vs)/len(vs)) if vs else float("nan")
+			out["factual_exact_match"] = _m(facts_em)
+			out["factual_token_f1"] = _m(facts_f1)
+			out["factual_numeric_acc"] = _m(facts_num)
+		except Exception:
+			pass
 		# Add heuristic overlap metrics
 		try:
 			refs = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
@@ -299,12 +380,34 @@ def run_eval(dataset):
 		relev = _mean_safe([r.get("answer_relevancy") for r in items])
 		cprec = _mean_safe([r.get("context_precision") for r in items])
 		crec = _mean_safe([r.get("context_recall") for r in items])
-		return {
+		base = {
 			"faithfulness": faith,
 			"answer_relevancy": relev,
 			"context_precision": cprec,
 			"context_recall": crec,
 		}
+		# try to add factual metrics from original dataset
+		try:
+			answers = dataset.get("answer") if isinstance(dataset, dict) else dataset["answer"]
+			references = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
+			facts_em, facts_f1, facts_num = [], [], []
+			for a, r in zip(answers or [], references or []):
+				em = exact_match(a, r)
+				f1v = token_f1(a, r)
+				nv = numeric_with_tolerance(a, r)
+				facts_em.append(em)
+				facts_f1.append(f1v)
+				if nv is not None:
+					facts_num.append(nv)
+			def _m(vals):
+				vs = [v for v in vals if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
+				return float(sum(vs)/len(vs)) if vs else float("nan")
+			base["factual_exact_match"] = _m(facts_em)
+			base["factual_token_f1"] = _m(facts_f1)
+			base["factual_numeric_acc"] = _m(facts_num)
+		except Exception:
+			pass
+		return base
 	except Exception:
 		return {
 			"faithfulness": float("nan"),
@@ -442,6 +545,13 @@ def run_eval_detailed(dataset):
 					rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
 				except Exception:
 					pass
+				# Factual per-question metrics
+				try:
+					rec["factual_exact_match"] = exact_match(rec.get("answer"), rec.get("reference"))
+					rec["factual_token_f1"] = token_f1(rec.get("answer"), rec.get("reference"))
+					rec["factual_numeric_acc"] = numeric_with_tolerance(rec.get("answer"), rec.get("reference"))
+				except Exception:
+					pass
 				per_q.append(rec)
 		elif hasattr(result, "results"):
 			items = list(getattr(result, "results") or [])
@@ -462,6 +572,12 @@ def run_eval_detailed(dataset):
 					ctxs = _get_col("contexts")[i] if i < len(_get_col("contexts")) else []
 					p, r, f1v = overlap_prf1(ref, list(ctxs or []))
 					rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
+				except Exception:
+					pass
+				try:
+					rec["factual_exact_match"] = exact_match(rec.get("answer"), rec.get("reference"))
+					rec["factual_token_f1"] = token_f1(rec.get("answer"), rec.get("reference"))
+					rec["factual_numeric_acc"] = numeric_with_tolerance(rec.get("answer"), rec.get("reference"))
 				except Exception:
 					pass
 				per_q.append(rec)
@@ -491,6 +607,13 @@ def run_eval_detailed(dataset):
 		"context_precision": _mean_safe([r.get("context_precision") for r in per_q]),
 		"context_recall": _mean_safe([r.get("context_recall") for r in per_q]),
 	}
+	# Add factual summaries
+	try:
+		summary["factual_exact_match"] = _mean_safe([r.get("factual_exact_match") for r in per_q])
+		summary["factual_token_f1"] = _mean_safe([r.get("factual_token_f1") for r in per_q])
+		summary["factual_numeric_acc"] = _mean_safe([r.get("factual_numeric_acc") for r in per_q])
+	except Exception:
+		pass
 	# Compute overlap metrics summary
 	try:
 		summary["overlap_precision"] = _mean_safe([r.get("overlap_precision") for r in per_q])
@@ -529,6 +652,11 @@ def pretty_metrics(m: dict) -> str:
 		f"Context precision: {_fmt(m.get('context_precision'))}",
 		f"Context recall: {_fmt(m.get('context_recall'))}",
 	]
+	# Optional factual metrics
+	if any(k in m for k in ("factual_exact_match", "factual_token_f1", "factual_numeric_acc")):
+		lines.append(f"Factual exact match: {_fmt(m.get('factual_exact_match'))}")
+		lines.append(f"Factual token F1: {_fmt(m.get('factual_token_f1'))}")
+		lines.append(f"Factual numeric acc: {_fmt(m.get('factual_numeric_acc'))}")
 	# Optional heuristic overlap metrics (no LLM/embeddings required)
 	if any(k in m for k in ("overlap_precision", "overlap_recall", "overlap_f1")):
 		lines.append(f"Overlap precision (heuristic): {_fmt(m.get('overlap_precision'))}")

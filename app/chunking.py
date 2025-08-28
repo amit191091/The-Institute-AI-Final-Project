@@ -2,6 +2,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import os
 from app.logger import get_logger
 from app.logger import trace_func
+from app.config import settings
 
 from app.metadata import classify_section_type, extract_keywords
 from app.utils import approx_token_len, simple_summarize, truncate_to_tokens, naive_markdown_table, split_into_sentences, slugify, sha1_short
@@ -23,17 +24,22 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 		except Exception:
 			pass
 
-	# Optional overrides for text splitting behavior to control chunk counts
+	# Settings-driven token budgets; behavior (semantic/multi-split/overlap) controlled by existing env flags
 	try:
-		split_multi = os.getenv("RAG_TEXT_SPLIT_MULTI", "0").lower() in ("1", "true", "yes")
-		TARGET_TOK = int(os.getenv("RAG_TEXT_TARGET_TOKENS", "350") or 350)
-		MAX_TOK = int(os.getenv("RAG_TEXT_MAX_TOKENS", "500") or 500)
-		SEMANTIC = os.getenv("RAG_SEMANTIC_CHUNKING", "0").lower() in ("1", "true", "yes")
-		OVERLAP_N = max(0, int(os.getenv("RAG_TEXT_OVERLAP_SENTENCES", "1") or 1))
+		avg_lo, avg_hi = settings.CHUNK_TOK_AVG_RANGE
+		TARGET_TOK = max(1, int((avg_lo + avg_hi) / 2))
+		MAX_TOK = int(settings.CHUNK_TOK_MAX)
 	except Exception:
-		split_multi = False
-		TARGET_TOK, MAX_TOK = 350, 500
-		SEMANTIC, OVERLAP_N = False, 1
+		TARGET_TOK, MAX_TOK = 375, 800
+	# Behavior toggles from env (do not add new flags; use existing ones)
+	try:
+		split_multi = os.getenv("RAG_TEXT_SPLIT_MULTI", "1").lower() in ("1", "true", "yes")
+		OVERLAP_N = max(0, int(os.getenv("RAG_TEXT_OVERLAP_SENTENCES", "1") or 1))
+		SEMANTIC = os.getenv("RAG_SEMANTIC_CHUNKING", "1").lower() in ("1", "true", "yes")
+	except Exception:
+		split_multi = True
+		OVERLAP_N = 1
+		SEMANTIC = True
 	# Derive doc_id once per file
 	try:
 		doc_id = slugify(str(os.path.basename(file_path)))
@@ -302,8 +308,8 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			label_hdr = f"LABEL: {table_label}\n" if (table_label and str(table_label).strip()) else ""
 			content = f"[TABLE]\n{label_hdr}SUMMARY:\n{distilled}\n{(analysis + '\n') if analysis else ''}MARKDOWN:\n{md or as_text}\nRAW:\n{as_text}"
 			tok = approx_token_len(content)
-			if tok > 800:
-				content = truncate_to_tokens(content, 800)
+			if tok > settings.CHUNK_TOK_MAX:
+				content = truncate_to_tokens(content, settings.CHUNK_TOK_MAX)
 			if trace:
 				log.debug("CHUNK-OUT[%d]: section=Table tokens≈%d anchor=%s", idx, tok, anchor)
 			# Final fallback for table anchor if still None
@@ -493,8 +499,8 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			# Build content with normalized caption shown to the LLM; compute token budget after composing
 			content = f"[FIGURE]\nCAPTION:\n{figure_summary_short}\nSUMMARY:\n{figure_summary}"
 			tok = approx_token_len(content)
-			if tok > 800:
-				content = truncate_to_tokens(content, 800)
+			if tok > settings.CHUNK_TOK_MAX:
+				content = truncate_to_tokens(content, settings.CHUNK_TOK_MAX)
 			if trace:
 				log.debug("CHUNK-OUT[%d]: section=Figure tokens≈%d img=%s anchor=%s", idx, tok, img_path, anchor)
 			chunk_preview = (content or "").splitlines()[0][:200]

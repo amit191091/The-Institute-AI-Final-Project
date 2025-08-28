@@ -1,4 +1,5 @@
 from typing import List, Protocol, Tuple, Dict
+from typing import Optional
 
 from langchain.schema import Document
 
@@ -16,6 +17,12 @@ try:
 	from app.query_intent import get_intent  # optional LLM-based intent
 except Exception:
 	get_intent = None  # type: ignore
+
+# Optional Neo4j helpers; guarded import
+try:
+	from app.graphdb import query_table_cells  # type: ignore
+except Exception:
+	query_table_cells = None  # type: ignore
 
 
 class LLMCallable(Protocol):
@@ -135,10 +142,11 @@ def route_question_ex(q: str) -> Tuple[str, Dict]:
 		trace["matched"].append("summary_keywords")
 		trace["route"] = "summary"
 		return "summary", trace
+	# Date questions should be answered with an exact value (one line) -> route to needle
 	if any(m in ql for m in ("timeline", "chronology", "when did", "what happened on", "what happend on")) or simp.get("wants_date"):
 		trace["matched"].append("timeline_date")
-		trace["route"] = "summary"
-		return "summary", trace
+		trace["route"] = "needle"
+		return "needle", trace
 	# Table/Figure cues
 	if simp.get("wants_table") or any(w in ql for w in ("table", "chart", "value", "figure", "fig ", "image", "graph", "plot")):
 		trace["matched"].append("table_figure_keywords")
@@ -221,4 +229,39 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	ctx = render_context(table_docs)
 	prompt = TABLE_SYSTEM + "\n" + TABLE_PROMPT.format(table=ctx, question=question)
 	return llm(prompt).strip()
+
+
+@trace_func
+def answer_graph(llm: LLMCallable, docs: List[Document], question: str) -> str:
+	"""Graph RAG agent (minimal):
+	- If question mentions a table number and a key, try Neo4j TableCell lookup.
+	- Else, fall back to needle over provided contexts.
+	"""
+	import re
+
+	q = (question or "").strip()
+	m = re.search(r"table\s*(\d+)", q, re.I)
+	# Rough key heuristic: words after 'for' or 'of' or quoted phrase
+	key: Optional[str] = None
+	km = re.search(r"(?:for|of)\s+([A-Za-z0-9_ /%-]{3,})", q, re.I)
+	qm = re.search(r"['\"]([^'\"]{3,})['\"]", q)
+	if km:
+		key = km.group(1).strip()
+	elif qm:
+		key = qm.group(1).strip()
+	if m and key and query_table_cells:
+		try:
+			tnum = int(m.group(1))
+			rows = query_table_cells(tnum, key, doc_id=None, limit=3)  # type: ignore[misc]
+			if rows:
+				r = rows[0]
+				val = str(r.get("value") or "").strip()
+				unit = str(r.get("unit") or "").strip()
+				cite = f"[{r.get('file')} p{r.get('page')}]"
+				if val:
+					return f"{val} {unit}".strip() + f" {cite}"
+		except Exception:
+			pass
+	# Fallback to needle
+	return answer_needle(llm, docs, question)
 

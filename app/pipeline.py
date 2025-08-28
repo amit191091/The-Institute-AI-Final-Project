@@ -43,7 +43,9 @@ from app.agents import (
     answer_table,
     route_question,
     route_question_ex,
+    answer_graph,
 )
+from app.router_agent import route_llm  # optional LLM router (graceful fallback)
 from app.ui_gradio import build_ui
 # Optional LlamaIndex export
 try:
@@ -77,6 +79,8 @@ except Exception:  # pragma: no cover
 from app.validate import validate_min_pages
 from app.logger import get_logger, trace_func, trace_here
 from app.eval_ragas import run_eval_detailed, pretty_metrics
+from app.eval_ragas import exact_match, token_f1, numeric_with_tolerance
+from app.logger import get_logger
 
 
 @trace_func
@@ -481,7 +485,17 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     if sec and not filtered:
         filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
     top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
-    route, rtrace = route_question_ex(question)
+    # Decide route: prefer LLM router if enabled; fallback to heuristic router
+    route_llm_choice = None
+    try:
+        route_llm_choice = route_llm(question)
+    except Exception:
+        route_llm_choice = None
+    if route_llm_choice and route_llm_choice != "DEFAULT":
+        route = route_llm_choice
+        rtrace = {"llm_router": True, "destination": route_llm_choice}
+    else:
+        route, rtrace = route_question_ex(question)
 
     def _doc_head(d):
         md = getattr(d, "metadata", {}) or {}
@@ -520,6 +534,8 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
         ans = answer_summary(_LLM(), top_docs, question)
     elif route == "table":
         ans = answer_table(_LLM(), top_docs, question)
+    elif route == "graph":
+        ans = answer_graph(_LLM(), top_docs, question)
     else:
         ans = answer_needle(_LLM(), top_docs, question)
     try:
@@ -581,6 +597,22 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
         ans = answer_table(llm, top_docs, question)
     else:
         ans = answer_needle(llm, top_docs, question)
+    # Attach a compact per-call trace for debugging
+    try:
+        trace = {
+            "route": route,
+            "top_docs": [
+                {
+                    "file": d.metadata.get("file_name"),
+                    "page": d.metadata.get("page"),
+                    "section": d.metadata.get("section"),
+                    "anchor": d.metadata.get("anchor"),
+                }
+                for d in top_docs
+            ],
+        }
+    except Exception:
+        trace = {"route": route}
     return ans, top_docs
 
 
@@ -795,6 +827,43 @@ def run_evaluation(docs, hybrid, llm: _LLM):
             "reference": ref,
         }
         rows_out.append(rec)
+        # Write a per-question debug trace line to logs/eval_debug.jsonl
+        try:
+            from app.retrieve import query_analyzer as _qa
+            from app.agents import route_question as _rq
+            qa_info = _qa(q)
+            route_dbg = _rq(q)
+            ctx_heads = []
+            for d in (ctx_docs or [])[:8]:
+                md = getattr(d, "metadata", {}) or {}
+                ctx_heads.append({
+                    "file": md.get("file_name"),
+                    "page": md.get("page"),
+                    "section": md.get("section") or md.get("section_type"),
+                    "anchor": md.get("anchor"),
+                })
+            dbg = {
+                "id": str(qid) if qid else None,
+                "question": q,
+                "route": route_dbg,
+                "canonical": qa_info.get("canonical"),
+                "filters": qa_info.get("filters"),
+                "answer": ans,
+                "reference": ref,
+                "factual_exact_match": exact_match(ans, ref),
+                "factual_token_f1": token_f1(ans, ref),
+                "factual_numeric_acc": numeric_with_tolerance(ans, ref),
+                "contexts": ctx_heads,
+            }
+            try:
+                Path("logs").mkdir(exist_ok=True)
+                with open(Path("logs") / "eval_debug.jsonl", "a", encoding="utf-8") as fdbg:
+                    import json as _json
+                    fdbg.write(_json.dumps(dbg, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+        except Exception:
+            pass
         try:
             if os.getenv("RAG_TRACE_EVAL", "0").lower() in ("1", "true", "yes"):
                 log.info("EVAL_TRACE[%d]: qid=%s | gt_found=%s | gt_count=%d | ctx_len=%d", i, str(qid), bool(gts), len(gts or []), len(ctxs or []))
