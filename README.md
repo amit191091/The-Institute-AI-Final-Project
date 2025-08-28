@@ -46,6 +46,20 @@ The app builds the index and launches a Gradio UI.
 - RAG_USE_PDFPLUMBER=true — try extracting tables via pdfplumber (pure Python; good fallback).
 - RAG_USE_CAMELOT=true — try extracting tables via Camelot (needs Ghostscript/Poppler).
 
+### Chunking controls (text size and coherence)
+
+- RAG_TEXT_SPLIT_MULTI=1 — allow grouping adjacent text elements on the same page to reach target tokens.
+- RAG_SEMANTIC_CHUNKING=1 — merge semantically similar sentences when packing chunks.
+- RAG_TEXT_TARGET_TOKENS=450 — desired token budget for text chunks; used by greedy/semantic packers.
+- RAG_TEXT_MAX_TOKENS=800 — hard cap per chunk (text/table/figure content is truncated to this limit).
+- RAG_TEXT_OVERLAP_SENTENCES=1 — sentence overlap between consecutive text chunks (when multi-split/semantic on).
+- RAG_MIN_CHUNK_TOKENS=250 — post-merge minimum size for adjacent text chunks to avoid tiny fragments.
+
+Tips:
+- If you observe many tiny text chunks (avg < 50 tokens), enable RAG_TEXT_SPLIT_MULTI and set RAG_MIN_CHUNK_TOKENS >= 250.
+- Semantic grouping is optional; if missing models, the code falls back to greedy packing.
+- Headings naturally split sections; very short section bodies may remain small by design.
+
 ### Optional, normalized pipeline and graph
 
 - RAG_USE_NORMALIZED=true — index from logs/normalized/chunks.jsonl if present (A/B without changing extractors).

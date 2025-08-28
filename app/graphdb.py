@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from app.logger import trace_func
 """
 Neo4j graph database integration: build a persistent graph from docs and run Cypher queries.
 
@@ -16,8 +16,15 @@ from typing import Any, Dict, Iterable, List, Tuple, Sequence
 
 try:
     # Ensure .env is loaded even if caller didn't load it yet (won't override existing env)
-    from dotenv import load_dotenv  # type: ignore
-    load_dotenv(override=False)
+    from dotenv import dotenv_values, find_dotenv  # type: ignore
+    try:
+        env_path = find_dotenv(usecwd=True, raise_error_if_not_found=False)
+        if env_path:
+            for k, v in (dotenv_values(env_path) or {}).items():
+                if v is not None and k not in os.environ:
+                    os.environ[k] = v
+    except Exception:
+        pass
 except Exception:
     pass
 
@@ -34,7 +41,7 @@ except Exception:  # pragma: no cover
     _Neo4jRel = None  # type: ignore
     _Neo4jPath = None  # type: ignore
 
-
+@trace_func
 def _get_driver():
     # Support common aliases from different guides
     uri = os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL")
@@ -45,13 +52,25 @@ def _get_driver():
         return None
     if not (uri and user and pwd):
         return None
-    return GraphDatabase.driver(uri, auth=(user, pwd))
+    # Use a short connection timeout to avoid long hangs if DB is unreachable
+    timeout_s = None
+    try:
+        timeout_s = float(os.getenv("NEO4J_CONN_TIMEOUT", "5"))
+    except Exception:
+        timeout_s = None
+    try:
+        if timeout_s is not None:
+            return GraphDatabase.driver(uri, auth=(user, pwd), connection_timeout=timeout_s)  # type: ignore[call-arg]
+        return GraphDatabase.driver(uri, auth=(user, pwd))
+    except TypeError:
+        # Older drivers may not support connection_timeout kwarg
+        return GraphDatabase.driver(uri, auth=(user, pwd))
 
-
+@trace_func
 def _chunk_node_id(md: dict) -> str:
     return f"{md.get('file_name','doc')}#p{md.get('page')}:{md.get('section','')}/{md.get('anchor','')}"
 
-
+@trace_func
 def build_graph_db(docs: Sequence[DocLike]) -> int:
     """Create/merge chunk and entity nodes, with relationships in Neo4j.
 
@@ -116,7 +135,7 @@ def build_graph_db(docs: Sequence[DocLike]) -> int:
 
 
 from typing import LiteralString
-
+@trace_func
 def run_cypher(query: LiteralString, parameters: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
     # Build clearer diagnostics if driver cannot be created
     drv = _get_driver()

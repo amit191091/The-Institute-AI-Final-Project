@@ -4,13 +4,14 @@ from typing import List, Tuple, Sequence, Protocol, runtime_checkable
 import re
 import networkx as nx
 import json
+from app.logger import trace_func
 
 @runtime_checkable
 class DocLike(Protocol):
     page_content: str
     metadata: dict
 
-
+@trace_func
 def _extract_entities(text: str) -> List[str]:
     """Entity regex: W-cases, dates, times, key nouns (RPS, RMS, FME)."""
     t = text or ""
@@ -33,7 +34,7 @@ def _extract_entities(text: str) -> List[str]:
             ents.add(kw)
     return list(ents)
 
-
+@trace_func
 def build_graph(docs: Sequence[DocLike]) -> nx.Graph:
     """Build a simple undirected graph of entities co-mentioned within the same chunk.
     Nodes: entities and file/page anchors. Edges: co-mentions.
@@ -56,7 +57,7 @@ def build_graph(docs: Sequence[DocLike]) -> nx.Graph:
                     G.add_edge(a, b)
     return G
 
-
+@trace_func
 def render_graph_html(G: nx.Graph, out_path: str, height: str = "600px") -> str:
     """Render the graph to an interactive HTML. Prefer pyvis, fallback to a minimal vis-network HTML.
 

@@ -1,3 +1,4 @@
+from app.logger import trace_func
 # RAGAS imports with robust fallbacks
 try:
 	from ragas import evaluate
@@ -34,7 +35,13 @@ try:
 except Exception:  # pragma: no cover
 	precision_score = recall_score = f1_score = None  # type: ignore
 
+from dotenv import dotenv_values, find_dotenv, load_dotenv
 
+# Load .env file
+load_dotenv()
+
+
+@trace_func
 def _simple_tokens(text: str) -> List[str]:
 	t = (text or "").lower()
 	# keep alphanumerics, collapse whitespace
@@ -42,7 +49,7 @@ def _simple_tokens(text: str) -> List[str]:
 	toks = [w for w in t.split() if len(w) >= 2]
 	return toks
 
-
+@trace_func
 def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, float]:
 	"""Compute a simple token-overlap precision/recall/F1 between reference and concatenated contexts.
 	If sklearn is available, use f1_score/precision_score/recall_score over token presence vectors.
@@ -75,17 +82,33 @@ def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, flo
 	r = inter / max(1, len(ref_tokens))
 	f1 = (2 * p * r / (p + r)) if (p + r) > 0 else 0.0
 	return float(p), float(r), float(f1)
-
+@trace_func
 def _setup_ragas_llm():
 	"""Setup LLM for RAGAS evaluation - supports both OpenAI and Google."""
     
-	# Allow explicit provider override
+	# Allow explicit provider override. Default: prefer Google; avoid OpenAI unless explicitly requested.
 	provider = (os.getenv("RAGAS_LLM_PROVIDER") or "").lower().strip()
-	try_openai_first = provider == "openai" or (provider == "" and os.getenv("OPENAI_API_KEY"))
-	try_google_next = provider == "google" or (provider == "" and os.getenv("GOOGLE_API_KEY"))
+	try_google_first = (provider in ("", "google")) and bool(os.getenv("GOOGLE_API_KEY"))
+	try_openai_next = (provider == "openai") and bool(os.getenv("OPENAI_API_KEY"))
 
-	# Prefer OpenAI for RAGAS (compatibility with evaluation prompts)
-	if try_openai_first:
+	# Prefer Google Gemini by default
+	if try_google_first:
+		try:
+			from langchain_google_genai import ChatGoogleGenerativeAI
+			preferred_model = os.getenv("GOOGLE_CHAT_MODEL", "gemini-1.5-pro")
+			safety_settings = None  # keep default safety behavior; avoid enum incompatibilities
+			llm = ChatGoogleGenerativeAI(
+				model=preferred_model,
+				temperature=0,
+				safety_settings=safety_settings,
+			)
+			print(f"[RAGAS LLM] Using Google Gemini model: {preferred_model}")
+			return llm
+		except Exception as e:
+			print(f"Failed to setup Google LLM for RAGAS: {e}")
+
+	# Only use OpenAI if explicitly requested
+	if try_openai_next:
 		try:
 			from langchain_openai import ChatOpenAI
 			openai_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
@@ -94,30 +117,13 @@ def _setup_ragas_llm():
 			return llm
 		except Exception as e:
 			print(f"Failed to setup OpenAI LLM for RAGAS: {e}")
-
-	# Fallback to Google Gemini if available
-	if try_google_next:
-		try:
-			from langchain_google_genai import ChatGoogleGenerativeAI
-			preferred_model = os.getenv("GOOGLE_CHAT_MODEL", "gemini-1.5-pro")
-			safety_settings = None  # keep default safety behavior; avoid enum incompatibilities
-			llm = ChatGoogleGenerativeAI(
-				model=preferred_model,
-				temperature=0,
-				convert_system_message_to_human=True,
-				safety_settings=safety_settings,
-			)
-			print(f"[RAGAS LLM] Using Google Gemini model: {preferred_model}")
-			return llm
-		except Exception as e:
-			print(f"Failed to setup Google LLM for RAGAS: {e}")
 	
 	return None
-
+@trace_func
 def _setup_ragas_embeddings():
 	"""Setup embeddings for RAGAS evaluation - supports both OpenAI and Google."""
-	
-	# Try Google first if API key is available  
+    
+	# Try Google first if API key is available (default)
 	if os.getenv("GOOGLE_API_KEY"):
 		try:
 			from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -130,8 +136,8 @@ def _setup_ragas_embeddings():
 		except Exception as e:
 			print(f"Failed to setup Google embeddings for RAGAS: {e}")
 	
-	# Fallback to OpenAI if available
-	if os.getenv("OPENAI_API_KEY"):
+	# Only use OpenAI if explicitly requested
+	if os.getenv("OPENAI_API_KEY") and os.getenv("RAGAS_EMBED_PROVIDER", "").lower().strip() == "openai":
 		try:
 			from langchain_openai import OpenAIEmbeddings
 			
@@ -145,14 +151,13 @@ def _setup_ragas_embeddings():
 	
 	return None
 
-
+@trace_func
 def run_eval(dataset):
 	if evaluate is None:
 		raise RuntimeError("ragas not installed. pip install ragas datasets evaluate")
-	
-	# Use explicitly configured LLM/embeddings to ensure supported models are used
+
 	print("Using RAGAS with configured LLM and embeddings")
-	
+
 	# Ensure proper Dataset object to avoid API differences
 	ds = dataset
 	try:
@@ -160,7 +165,7 @@ def run_eval(dataset):
 			ds = Dataset.from_dict(dataset)  # type: ignore[arg-type]
 	except Exception:
 		ds = dataset
-	
+
 	# Choose metrics based on dataset columns/presence to avoid NaNs
 	has_ref = False
 	has_gt = False
@@ -171,20 +176,18 @@ def run_eval(dataset):
 		has_ref = False
 	try:
 		gts = dataset.get("ground_truths") if isinstance(dataset, dict) else dataset["ground_truths"]
-		# treat as present if any non-empty list
 		has_gt = any(isinstance(x, list) and len(x) > 0 for x in (gts or []))
 	except Exception:
 		has_gt = False
+
 	metrics: list = [m for m in (faithfulness, answer_relevancy) if m is not None]
 	if has_ref and context_precision is not None:
 		metrics.append(context_precision)
 	if has_gt and context_recall is not None:
 		metrics.append(context_recall)
-	
 	if not metrics:
 		raise RuntimeError("No RAGAS metrics available")
-	
-	# Run evaluation with configured LLM/embeddings
+
 	llm = _setup_ragas_llm()
 	emb = _setup_ragas_embeddings()
 	run_config = None
@@ -199,7 +202,6 @@ def run_eval(dataset):
 		else:
 			result = evaluate(dataset=ds, metrics=metrics, llm=llm, embeddings=emb)  # type: ignore
 	except TypeError:
-		# Fallback for older RAGAS versions
 		try:
 			if run_config is not None:
 				result = evaluate(ds, metrics=metrics, llm=llm, embeddings=emb, run_config=run_config)  # type: ignore
@@ -207,7 +209,8 @@ def run_eval(dataset):
 				result = evaluate(ds, metrics=metrics, llm=llm, embeddings=emb)  # type: ignore
 		except Exception as e:
 			raise RuntimeError(f"RAGAS evaluation failed: {e}") from e
-	# Build summary robustly from per-question outputs
+
+	@trace_func
 	def _mean_safe(vals):
 		vals2 = []
 		for v in vals:
@@ -219,7 +222,6 @@ def run_eval(dataset):
 				pass
 		return float(sum(vals2)/len(vals2)) if vals2 else float("nan")
 
-	faith = relev = cprec = crec = float("nan")
 	# Preferred: use to_pandas per-question and average
 	try:
 		if hasattr(result, "to_pandas"):
@@ -234,13 +236,10 @@ def run_eval(dataset):
 				"context_precision": cprec,
 				"context_recall": crec,
 			}
-			# Add heuristic overlap metrics if reference/contexts present and ragas metrics are NaN
+			# Add heuristic overlap metrics if reference/contexts present
 			try:
 				refs = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
 				ctxs = dataset.get("contexts") if isinstance(dataset, dict) else dataset["contexts"]
-			except Exception:
-				refs, ctxs = [], []
-			try:
 				if refs and ctxs:
 					p_list, r_list, f1_list = [], [], []
 					for ref, ctx in zip(refs, ctxs):
@@ -254,14 +253,15 @@ def run_eval(dataset):
 			return out
 	except Exception:
 		pass
+
 	# Next: try dict-like summary
 	try:
 		raw = dict(result)  # type: ignore
 		as_dict = {str(k): raw[k] for k in raw.keys()}
-		faith = float(as_dict["faithfulness"]) if "faithfulness" in as_dict else float("nan")
-		relev = float(as_dict["answer_relevancy"]) if "answer_relevancy" in as_dict else float("nan")
-		cprec = float(as_dict["context_precision"]) if "context_precision" in as_dict else float("nan")
-		crec = float(as_dict["context_recall"]) if "context_recall" in as_dict else float("nan")
+		faith = float(as_dict.get("faithfulness", float("nan")))
+		relev = float(as_dict.get("answer_relevancy", float("nan")))
+		cprec = float(as_dict.get("context_precision", float("nan")))
+		crec = float(as_dict.get("context_recall", float("nan")))
 		out = {
 			"faithfulness": faith,
 			"answer_relevancy": relev,
@@ -285,6 +285,7 @@ def run_eval(dataset):
 		return out
 	except Exception:
 		pass
+
 	# Finally: handle .results list shape
 	try:
 		items = list(getattr(result, "results") or [])
@@ -292,12 +293,13 @@ def run_eval(dataset):
 		relev = _mean_safe([r.get("answer_relevancy") for r in items])
 		cprec = _mean_safe([r.get("context_precision") for r in items])
 		crec = _mean_safe([r.get("context_recall") for r in items])
-		return {
+		base = {
 			"faithfulness": faith,
 			"answer_relevancy": relev,
 			"context_precision": cprec,
 			"context_recall": crec,
 		}
+		return base
 	except Exception:
 		return {
 			"faithfulness": float("nan"),
@@ -309,7 +311,7 @@ def run_eval(dataset):
 			"overlap_f1": float("nan"),
 		}
 
-
+@trace_func
 def run_eval_detailed(dataset):
 	"""Run RAGAS and return (summary_metrics, per_question) where per_question is a
 	list of dicts including metrics per item when available. Falls back to empty list otherwise.
@@ -473,6 +475,7 @@ def run_eval_detailed(dataset):
 		per_q = []
 
 	# Compute summary from per-question metrics as a robust fallback
+	@trace_func
 	def _mean_safe(values):
 		vals = [v for v in values if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
 		return float(sum(vals) / len(vals)) if vals else None
@@ -501,7 +504,7 @@ TARGETS = {
 	"table_qa_accuracy": 0.90,
 }
 
-
+@trace_func
 def pretty_metrics(m: dict) -> str:
 	def _fmt(x):
 		try:
@@ -527,4 +530,21 @@ def pretty_metrics(m: dict) -> str:
 		lines.append(f"Overlap recall (heuristic): {_fmt(m.get('overlap_recall'))}")
 		lines.append(f"Overlap F1 (heuristic): {_fmt(m.get('overlap_f1'))}")
 	return "\n".join(lines)
+
+@trace_func
+def append_eval_footer(per_question_path: str, summary: dict) -> None:
+	"""Append a summary footer line to the per-question JSONL for quick averages view."""
+	try:
+		import json as _json
+		footer = {
+			"__summary__": True,
+			"faithfulness": summary.get("faithfulness"),
+			"answer_relevancy": summary.get("answer_relevancy"),
+			"context_precision": summary.get("context_precision"),
+			"context_recall": summary.get("context_recall"),
+		}
+		with open(per_question_path, "a", encoding="utf-8") as f:
+			f.write(_json.dumps(footer, ensure_ascii=False) + "\n")
+	except Exception:
+		pass
 

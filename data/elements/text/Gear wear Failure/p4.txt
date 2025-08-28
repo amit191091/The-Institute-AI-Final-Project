@@ -1,0 +1,39 @@
+4 | P a g e  
+ 
+ 
+broadband noise floor above the mesh harmonics also rose noticeably compared to the 
+baseline, confirming a spread of high-frequency energy consistent with contact roughening. 
+At 15 RPS, a late-afternoon recording (15:32–15:58) showed even clearer differences: RMS 
+was consistently above the earlier baseline, and spectral smearing broadened into a 
+persistent high-frequency haze, indicative of mixed lubrication and developing asperity 
+interaction. This dual evidence — photographic flattening of the flank region and repeatable 
+vibro-acoustic departures — remained consistent through the following days. 
+The April 27–29 campaigns documented progressive expansion of the worn zone in the 
+microscope images, while vibration records at both 45 and 15 RPS sustained the elevated 
+RMS and strengthened sideband structures. By May 3, photographs showed contact scars 
+encroaching across multiple teeth, with clear edges rather than the diffuse polishing seen 
+earlier, and vibration spectra exhibited broader and more numerous sidebands, alongside a 
+further rise in the high-frequency floor. The RMS growth remained gradual, avoiding 
+impulsive spikes, which aligned with a wear mechanism dominated by abrasive smoothing 
+rather than fracture or chipping. 
+Taken together, the evidence from April 23 through May 7 defines the Moderate Wear stage, 
+characterized by: 
+1. Photographs revealing enlarging contact scars and measurable loss of original flank 
+curvature. 
+2. RMS values at both operating speeds trending consistently upward by 10–20% 
+relative to April 9. 
+3. Spectral content displaying organized sideband families and a rising broadband floor 
+across successive days. 
+This stage thus marks the progression from micro-texture alteration into geometrically 
+significant wear, recognizable in both visual and vibro-acoustic domains, but still without 
+catastrophic features such as broken teeth or impulsive shock signatures.  
+Severe Wear 
+The transition into severe wear was first documented on May 14, when microscope 
+photographs revealed sharp-edged scars and material loss extending across large sections of 
+the tooth flank. Unlike the smoother polishing or gradual flattening seen during the 
+moderate stage, the worn regions now displayed darker, roughened textures intermixed 
+with bright reflective zones, characteristic of scuffing and surface tearing. Contact scars 
+widened significantly, consuming much of the original flank geometry, with visible depth 
+variations along the wear path. These changes were not confined to isolated teeth: by mid-
+May, photographs confirmed that multiple consecutive teeth exhibited similar damage, 
+establishing that the wear mechanism had advanced to a system-wide condition.

@@ -13,8 +13,10 @@ import difflib
 from datetime import datetime, UTC
 from pathlib import Path
 from typing import List, Tuple
+from app.logger import trace_func
 
-from dotenv import load_dotenv
+# Prefer a safe .env loader to avoid parse spam; we update os.environ manually
+from dotenv import dotenv_values, find_dotenv
 
 from app.config import settings
 import app.loaders as loaders
@@ -25,6 +27,7 @@ from app.indexing import (
     build_sparse_retriever,
     to_documents,
     dump_chroma_snapshot,
+    expand_table_kv_docs,
 )
 from app.normalized_loader import load_normalized_docs  # Optional normalized source
 from app.retrieve import (
@@ -42,6 +45,23 @@ from app.agents import (
     route_question_ex,
 )
 from app.ui_gradio import build_ui
+# Optional LLM-based router (safe no-op if unavailable)
+try:
+    from app.router_chain import route_llm  # type: ignore
+except Exception:  # pragma: no cover
+    def route_llm(question: str) -> str:  # type: ignore
+        return "DEFAULT"
+# Optional LlamaIndex export
+try:
+    from app.llamaindex_export import export_llamaindex_for  # type: ignore
+except Exception:  # pragma: no cover
+    def export_llamaindex_for(paths, out_root=None):
+        return 0
+try:
+    from app.llamaindex_compare import build_alt_indexes  # type: ignore
+except Exception:  # pragma: no cover
+    def build_alt_indexes(paths, embedding_fn):
+        return {}
 # Optional graph visualization/database modules. Provide no-op fallbacks if missing.
 try:
     from app.graph import build_graph, render_graph_html  # type: ignore
@@ -61,10 +81,11 @@ except Exception:  # pragma: no cover
     def import_normalized_graph(graph_path, chunks_path):
         return 0
 from app.validate import validate_min_pages
-from app.logger import get_logger
+from app.logger import get_logger, trace_func, trace_here
 from app.eval_ragas import run_eval_detailed, pretty_metrics
 
 
+@trace_func
 def _clean_run_outputs() -> None:
     """Delete prior run artifacts so new extraction overwrites files.
     Cleans: data/images, data/elements, logs/queries.jsonl, logs/elements/*.jsonl
@@ -105,6 +126,7 @@ def _clean_run_outputs() -> None:
         pass
 
 
+@trace_func
 def _discover_input_paths() -> List[Path]:
     """Collect input files: root Gear wear Failure.pdf and files under data/."""
     candidates: List[Path] = []
@@ -117,8 +139,17 @@ def _discover_input_paths() -> List[Path]:
     return candidates
 
 
+@trace_func
 def _get_embeddings():
     """Prefer Google embeddings, fallback to OpenAI, then FakeEmbeddings for local smoke tests."""
+    # Debug override to force local embeddings and avoid API calls
+    try:
+        if os.getenv("RAG_FORCE_FAKE_EMBED", "0").lower() in ("1", "true", "yes"):
+            from langchain_community.embeddings import FakeEmbeddings  # type: ignore
+            print("[Embeddings] Forcing FakeEmbeddings (RAG_FORCE_FAKE_EMBED=1)")
+            return FakeEmbeddings(size=1536)
+    except Exception:
+        pass
     force_openai = os.getenv("FORCE_OPENAI_ONLY", "").strip().lower() in ("1", "true", "yes")
     try:
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -149,7 +180,7 @@ def _get_embeddings():
 
 class _LLM:
     """Simple callable LLM wrapper preferring Gemini; fallback to OpenAI via LangChain chat models."""
-
+    @trace_func
     def __init__(self) -> None:
         self._backend = None
         self._which = None
@@ -158,7 +189,8 @@ class _LLM:
         if os.getenv("GOOGLE_API_KEY") and not force_openai:
             try:
                 from langchain_google_genai import ChatGoogleGenerativeAI
-                self._backend = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.1)
+                # Prefer a more faithful model with deterministic generation
+                self._backend = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0.0)
                 self._which = "google"
             except Exception:
                 self._backend = None
@@ -168,16 +200,17 @@ class _LLM:
                 from langchain_openai import ChatOpenAI
                 model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
                 try:
-                    self._backend = ChatOpenAI(model=model, temperature=0.1)  # type: ignore[call-arg]
+                    self._backend = ChatOpenAI(model=model, temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                 except Exception:
                     try:
-                        self._backend = ChatOpenAI(model_name=model)  # type: ignore[call-arg]
+                        self._backend = ChatOpenAI(model_name=model, temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                     except Exception:
-                        self._backend = ChatOpenAI()  # type: ignore[call-arg]
+                        self._backend = ChatOpenAI(model=model, temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                 self._which = "openai"
             except Exception:
                 self._backend = None
 
+    @trace_func
     def __call__(self, prompt: str) -> str:
         if self._backend is not None:
             try:
@@ -187,26 +220,71 @@ class _LLM:
                 return f"[LLM error] {e}\n\n{prompt[-400:]}"
         return "[LLM not configured] " + prompt[-400:]
 
+@trace_func
+def _count_pdf_pages(path: Path) -> int:
+    """Best-effort page count using PyMuPDF or pdfplumber; fallback to 0."""
+    try:
+        import fitz  # type: ignore
+        try:
+            with fitz.open(str(path)) as doc:  # type: ignore
+                return int(len(doc))
+        except Exception:
+            pass
+    except Exception:
+        pass
+    try:
+        import pdfplumber  # type: ignore
+        with pdfplumber.open(path) as pdf:  # type: ignore
+            return int(len(pdf.pages))
+    except Exception:
+        pass
+    return 0
 
+
+@trace_func
 def build_pipeline(paths: List[Path]):
     """Ingest documents, build chunks+metadata, and initialize hybrid retriever."""
     log = get_logger()
+    # Log high-level knobs once to aid debugging small chunk counts
+    try:
+        log.info(
+            "FLAGS[chunking]: MULTI=%s SEMANTIC=%s TARGET_TOK=%s MAX_TOK=%s OVERLAP_N=%s HEADING_MIN_FONT=%s",
+            os.getenv("RAG_TEXT_SPLIT_MULTI", "1"),
+            os.getenv("RAG_SEMANTIC_CHUNKING", "1"),
+            os.getenv("RAG_TEXT_TARGET_TOKENS", "350"),
+            os.getenv("RAG_TEXT_MAX_TOKENS", "500"),
+            os.getenv("RAG_TEXT_OVERLAP_SENTENCES", "1"),
+            os.getenv("RAG_HEADING_MIN_FONT", "12"),
+        )
+        log.info(
+            "FLAGS[retrieval]: DENSE_K=%d SPARSE_K=%d CONTEXT_TOP_N=%d CE_RERANK=%s GRAPH_DB=%s",
+            settings.DENSE_K,
+            settings.SPARSE_K,
+            settings.CONTEXT_TOP_N,
+            os.getenv("RAG_USE_CE_RERANKER", "0"),
+            os.getenv("RAG_GRAPH_DB", "1"),
+        )
+    except Exception:
+        pass
     records = []
     # ingest
-    for path, elements in loaders.load_many(paths):
+    for pair in loaders.load_many(paths):
+        try:
+            path, elements = pair
+        except Exception:
+            # Fallback in case of unexpected return shapes
+            continue
         # basic ingestion validation: min pages
         try:
-            pages_list = [
-                int(getattr(getattr(e, "metadata", None), "page_number", 0))
-                for e in elements
-                if getattr(getattr(e, "metadata", None), "page_number", None) is not None
-            ]
-            pages = sorted(set(pages_list))
-            ok, msg = validate_min_pages(len(set(pages)), settings.MIN_PAGES)
+            page_count = _count_pdf_pages(Path(path))
+            ok, msg = validate_min_pages(page_count, settings.MIN_PAGES)
             if not ok:
                 print(f"[WARN] {path.name}: {msg}")
+            else:
+                get_logger().info("%s: page_count=%d", path.name, page_count)
         except Exception:
             pass
+        # Structure-aware chunking (semantic+multi by default; see FLAGS above)
         chunks = structure_chunks(elements, str(path))
         for ch in chunks:
             records.append(attach_metadata(ch, client_id=os.getenv("CLIENT_ID"), case_id=path.stem))
@@ -225,11 +303,18 @@ def build_pipeline(paths: List[Path]):
         log.info("Using normalized docs for indexing: %d", len(docs))
     else:
         docs = to_documents(records)
-    # Write a quick DB snapshot for debugging
+    # Optional: expand table rows into KV mini-docs to improve retrieval of specific values
+    try:
+        if os.getenv("RAG_EXPAND_TABLE_KV", "1").lower() in ("1", "true", "yes"):
+            docs = expand_table_kv_docs(docs)
+    except Exception:
+        pass
+    # Write DB snapshots for debugging
     try:
         Path("logs").mkdir(exist_ok=True)
         snap_path = Path("logs") / "db_snapshot.jsonl"
-        with open(snap_path, "w", encoding="utf-8") as f:
+        full_snap_path = Path("logs") / "db_snapshot_full.jsonl"
+        with open(snap_path, "w", encoding="utf-8") as f, open(full_snap_path, "w", encoding="utf-8") as f_full:
             for d in docs:
                 md = d.metadata or {}
                 txt = d.page_content or ""
@@ -293,6 +378,37 @@ def build_pipeline(paths: List[Path]):
                     "preview": preview_str,
                 }
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+                # Full, non-normalized snapshot record (text + full metadata)
+                try:
+                    full_rec = {
+                        "file": md.get("file_name"),
+                        "page": md.get("page"),
+                        "section": md.get("section") or md.get("section_type"),
+                        "anchor": md.get("anchor"),
+                        "doc_id": md.get("doc_id"),
+                        "chunk_id": md.get("chunk_id"),
+                        "content_hash": md.get("content_hash"),
+                        "metadata": md,  # entire metadata blob for offline inspection
+                        "text": txt,     # full chunk text (untruncated)
+                        "words": len((txt or "").split()),
+                    }
+                    f_full.write(json.dumps(full_rec, ensure_ascii=False) + "\n")
+                except Exception:
+                    # Best-effort: if serialization fails, write a minimal fallback
+                    try:
+                        f_full.write(json.dumps({
+                            "file": md.get("file_name"),
+                            "page": md.get("page"),
+                            "section": md.get("section") or md.get("section_type"),
+                            "anchor": md.get("anchor"),
+                            "doc_id": md.get("doc_id"),
+                            "chunk_id": md.get("chunk_id"),
+                            "content_hash": md.get("content_hash"),
+                            "text": txt,
+                        }, ensure_ascii=False) + "\n")
+                    except Exception:
+                        pass
     except Exception:
         pass
     tbl_cnt = sum(1 for d in docs if (d.metadata or {}).get("section") == "Table")
@@ -309,6 +425,12 @@ def build_pipeline(paths: List[Path]):
     dense = build_dense_index(docs, embeddings)
     sparse = build_sparse_retriever(docs, k=settings.SPARSE_K)
     hybrid = build_hybrid_retriever(dense, sparse, dense_k=settings.DENSE_K)
+    # Optional DB tracing
+    try:
+        if os.getenv("RAG_TRACE_DB", "0").lower() in ("1", "true", "yes"):
+            log.info("DB_TRACE: backend=%s | dense_k=%d sparse_k=%d | docs=%d", os.getenv("RAG_VECTOR_BACKEND", "chroma"), settings.DENSE_K, settings.SPARSE_K, len(docs))
+    except Exception:
+        pass
     # If Chroma is persisted, try writing a snapshot
     try:
         if os.getenv("RAG_CHROMA_DIR"):
@@ -321,9 +443,9 @@ def build_pipeline(paths: List[Path]):
     except Exception:
         dense_ret = None
     debug = {"dense": dense_ret, "sparse": sparse}
-    # Optional: populate graph database from current docs (entity co-mention graph)
+    # Populate graph database from current docs by default (opt-out via RAG_GRAPH_DB=0/false)
     try:
-        if os.getenv("RAG_GRAPH_DB", "").lower() in ("1", "true", "yes"):
+        if os.getenv("RAG_GRAPH_DB", "1").lower() not in ("0", "false", "no"):
             n = build_graph_db(docs)
             print(f"[GraphDB] Upserted ~{n} nodes/edges to Neo4j")
     except Exception as e:
@@ -345,17 +467,39 @@ def build_pipeline(paths: List[Path]):
                 print(f"[GraphDB] normalized import result={n2}")
     except Exception:
         pass
-    return docs, hybrid, debug
+    # Build alternate indexes for comparison (LlamaIndex exports and/or LlamaParse)
+    alt = {}
+    try:
+        alt = build_alt_indexes(paths, embeddings)
+        # Summarize alt indexes
+        for key, obj in (alt or {}).items():
+            try:
+                get_logger().info("ALT[%s]: docs=%d | dense=%s | sparse=%s", key, len(obj.get("docs", [])), type(obj.get("dense")).__name__, type(obj.get("sparse")).__name__)
+            except Exception:
+                pass
+        # Dump Chroma snapshots for alt dense stores
+        try:
+            for key, obj in (alt or {}).items():
+                vs = obj.get("dense")
+                if vs is not None:
+                    dump_chroma_snapshot(vs, Path("logs") / f"chroma_snapshot_{key}.jsonl")
+        except Exception:
+            pass
+    except Exception:
+        alt = {}
+    return docs, hybrid, {**debug, "alt": alt}
 
-
+@trace_func
 def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None) -> str:
     """Answer a user question using the hybrid retriever and route to sub-agents."""
     log = get_logger()
+    trace_here("ask")
     qa = query_analyzer(question)
     q_exec = qa.get("canonical") or question
     try:
         candidates = hybrid.invoke(q_exec)
     except Exception:
+        # Fallback to invoke for older retriever interfaces
         candidates = hybrid.invoke(q_exec)
     candidates = candidates[: settings.K_TOP_K]  # rerank TOP K
     filtered = apply_filters(candidates, qa["filters"])  # metadata filters
@@ -366,7 +510,12 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     if sec and not filtered:
         filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
     top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
-    route, rtrace = route_question_ex(question)
+    # Prefer LLM router when enabled; fall back to heuristic router
+    route = route_llm(question)
+    if route == "DEFAULT":
+        route, rtrace = route_question_ex(question)
+    else:
+        rtrace = {"matched": ["llm_router"], "route": route, "simplified": qa.get("intent", {})}
 
     def _doc_head(d):
         md = getattr(d, "metadata", {}) or {}
@@ -379,20 +528,31 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
         return round(base + boost, 4)
 
     log.info(
-        "Q: %s | route=%s | keywords=%s | filters=%s | pool=%d | filtered=%d | using=%d",
+        "Q: %s | route=%s | canonical=%s | keywords=%s | filters=%s | pool=%d | filtered=%d | using=%d",
         q_exec,
         route,
+        qa.get("canonical"),
         qa["keywords"],
         qa["filters"],
         len(candidates),
         len(filtered),
         len(top_docs),
     )
+    try:
+        # Log a compact list of candidate heads before filtering
+        heads = []
+        for d in candidates[:20]:
+            md = getattr(d, "metadata", {}) or {}
+            heads.append(f"{md.get('file_name')}#p{md.get('page')} {md.get('section')}#{md.get('anchor')}")
+        if heads:
+            log.debug("CANDIDATES: %s", "; ".join(heads))
+    except Exception:
+        pass
     for i, d in enumerate(top_docs, start=1):
         log.info("ctx[%d] score=%.4f | %s", i, _score(d), _doc_head(d))
     if route == "summary":
         ans = answer_summary(_LLM(), top_docs, question)
-    elif route == "table":
+    elif route == "table" or route == "graph":  # temporary: route graph to table agent until dedicated graph agent is added
         ans = answer_table(_LLM(), top_docs, question)
     else:
         ans = answer_needle(_LLM(), top_docs, question)
@@ -425,6 +585,7 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     return ans
 
 
+@trace_func
 def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
     """Answer a question and also return the contexts used (top_docs)."""
     log = get_logger()
@@ -447,16 +608,20 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
         top_docs = candidates[: settings.CONTEXT_TOP_N] if candidates else []
     if not top_docs:
         top_docs = docs[: settings.CONTEXT_TOP_N]
-    route = route_question(question)
+    # Use LLM router with fallback to heuristic
+    route = route_llm(question)
+    if route == "DEFAULT":
+        route = route_question(question)
     if route == "summary":
         ans = answer_summary(llm, top_docs, question)
-    elif route == "table":
+    elif route == "table" or route == "graph":
         ans = answer_table(llm, top_docs, question)
     else:
         ans = answer_needle(llm, top_docs, question)
     return ans, top_docs
 
 
+@trace_func
 def _load_json_or_jsonl(path: Path):
     """Load a .json (list/dict) or .jsonl file into a list of dicts."""
     try:
@@ -483,25 +648,26 @@ def _load_json_or_jsonl(path: Path):
         return []
 
 
+@trace_func
 def _discover_eval_files():
-    qa_candidates = [
-        Path(os.getenv("RAG_QA_FILE", "")),
-        Path("gear_wear_qa.json"),
-        Path("gear_wear_qa.jsonl"),
-        Path("data") / "gear_wear_qa.json",
-        Path("data") / "gear_wear_qa.jsonl",
-    ]
-    gt_candidates = [
-        Path(os.getenv("RAG_GT_FILE", "")),
-        Path("gear_wear_ground_truth.json"),
-        Path("gear_wear_ground_truth.json"),
-        Path("data") / "gear_wear_ground_truth.json",
-    ]
-    qa = next((p for p in qa_candidates if str(p) and p.exists()), None)
-    gt = next((p for p in gt_candidates if str(p) and p.exists()), None)
+    # Only load the two context_free files provided (unless explicit env overrides are valid files)
+    qa_env = os.getenv("RAG_QA_FILE", "").strip()
+    gt_env = os.getenv("RAG_GT_FILE", "").strip()
+    qa_override = Path(qa_env) if qa_env else None
+    gt_override = Path(gt_env) if gt_env else None
+    # Require files, not directories (avoid Path("") -> ".")
+    if qa_override is not None and not qa_override.is_file():
+        qa_override = None
+    if gt_override is not None and not gt_override.is_file():
+        gt_override = None
+    qa = qa_override if qa_override is not None else (Path("data") / "gear_wear_qa_context_free.jsonl")
+    gt = gt_override if gt_override is not None else (Path("data") / "gear_wear_ground_truth_context_free.json")
+    qa = qa if qa.exists() and qa.is_file() else None
+    gt = gt if gt.exists() and gt.is_file() else None
     return qa, gt
 
 
+@trace_func
 def _normalize_ground_truth(gt_rows):
     """Return dict: question -> list[str] ground truths."""
     mapping = {}
@@ -538,9 +704,61 @@ def _normalize_ground_truth(gt_rows):
     return mapping
 
 
+@trace_func
+def _index_ground_truth(gt_rows):
+    """Build two maps: by_id and by_question for flexible GT matching."""
+    by_id: dict[str, list[str]] = {}
+    by_q: dict[str, list[str]] = {}
+    import re as _re
+
+    def _norm(s: str) -> str:
+        s = str(s).lower().strip()
+        s = _re.sub(r"\s+", " ", s)
+        s = s.strip(".,:;!?—-\u2013\u2014\"'()[]{}")
+        return s
+
+    for r in gt_rows or []:
+        if not isinstance(r, dict):
+            continue
+        rid = r.get("id") or r.get("qid") or r.get("question_id") or r.get("key")
+        q = r.get("question") or r.get("q") or r.get("prompt")
+        gts = (
+            r.get("ground_truths")
+            or r.get("ground_truth")
+            or r.get("answers")
+            or r.get("answer")
+            or r.get("value")
+        )
+        if gts is None:
+            vals: list[str] = []
+        elif isinstance(gts, str):
+            vals = [gts]
+        elif isinstance(gts, list):
+            vals = [str(x) for x in gts]
+        else:
+            vals = [str(gts)]
+        if rid:
+            by_id[str(rid)] = vals
+        if q:
+            by_q[_norm(q)] = vals
+    return by_id, by_q
+
+
+@trace_func
 def run_evaluation(docs, hybrid, llm: _LLM):
     log = get_logger()
     qa_path, gt_path = _discover_eval_files()
+    # Diagnostics for file discovery
+    try:
+        log.info(
+            "EVAL files: QA=%s (exists=%s) | GT=%s (exists=%s)",
+            str(qa_path) if qa_path else "<none>",
+            (qa_path.exists() if qa_path else False),
+            str(gt_path) if gt_path else "<none>",
+            (gt_path.exists() if gt_path else False),
+        )
+    except Exception:
+        pass
     if not qa_path:
         log.warning("Evaluation requested but QA file not found.")
         return
@@ -550,14 +768,26 @@ def run_evaluation(docs, hybrid, llm: _LLM):
     except Exception:
         pass
     qa_rows = _load_json_or_jsonl(qa_path)
+    try:
+        log.info("QA auto-load: Loaded %d QA items from %s", len(qa_rows or []), str(qa_path))
+    except Exception:
+        pass
     gt_rows = _load_json_or_jsonl(gt_path) if gt_path else []
-    gt_map = _normalize_ground_truth(gt_rows)
+    gt_by_id, gt_by_q = _index_ground_truth(gt_rows)
+    try:
+        log.info(
+            "GT auto-load: Loaded %d ids and %d questions from %s. Sample ids: %s",
+            len(gt_by_id), len(gt_by_q), str(gt_path) if gt_path else "<none>", ", ".join(list(gt_by_id.keys())[:5])
+        )
+    except Exception:
+        pass
     rows_out = []
     any_gt = False
     for i, row in enumerate(qa_rows, start=1):
         if not isinstance(row, dict):
             continue
         q = row.get("question") or row.get("q") or row.get("prompt") or row.get("text")
+        qid = row.get("id") or row.get("qid") or row.get("question_id") or row.get("key")
         if not q:
             continue
         try:
@@ -570,9 +800,14 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         norm_q = str(q).lower().strip()
         norm_q = " ".join(norm_q.split())
         norm_q = norm_q.strip(".,:;!?-—\u2013\u2014\"'()[]{}")
-        gts = gt_map.get(norm_q, [])
-        if not gts and gt_map:
-            keys = list(gt_map.keys())
+        # Prefer ID match, then question match
+        gts = []
+        if qid and str(qid) in gt_by_id:
+            gts = gt_by_id.get(str(qid), [])
+        if (not gts) and norm_q in gt_by_q:
+            gts = gt_by_q.get(norm_q, [])
+        if not gts and gt_by_q:
+            keys = list(gt_by_q.keys())
             best = None
             best_score = 0.0
             for k in keys:
@@ -581,7 +816,7 @@ def run_evaluation(docs, hybrid, llm: _LLM):
                     best_score = s
                     best = k
             if best is not None and best_score >= 0.75:
-                gts = gt_map.get(best, [])
+                gts = gt_by_q.get(best, [])
         if (not gts) and isinstance(row.get("answer"), (str, int, float)):
             ans_txt = str(row["answer"]).strip()
             if ans_txt:
@@ -589,19 +824,29 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         if gts:
             any_gt = True
         ref = gts[0] if isinstance(gts, list) and gts else ""
-        rows_out.append({
+        rec = {
             "question": q,
             "answer": ans or "",
             "contexts": ctxs,
             "ground_truths": gts,
             "reference": ref,
-        })
+        }
+        rows_out.append(rec)
+        try:
+            if os.getenv("RAG_TRACE_EVAL", "0").lower() in ("1", "true", "yes"):
+                log.info("EVAL_TRACE[%d]: qid=%s | gt_found=%s | gt_count=%d | ctx_len=%d", i, str(qid), bool(gts), len(gts or []), len(ctxs or []))
+        except Exception:
+            pass
         try:
             log.info("EVAL Q[%d]: %s", i, q)
         except Exception:
             pass
     if not rows_out:
         print("No evaluation rows to process.")
+        try:
+            log.warning("EVAL skipped: QA rows=%d | QA=%s | GT=%s", len(qa_rows or []), str(qa_path), str(gt_path))
+        except Exception:
+            pass
         return
     ds = {"question": [], "answer": [], "contexts": [], "reference": [], "ground_truths": []}
     for r in rows_out:
@@ -627,10 +872,31 @@ def run_evaluation(docs, hybrid, llm: _LLM):
     out_dir.mkdir(exist_ok=True)
     with open(out_dir / "eval_ragas_summary.json", "w", encoding="utf-8") as f:
         json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2)
-    with open(out_dir / "eval_ragas_per_question.jsonl", "w", encoding="utf-8") as f:
+    per_q_path = out_dir / "eval_ragas_per_question.jsonl"
+    with open(per_q_path, "w", encoding="utf-8") as f:
         for rec in per_q:
             f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False) + "\n")
-    print("RAGAS summary:\n" + pretty_metrics(summary))
+        # Footer: averaged metrics across all questions for quick inspection
+        try:
+            s = _nan_to_none(summary)
+            footer = {
+                "__summary__": True,
+                "faithfulness": (s.get("faithfulness") if isinstance(s, dict) else None),
+                "answer_relevancy": (s.get("answer_relevancy") if isinstance(s, dict) else None),
+                "context_precision": (s.get("context_precision") if isinstance(s, dict) else None),
+                "context_recall": (s.get("context_recall") if isinstance(s, dict) else None),
+            }
+            f.write(json.dumps(footer, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+    log = get_logger()
+    summ_str = pretty_metrics(summary)
+    print("RAGAS summary:\n" + summ_str)
+    try:
+        log.info("Evaluation summary (averaged over %d items):\n%s", len(rows_out), summ_str)
+        log.info("Saved summary to %s and per-question to %s", str(out_dir / "eval_ragas_summary.json"), str(per_q_path))
+    except Exception:
+        pass
     print("\nPer-question results:")
     try:
         for rec in per_q:
@@ -644,17 +910,71 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         pass
 
 
+@trace_func
 def run() -> None:
     """Entry point that mirrors the prior Main.main() behavior."""
     print("stating program")
-    # Load .env and override any pre-set env vars to ensure the correct API keys are used
-    load_dotenv(override=True)
+    # Prevent third-party libraries from auto-loading and parsing .env (which causes noisy parse warnings)
+    try:
+        os.environ.setdefault("DOTENV_DISABLE", "1")
+    except Exception:
+        pass
+    # Load .env safely (and only if not explicitly disabled) to avoid parse spam
+    try:
+        if os.getenv("DOTENV_DISABLE", "0").lower() not in ("1", "true", "yes"):
+            env_path = find_dotenv(usecwd=True, raise_error_if_not_found=False)
+            if env_path:
+                values = dotenv_values(env_path) or {}
+                for k, v in values.items():
+                    if v is None:
+                        continue
+                    # Respect process env precedence by default
+                    precedence = os.getenv("RAG_ENV_PRECEDENCE", "process").lower()
+                    if precedence in ("process", "runtime"):
+                        os.environ.setdefault(k, v)
+                    else:
+                        os.environ[k] = v
+    except Exception:
+        pass
     _clean_run_outputs()
     paths = _discover_input_paths()
     if not paths:
         print("No input files found. Place PDFs/DOCs under data/ or the root PDF.")
         return
+    # Log core toggles once
+    try:
+        log = get_logger()
+        log.info("FLAGS: HEADLESS=%s EVAL=%s USE_NORMALIZED=%s VEC_BACKEND=%s LLM_INDEX=%s LLAMAPARSE=%s", os.getenv("RAG_HEADLESS"), os.getenv("RAG_EVAL"), os.getenv("RAG_USE_NORMALIZED"), os.getenv("RAG_VECTOR_BACKEND", "chroma"), os.getenv("RAG_ENABLE_LLAMAINDEX"), os.getenv("RAG_USE_LLAMAPARSE"))
+    except Exception:
+        pass
     docs, hybrid, debug = build_pipeline(paths)
+    # Log discovered image assets (help explain figure counts)
+    try:
+        log = get_logger()
+        figs = [d for d in docs if (d.metadata or {}).get("section") == "Figure"]
+        if figs:
+            for d in figs:
+                md = d.metadata or {}
+                if md.get("image_path"):
+                    asset_tag = " (asset)" if md.get("is_asset") else ""
+                    log.info(
+                        "Image%s: %s p%s fig#%s -> %s",
+                        asset_tag,
+                        md.get("file_name"), md.get("page"), md.get("figure_number"), md.get("image_path"),
+                    )
+    except Exception:
+        pass
+    # Optional: export LlamaIndex artifacts and mirror pipeline tables/images
+    try:
+        enable_llx = os.getenv("RAG_ENABLE_LLAMAINDEX", "0").lower() in ("1", "true", "yes")
+        if enable_llx:
+            n = export_llamaindex_for(paths)
+            if n:
+                print(f"[LlamaIndex] Exported artifacts for {n} document(s) under data/elements/llamaindex")
+            else:
+                print("[LlamaIndex] No export performed (missing dependency or no PDFs)")
+    except Exception:
+        pass
     # Build a lightweight graph and render it for UI
     try:
         G = build_graph(docs)

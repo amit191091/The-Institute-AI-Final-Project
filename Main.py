@@ -2,6 +2,10 @@ from __future__ import annotations
 
 """Thin entrypoint delegating to app.pipeline for cleaner structure."""
 
+# Disable auto .env parsing by third-party libs before any imports that might load dotenv
+import os as _os
+_os.environ.setdefault("DOTENV_DISABLE", "1")
+
 from app.pipeline import run
 def main() -> None:
     run()
