@@ -2,6 +2,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Optional
+from functools import wraps
 
 
 _LOGGER: Optional[logging.Logger] = None
@@ -31,3 +32,25 @@ def get_logger() -> logging.Logger:
 
     _LOGGER = logger
     return logger
+
+
+# Lightweight function-entry tracer. Enable with env RAG_TRACE_FUNCS=1/true/yes/on
+def trace_func(func):
+    @wraps(func)
+    def _wrapper(*args, **kwargs):
+        try:
+            if str(os.getenv("RAG_TRACE_FUNCS", "0")).lower() in ("1", "true", "yes", "on"):
+                get_logger().info(f"im here, this is {func.__name__}")
+        except Exception:
+            pass
+        return func(*args, **kwargs)
+    return _wrapper
+
+
+def trace_here(name: str) -> None:
+    """Manual trace injection for spots where a decorator isn't practical."""
+    try:
+        if str(os.getenv("RAG_TRACE_FUNCS", "0")).lower() in ("1", "true", "yes", "on"):
+            get_logger().info(f"im here, this is {name}")
+    except Exception:
+        pass

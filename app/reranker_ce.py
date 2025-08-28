@@ -5,6 +5,8 @@ Defaults to a small, fast model.
 """
 from __future__ import annotations
 
+from app.logger import trace_func
+
 import os
 from typing import List, Optional
 
@@ -17,7 +19,7 @@ from langchain.schema import Document
 
 _MODEL: Optional[object] = None
 
-
+@trace_func
 def get_ce_reranker() -> Optional[object]:
     global _MODEL
     if os.getenv("RAG_USE_CE_RERANKER", "0").lower() not in ("1", "true", "yes"):
@@ -33,7 +35,7 @@ def get_ce_reranker() -> Optional[object]:
         _MODEL = None
     return _MODEL
 
-
+@trace_func
 def rerank(query: str, docs: List[Document], top_n: int = 8, max_pairs: int = 64) -> List[Document]:
     model = get_ce_reranker()
     if model is None or not docs:

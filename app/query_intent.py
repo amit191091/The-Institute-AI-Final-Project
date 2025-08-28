@@ -13,13 +13,14 @@ import json
 import os
 import re
 from typing import Dict, Any
+from app.logger import get_logger, trace_func
 
 # Local fallback
 from app.agents import simplify_question
 
 _CACHE: dict[str, Dict[str, Any]] = {}
 
-
+@trace_func
 def _setup_llm():
     provider = (os.getenv("RAG_INTENT_PROVIDER") or "").lower().strip()
     try_openai_first = provider == "openai" or (provider == "" and os.getenv("OPENAI_API_KEY"))
@@ -37,7 +38,7 @@ def _setup_llm():
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
             model = os.getenv("GOOGLE_CHAT_MODEL", "gemini-1.5-flash")
-            return ChatGoogleGenerativeAI(model=model, temperature=0, convert_system_message_to_human=True)
+            return ChatGoogleGenerativeAI(model=model, temperature=0)
         except Exception:
             pass
     return None
@@ -56,7 +57,7 @@ _PROMPT = (
     "JSON:"
 )
 
-
+@trace_func
 def _safe_json_extract(text: str) -> Dict[str, Any]:
     # Try raw parse
     try:
@@ -72,7 +73,7 @@ def _safe_json_extract(text: str) -> Dict[str, Any]:
             pass
     return {}
 
-
+@trace_func
 def analyze_query_llm(q: str) -> Dict[str, Any] | None:
     if not q:
         return None
@@ -116,7 +117,7 @@ def analyze_query_llm(q: str) -> Dict[str, Any] | None:
     except Exception:
         return None
 
-
+@trace_func
 def get_intent(q: str) -> Dict[str, Any]:
     """Return intent dict. Prefer LLM when enabled, fallback to regex simplify_question."""
     data = analyze_query_llm(q)

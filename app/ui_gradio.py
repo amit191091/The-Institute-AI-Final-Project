@@ -6,6 +6,7 @@ import difflib
 import re
 import html as _html
 
+
 from app.agents import answer_needle, answer_summary, answer_table, route_question_ex
 from app.retrieve import apply_filters, query_analyzer, rerank_candidates
 from app.eval_ragas import run_eval, pretty_metrics
@@ -224,6 +225,47 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				loaded = rows
 			else:
 				loaded = json.load(open(p, "r", encoding="utf-8"))
+
+			# New fast-path: context_free GT provided as a list of {id, answer/acceptable_answers}
+			# Build by-id answer lists and defer question join until QA is loaded.
+			if isinstance(loaded, list) and loaded and all(isinstance(it, dict) for it in loaded):
+				try:
+					by_id: dict[str, list[str]] = {}
+					for it in loaded:
+						_i = it.get("id") or it.get("qid") or it.get("question_id") or it.get("key")
+						if not _i:
+							continue
+						vals: list[str] = []
+						acc = it.get("acceptable_answers")
+						ans = it.get("ground_truth") or it.get("answer") or it.get("value")
+						if isinstance(acc, list) and acc:
+							vals = [str(x) for x in acc]
+						elif ans is not None:
+							vals = [str(ans)]
+						if vals:
+							by_id[str(_i)] = vals
+					if by_id:
+						gt_map["by_id"] = by_id
+						# If QA by-id is already present, join to build question->GTs
+						qa_by_id = qa_map.get("by_id") or {}
+						if isinstance(qa_by_id, dict) and qa_by_id:
+							joined: dict[str, list[str]] = {}
+							for _id, _q in qa_by_id.items():
+								gts = by_id.get(str(_id))
+								if _q and gts:
+									joined[str(_q)] = [str(x) for x in gts]
+							if joined:
+								gt_map["map"] = joined
+								gt_map["norm"] = { _norm_q(k): v for k, v in joined.items() }
+						gt_map["__loaded__"] = True
+						# Craft message reflecting whether join occurred
+						samplek = list((gt_map.get("map") or {}).keys())[:2]
+						if samplek:
+							return f"Loaded {len(gt_map['map'])} ground truths (joined by id) from {path_str}. Sample keys: {', '.join(samplek)}"
+						return f"Loaded {len(by_id)} GT ids from {path_str} (waiting for QA to join questions)"
+				except Exception:
+					# fall through to other parsers
+					pass
 
 			# Fast-path: context_free schema detected (top-level id -> {answer, acceptable_answers, ...})
 			if isinstance(loaded, dict) and loaded and all(isinstance(v, dict) for v in loaded.values()):
@@ -473,8 +515,6 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		for _cand in [
 			Path("gear_wear_ground_truth_context_free.json"),
 			Path("data")/"gear_wear_ground_truth_context_free.json",
-			Path("gear_wear_ground_truth.json"),
-			Path("data")/"gear_wear_ground_truth.json",
 		]:
 			if _cand.exists():
 				msg = _load_gt_file(str(_cand))
@@ -486,10 +526,6 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		for _cand in [
 			Path("gear_wear_qa_context_free.jsonl"),
 			Path("data")/"gear_wear_qa_context_free.jsonl",
-			Path("gear_wear_qa.jsonl"),
-			Path("data")/"gear_wear_qa.jsonl",
-			Path("gear_wear_qa.json"),
-			Path("data")/"gear_wear_qa.json",
 		]:
 			if _cand.exists():
 				msg = _load_qa_file(str(_cand))

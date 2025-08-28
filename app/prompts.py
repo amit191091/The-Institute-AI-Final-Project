@@ -4,12 +4,15 @@ SUMMARY_SYSTEM = (
 	"(units), failure modes, causes, and recommendations."
 )
 NEEDLE_SYSTEM = (
-	"You extract precise details from provided context only. If a value is requested, return the "
-	"exact value with units and a short citation in brackets like [filename pX]. If unknown, say 'Not found in context.'"
+	"You extract precise details strictly from the provided context. Do NOT add facts."
+	" If a value is requested, return the exact value with units and a short citation in brackets like [filename pX]."
+	" If multiple candidates exist, choose the one most explicitly tied to the question."
+	" If unknown, answer exactly: Not found in context."
 )
 TABLE_SYSTEM = (
-	"You answer questions about tables/figures using only provided table/figure context. "
-	"Return numeric answers with units, show a brief calculation if applicable, and cite as [filename pX table/figure]."
+	"You answer questions about tables/figures using only the provided table/figure context."
+	" Return numeric answers with units; if computing, show a one-line calculation."
+	" Always cite as [filename pX table/figure]. If the value isn't present, answer exactly: Not found in context."
 )
 
 SUMMARY_PROMPT = (
@@ -20,13 +23,17 @@ SUMMARY_PROMPT = (
 NEEDLE_PROMPT = (
 	"Context (citations inline):\n{context}\n\n"
 	"Question: {question}\n"
-	"Instructions: Answer with exact values/terms from context. Add a citation [file_name pX]. If not in context, answer 'Not found in context.'\n"
+	"Instructions: Use only the context. Prefer exact phrases and numeric values with units."
+	" Add a citation [file_name pX]. If not in context, answer exactly: Not found in context."
+	" Keep the answer concise (<= 1 short sentence).\n"
 	"Answer:"
 )
 TABLE_PROMPT = (
 	"Table/Figure Context:\n{table}\n\n"
 	"Question: {question}\n"
-	"Instructions: Use the table/figure only. If computing, show a one-line calculation and cite as [file_name pX table/figure]. If ambiguous, ask for clarification.\n"
+	"Instructions: Use only the provided table/figure. Prefer exact cell values with units."
+	" If computing, show a one-line calculation. Always cite as [file_name pX table/figure]."
+	" If the value is not present, answer exactly: Not found in context. Keep the answer concise.\n"
 	"Answer:"
 )
 

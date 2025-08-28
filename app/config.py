@@ -8,6 +8,7 @@ class Settings:
 	INDEX_DIR: Path = Path("index")
 	EMBEDDING_MODEL_OPENAI: str = "text-embedding-3-small"
 	EMBEDDING_MODEL_GOOGLE: str = "models/text-embedding-004"
+	# Defaults: prefer Google providers; avoid OpenAI unless explicitly forced by env
 	DENSE_K: int = 10
 	SPARSE_K: int = 10
 	K_TOP_K: int = 20

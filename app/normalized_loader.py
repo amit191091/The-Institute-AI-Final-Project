@@ -6,6 +6,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List
+from app.logger import trace_func
 
 try:
     # Match indexing.to_documents usage
@@ -13,14 +14,14 @@ try:
 except Exception:  # pragma: no cover
     from langchain.schema import Document  # type: ignore
 
-
+@trace_func
 def _coerce_int(x: Any) -> int | None:
     try:
         return int(x)
     except Exception:
         return None
 
-
+@trace_func
 def _section_from_type(ctype: str, section_title: str | None) -> str:
     t = (ctype or "").lower()
     if t.startswith("figure_"):
@@ -30,7 +31,7 @@ def _section_from_type(ctype: str, section_title: str | None) -> str:
     # For everything else, reuse the canonical section title
     return section_title or "Results and Analysis"
 
-
+@trace_func
 def load_normalized_docs(chunks_path: str | os.PathLike[str]) -> List[Document]:
     """Read logs/normalized/chunks.jsonl and convert each chunk to a Document.
 

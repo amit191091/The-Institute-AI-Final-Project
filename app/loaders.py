@@ -26,8 +26,8 @@ Returned Element objects carry:
 import os
 import re
 from pathlib import Path
-from typing import List
-from app.logger import get_logger
+from typing import List, Tuple
+from app.logger import get_logger, trace_func
 
 # Optional imports with graceful fallbacks
 try:
@@ -36,12 +36,12 @@ except ImportError:
     pdfplumber = None
 
 try:
-    import camelot
+    import camelot  # type: ignore
 except ImportError:
     camelot = None
 
 try:
-    import tabula
+    import tabula  # type: ignore
 except ImportError:
     tabula = None
 
@@ -93,6 +93,7 @@ class Figure(Element):
 
 # Use central application logger from app.logger
 
+@trace_func
 def _env_enabled(var_name: str, default: bool = False) -> bool:
     """Return True if the env var is a truthy flag.
 
@@ -101,6 +102,7 @@ def _env_enabled(var_name: str, default: bool = False) -> bool:
     value = os.environ.get(var_name, "1" if default else "0")
     return str(value).lower() in ("1", "true", "yes", "on")
 
+@trace_func
 def _export_tables_to_files(elements: List[Element], path: Path) -> None:
     """Persist detected table elements to data/elements as Markdown and CSV files.
 
@@ -176,14 +178,22 @@ def _export_tables_to_files(elements: List[Element], path: Path) -> None:
         except Exception:
             pass
 
+@trace_func
 def _table_to_markdown(table) -> str:
     """Convert a sequence of rows (list[list]) into GitHub-flavored markdown."""
     if not table or len(table) < 2:
         return ""
     
     lines = []
-    # Header
-    header = "| " + " | ".join(str(cell or "") for cell in table[0]) + " |"
+    def _clean(cell) -> str:
+        # Replace newlines and pipes inside cells to avoid breaking markdown rows
+        s = str(cell or "").replace("\r", " ").replace("\n", " ")
+        s = " ".join(s.split())  # collapse repeated spaces
+        s = s.replace("|", "/")  # avoid pipe-conflicts in markdown formatting
+        return s
+
+    # Header (single logical line after cleaning)
+    header = "| " + " | ".join(_clean(cell) for cell in table[0]) + " |"
     lines.append(header)
     
     # Separator
@@ -192,11 +202,12 @@ def _table_to_markdown(table) -> str:
     
     # Data rows
     for row in table[1:]:
-        data_row = "| " + " | ".join(str(cell or "") for cell in row) + " |"
+        data_row = "| " + " | ".join(_clean(cell) for cell in row) + " |"
         lines.append(data_row)
     
     return "\n".join(lines)
 
+@trace_func
 def _try_pdfplumber_tables(pdf_path: Path) -> List[Element]:
     """Extract tables with pdfplumber.
 
@@ -240,6 +251,7 @@ def _try_pdfplumber_tables(pdf_path: Path) -> List[Element]:
     
     return elements
 
+@trace_func
 def _try_camelot_tables(pdf_path: Path) -> List[Element]:
     """Extract tables using Camelot (optional).
 
@@ -256,22 +268,19 @@ def _try_camelot_tables(pdf_path: Path) -> List[Element]:
         log.info(f"camelot: Starting extraction from {pdf_path.name}")
     
     elements = []
-    
+
     try:
-        tables = camelot.read_pdf(str(pdf_path), pages="all")
-        
+        tables = camelot.read_pdf(str(pdf_path), pages="all")  # type: ignore[attr-defined]
         if debug:
             log.info(f"camelot: Found {len(tables)} tables")
-        
         for i, table in enumerate(tables):
             markdown = table.df.to_markdown(index=False)
             metadata = {
                 "extractor": "camelot",
                 "page_number": table.page,
-                "table_index": i
+                "table_index": i,
             }
             elements.append(Table(text=markdown, metadata=metadata))
-    
     except Exception as e:
         if debug:
             log.warning(f"camelot extraction failed: {e}")
@@ -281,46 +290,110 @@ def _try_camelot_tables(pdf_path: Path) -> List[Element]:
     
     return elements
 
+@trace_func
 def _try_tabula_tables(pdf_path: Path) -> List[Element]:
-    """Extract tables using Tabula (optional).
+    """Extract tables using Tabula (optional, Java required).
 
-    Requires: Java runtime installed and accessible. Enabled by RAG_USE_TABULA (default: off).
+    Behavior:
+    - Iterates per-page to attach accurate page_number in metadata.
+    - Emits GitHub-flavored markdown for each table.
+    - Controlled by RAG_USE_TABULA (truthy to enable).
     """
     if not tabula or not _env_enabled("RAG_USE_TABULA"):
         return []
-    
+
     log = get_logger()
     debug = _env_enabled("RAG_TABULA_DEBUG")
-    
+
     if debug:
         log.info(f"tabula: Starting extraction from {pdf_path.name}")
-    
-    elements = []
-    
+
+    elements: List[Element] = []
+
+    # Quick Java availability hint (Tabula requires Java)
     try:
-        dfs = tabula.read_pdf(str(pdf_path), pages="all", multiple_tables=True)
-        
-        if debug:
-            log.info(f"tabula: Found {len(dfs)} tables")
-        
-        for i, df in enumerate(dfs):
-            markdown = df.to_markdown(index=False)
-            metadata = {
-                "extractor": "tabula",
-                "table_index": i
-            }
-            elements.append(Table(text=markdown, metadata=metadata))
-    
+        import shutil as _shutil
+        if _shutil.which("java") is None and not os.environ.get("JAVA_HOME"):
+            if debug:
+                log.warning("tabula: Java runtime not found in PATH and JAVA_HOME not set; extraction may fail.")
+    except Exception:
+        pass
+
+    # Determine page count using PyMuPDF or pdfplumber; fall back to 'all'
+    page_count = None
+    try:
+        if fitz:
+            with fitz.open(str(pdf_path)) as doc:  # type: ignore
+                page_count = len(doc)
+        elif pdfplumber:
+            with pdfplumber.open(pdf_path) as pdf:  # type: ignore
+                page_count = len(pdf.pages)
+    except Exception:
+        page_count = None
+
+    try:
+        if page_count is None:
+            # Fallback: let Tabula find tables across all pages (no page_number available)
+            dfs = []
+            try:
+                dfs = tabula.read_pdf(str(pdf_path), pages="all", multiple_tables=True, lattice=True)
+            except Exception:
+                pass
+            if not dfs:
+                try:
+                    dfs = tabula.read_pdf(str(pdf_path), pages="all", multiple_tables=True, stream=True)
+                except Exception:
+                    dfs = []
+            if debug:
+                log.info(f"tabula: Found {len(dfs)} tables (no page count available)")
+            for i, df in enumerate(dfs):
+                try:
+                    markdown = df.to_markdown(index=False)
+                except Exception:
+                    markdown = df.to_csv(index=False)  # last resort
+                metadata = {
+                    "extractor": "tabula",
+                    "table_index": i,
+                }
+                elements.append(Table(text=markdown, metadata=metadata))
+        else:
+            total_found = 0
+            for p in range(1, page_count + 1):
+                try:
+                    # Try lattice mode first (grid-like tables), then stream mode (spaces/lines)
+                    dfs = tabula.read_pdf(str(pdf_path), pages=str(p), multiple_tables=True, lattice=True)
+                    if not dfs:
+                        dfs = tabula.read_pdf(str(pdf_path), pages=str(p), multiple_tables=True, stream=True)
+                except Exception as e:
+                    if debug:
+                        log.warning(f"tabula: page {p} extraction failed: {e}")
+                    continue
+                if not dfs:
+                    continue
+                if debug:
+                    log.info(f"tabula: page {p} -> {len(dfs)} tables")
+                for i, df in enumerate(dfs):
+                    try:
+                        markdown = df.to_markdown(index=False)
+                    except Exception:
+                        markdown = df.to_csv(index=False)
+                    metadata = {
+                        "extractor": "tabula",
+                        "page_number": p,
+                        "table_index": i,
+                    }
+                    elements.append(Table(text=markdown, metadata=metadata))
+                    total_found += 1
+            if debug:
+                log.info(f"tabula: Extracted {total_found} tables across {page_count} pages")
     except Exception as e:
         if debug:
             log.warning(f"tabula extraction failed: {e}")
-    
-    if debug:
-        log.info(f"tabula: Extracted {len(elements)} tables total")
-    
+
     return elements
 
 
+@trace_func
 def _try_pymupdf_images(pdf_path: Path) -> List[Element]:
     """Extract embedded images using PyMuPDF (fitz).
 
@@ -345,6 +418,8 @@ def _try_pymupdf_images(pdf_path: Path) -> List[Element]:
                     base = f"{pdf_path.stem}-p{pno+1}-img{idx}.png"
                     out_path = out_dir / base
                     pix = doc.extract_image(xref)
+                    iw = pix.get("width") if isinstance(pix, dict) else None
+                    ih = pix.get("height") if isinstance(pix, dict) else None
                     # Some images are already PNG/JPEG; keep extension consistent for consumer simplicity
                     with open(out_path, "wb") as f:
                         f.write(pix.get("image", b""))
@@ -353,9 +428,17 @@ def _try_pymupdf_images(pdf_path: Path) -> List[Element]:
                         "page_number": pno + 1,
                         "image_path": str(out_path.as_posix()),
                         "figure_order": idx,
+                        "image_width": iw,
+                        "image_height": ih,
                     }
                     # Minimal text payload to let chunker identify this as a figure
                     txt = f"[FIGURE]\nImage file: {out_path.as_posix()}\nPage: {pno+1}"
+                    # Mark tiny images as assets (icons, bullets)
+                    try:
+                        if isinstance(iw, int) and isinstance(ih, int) and (iw < 128 or ih < 128):
+                            meta["is_asset"] = True
+                    except Exception:
+                        pass
                     elements.append(Figure(text=txt, metadata=meta))
                 except Exception:
                     continue
@@ -364,6 +447,7 @@ def _try_pymupdf_images(pdf_path: Path) -> List[Element]:
     return elements
 
 
+@trace_func
 def _try_llamaparse_tables(pdf_path: Path) -> List[Element]:
     """Extract tables via LlamaParse, returning Markdown tables as Table elements.
 
@@ -492,6 +576,7 @@ def _try_llamaparse_tables(pdf_path: Path) -> List[Element]:
             pass
     return elements
 
+@trace_func
 def load_elements(path: Path) -> List[Element]:
     """Extract tables and images from a single document path.
 
@@ -505,7 +590,7 @@ def load_elements(path: Path) -> List[Element]:
             "pdfplumber": _env_enabled("RAG_USE_PDFPLUMBER", True),
             "camelot": _env_enabled("RAG_USE_CAMELOT", False),
             "tabula": _env_enabled("RAG_USE_TABULA", False),
-            "llamaparse": _env_enabled("RAG_USE_LLAMA_PARSE", False),
+            "llamaparse": _env_enabled("RAG_USE_LLAMAPARSE"),
             "pymupdf": _env_enabled("RAG_USE_PYMUPDF", True),
         }
         log.info(
@@ -553,6 +638,61 @@ def load_elements(path: Path) -> List[Element]:
     except Exception as e:
         log.warning(f"pymupdf: extraction failed: {e}")
 
+    # Minimal full-text extraction (per page) using PyMuPDF (or pdfplumber fallback)
+    # This ensures we always have narrative Text elements, not just tables/images.
+    try:
+        if _env_enabled("RAG_USE_PYMUPDF_TEXT", True):
+            added = 0
+            if fitz is not None:
+                try:
+                    doc = fitz.open(str(path))  # type: ignore[misc]
+                    for pno in range(len(doc)):
+                        try:
+                            page = doc.load_page(pno)
+                            # Use getattr to avoid static analysis errors; support multiple API variants
+                            _gt = getattr(page, "get_text", None) or getattr(page, "getText", None)
+                            txt = ""
+                            if callable(_gt):
+                                try:
+                                    txt = _gt() or ""
+                                except Exception:
+                                    try:
+                                        txt = _gt("text") or ""
+                                    except Exception:
+                                        txt = ""
+                            txt = str(txt).strip()
+                            if txt:
+                                elements.append(Element(text=txt, category="text", metadata={
+                                    "extractor": "pymupdf_text",
+                                    "page_number": pno + 1,
+                                }))
+                                added += 1
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+            # Fallback to pdfplumber for text if PyMuPDF failed or unavailable
+            if added == 0 and pdfplumber is not None:
+                try:
+                    with pdfplumber.open(path) as pdf:  # type: ignore
+                        for page_num, page in enumerate(pdf.pages, 1):
+                            try:
+                                txt = (page.extract_text() or "").strip()
+                                if txt:
+                                    elements.append(Element(text=txt, category="text", metadata={
+                                        "extractor": "pdfplumber_text",
+                                        "page_number": page_num,
+                                    }))
+                                    added += 1
+                            except Exception:
+                                continue
+                except Exception:
+                    pass
+            if added:
+                log.info(f"text: extracted {added} page-text elements")
+    except Exception:
+        pass
+
     # Persist table elements to files (MD + CSV) and backfill metadata with paths
     try:
         _export_tables_to_files(elements, path)
@@ -560,6 +700,25 @@ def load_elements(path: Path) -> List[Element]:
         log = get_logger()
         try:
             log.warning(f"table export failed: {e}")
+        except Exception:
+            pass
+
+    # Persist per-page raw text to files for full-fidelity inspection
+    try:
+        _export_page_text_to_files(elements, path)
+    except Exception as e:
+        try:
+            get_logger().warning(f"page-text export failed: {e}")
+        except Exception:
+            pass
+
+    # Optional: dump all extracted elements (raw, untruncated) to logs/elements for auditing
+    try:
+        if _env_enabled("RAG_DUMP_ELEMENTS", True):
+            _dump_elements_jsonl(elements, path)
+    except Exception as e:
+        try:
+            get_logger().warning(f"elements dump failed: {e}")
         except Exception:
             pass
 
@@ -581,7 +740,101 @@ def load_elements(path: Path) -> List[Element]:
     return elements
 
 
-def load_many(paths: List[Path]) -> List[Element]:
+# --- Exports and Debug Dumps -------------------------------------------------
+
+def _export_page_text_to_files(elements: List[Element], pdf_path: Path) -> None:
+    """Write per-page raw text files under data/elements/text/<stem>/p{page}.txt.
+
+    This is lossless and does not truncate. If multiple text elements exist per page,
+    they will be appended in order of appearance.
+    """
+    try:
+        out_dir = Path("data") / "elements" / "text" / pdf_path.stem
+        out_dir.mkdir(parents=True, exist_ok=True)
+        # Build map page -> list[text]
+        from collections import defaultdict
+        page_texts = defaultdict(list)
+        for el in elements:
+            if getattr(el, "category", getattr(el, "type", "")) in ("text", "Text"):
+                md = getattr(el, "metadata", None) or {}
+                page = md.get("page_number")
+                if page is None:
+                    continue
+                t = (getattr(el, "text", "") or "")
+                if t:
+                    page_texts[int(page)].append(str(t))
+        # Write files and an index.json
+        import json as _json
+        index = []
+        for page in sorted(page_texts.keys()):
+            fp = out_dir / f"p{int(page)}.txt"
+            try:
+                fp.write_text("\n\n".join(page_texts[page]), encoding="utf-8")
+            except Exception:
+                # Best-effort; continue
+                continue
+            try:
+                txt = fp.read_text(encoding="utf-8")
+                index.append({
+                    "page": int(page),
+                    "chars": len(txt),
+                    "words": len(txt.split()),
+                    "file": fp.as_posix(),
+                })
+            except Exception:
+                index.append({"page": int(page), "file": fp.as_posix()})
+        # Write index.json
+        try:
+            (out_dir / "index.json").write_text(_json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+    except Exception:
+        # Non-fatal
+        pass
+
+
+def _dump_elements_jsonl(elements: List[Element], pdf_path: Path) -> None:
+    """Write all extracted elements as raw JSONL to logs/elements/<stem>-elements.jsonl.
+
+    Fields: category, extractor, page_number, table_number (if any), image_path (if any),
+    and "text" with full content (no truncation).
+    """
+    try:
+        out_dir = Path("logs") / "elements"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{pdf_path.stem}-elements.jsonl"
+        import json as _json
+        with open(out_path, "w", encoding="utf-8") as f:
+            for el in elements:
+                md = getattr(el, "metadata", None) or {}
+                rec = {
+                    "file": pdf_path.name,
+                    "category": getattr(el, "category", getattr(el, "type", "Text")),
+                    "extractor": md.get("extractor"),
+                    "page_number": md.get("page_number"),
+                    "table_number": md.get("table_number"),
+                    "table_md_path": md.get("table_md_path"),
+                    "table_csv_path": md.get("table_csv_path"),
+                    "image_path": md.get("image_path"),
+                    "figure_order": md.get("figure_order"),
+                    "text": (getattr(el, "text", "") or ""),
+                }
+                try:
+                    f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+                except Exception:
+                    # Attempt a minimal fallback if JSON serialization barfs
+                    try:
+                        rec.pop("text", None)
+                        f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+                    except Exception:
+                        pass
+    except Exception:
+        # Non-fatal
+        pass
+
+
+@trace_func
+def load_many(paths: List[Path]) -> List[Tuple[Path, List[Element]]]:
     """Batch-extract elements for multiple paths, returning (path, elements) tuples.
 
     The pipeline expects this exact return shape, so callers can iterate
@@ -611,9 +864,12 @@ if __name__ == "__main__":
     """
     import sys
     try:
-        from dotenv import load_dotenv  # type: ignore
-        # Do not override existing env from the shell; let inline flags win.
-        load_dotenv(override=False)
+        from dotenv import dotenv_values, find_dotenv  # type: ignore
+        env_path = find_dotenv(usecwd=True, raise_error_if_not_found=False)
+        if env_path:
+            for k, v in (dotenv_values(env_path) or {}).items():
+                if v is not None and k not in os.environ:
+                    os.environ[k] = v
     except Exception:
         pass
     log = get_logger()

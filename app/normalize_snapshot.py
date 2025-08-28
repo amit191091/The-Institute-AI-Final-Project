@@ -17,6 +17,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Set
+from app.logger import trace_func
 
 
 # ----------------------------- Utility helpers -----------------------------
@@ -36,18 +37,18 @@ MONTHS = {
     "december": "12",
 }
 
-
+@trace_func
 def norm_path(p: Optional[str]) -> Optional[str]:
     if not p:
         return p
     return p.replace("\\", "/")
 
-
+@trace_func
 def is_footer_preview(text: str) -> bool:
     # Matches patterns like "12 | P a g e"
     return bool(re.fullmatch(r"\s*\d+\s*\|\s*P\s*a\s*g\s*e\s*", text))
 
-
+@trace_func
 def is_heading_only(text: str) -> bool:
     # Treat very short single-line headings as noise (e.g., "Case", "Recommendations")
     # Keep if it contains colon or ends with a period (likely sentence).
@@ -59,11 +60,11 @@ def is_heading_only(text: str) -> bool:
     words = re.findall(r"\w+", text)
     return 0 < len(words) <= 3
 
-
+@trace_func
 def sha1(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()
 
-
+@trace_func
 def anchor_sort_key(anchor: str, page: int) -> Tuple[int, Tuple[int, str]]:
     # Sort by page, then by anchor type+numeric
     # anchors could be p12-t3, figure-2, table-03
@@ -84,7 +85,7 @@ def anchor_sort_key(anchor: str, page: int) -> Tuple[int, Tuple[int, str]]:
             a_num = int(nums[-1])
     return (page, (a_type, f"{a_num:06d}"))
 
-
+@trace_func
 def normalize_section_title(section: str, text: str) -> str:
     # Canonical list:
     # Executive Summary|System Description|Baseline Condition|Failure Progression|Investigation Findings|Results and Analysis|Recommendations|Conclusion
@@ -117,7 +118,7 @@ def normalize_section_title(section: str, text: str) -> str:
     # Heuristic: default most narrative text to Results and Analysis
     return "Results and Analysis"
 
-
+@trace_func
 def detect_measurements_sensors_speed(text: str) -> Tuple[List[str], List[str], List[int]]:
     tl = text.lower()
     measurements: List[str] = []
@@ -146,7 +147,7 @@ def detect_measurements_sensors_speed(text: str) -> Tuple[List[str], List[str], 
     sensors = sorted({s for s in sensors})
     return measurements, sensors, speeds
 
-
+@trace_func
 def infer_stage(date_s: Optional[str], date_e: Optional[str], single_date: Optional[str]) -> Optional[str]:
     # date thresholds as per spec
     # <= 2023-04-08 baseline
@@ -181,7 +182,7 @@ def infer_stage(date_s: Optional[str], date_e: Optional[str], single_date: Optio
             return "baseline"
     return None
 
-
+@trace_func
 def parse_dates(text: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     # Returns (date_start, date_end, date)
     # Year is assumed 2023 as per spec.
@@ -203,14 +204,14 @@ def parse_dates(text: str) -> Tuple[Optional[str], Optional[str], Optional[str]]
             return (None, None, f"2023-{mm}-{int(dd):02d}")
     return (None, None, None)
 
-
+@trace_func
 def clean_caption(label: str) -> str:
     t = (label or "").strip()
     # Ensure single sentence. If multiple sentences, keep first; else leave.
     parts = re.split(r"(?<=[.!?])\s+", t)
     return parts[0] if parts else t
 
-
+@trace_func
 def minimal_table_summary(table_label: str) -> str:
     label = (table_label or "").strip()
     # Convert "Table N: X" -> "Table N summarizes X" as a safe default.
@@ -305,6 +306,46 @@ def read_snapshot(path: str) -> List[SnapshotRow]:
                 # skip malformed
                 continue
     return rows
+
+
+@trace_func
+def maybe_upgrade_with_full_text(rows: List[SnapshotRow], full_path: Optional[str]) -> List[SnapshotRow]:
+    """If a full snapshot exists (db_snapshot_full.jsonl), merge its text and metadata into rows.
+    Match on (doc_id, chunk_id, content_hash). Missing keys are left as-is.
+    """
+    if not full_path or not os.path.exists(full_path):
+        return rows
+    index: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    try:
+        with io.open(full_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    key = (str(data.get("doc_id", "")), str(data.get("chunk_id", "")), str(data.get("content_hash", "")))
+                    index[key] = data
+                except Exception:
+                    continue
+    except Exception:
+        return rows
+    out: List[SnapshotRow] = []
+    for r in rows:
+        key = (str(r.doc_id), str(r.chunk_id), str(r.content_hash))
+        full = index.get(key)
+        if full:
+            # inject richer preview if empty
+            if not r.raw.get("preview") and full.get("text"):
+                r.raw["preview"] = str(full.get("text"))[:200]
+            # propagate any missing fields we care about
+            if not r.raw.get("file") and full.get("file"):
+                r.raw["file"] = full.get("file")
+            if not r.raw.get("page") and full.get("page") is not None:
+                r.raw["page"] = full.get("page")
+            # keep section/anchor as-is; they should already exist
+        out.append(r)
+    return out
 
 
 def filter_noise(rows: List[SnapshotRow]) -> List[SnapshotRow]:
@@ -719,10 +760,12 @@ def write_outputs(chunks: List[Dict[str, Any]], graph: Dict[str, Any], out_dir: 
 def main():
     parser = argparse.ArgumentParser(description="Normalize db_snapshot.jsonl → chunks.jsonl + graph.json")
     parser.add_argument("--input", default=os.path.join("logs", "db_snapshot.jsonl"))
+    parser.add_argument("--full", default=os.path.join("logs", "db_snapshot_full.jsonl"), help="Optional path to non-normalized full snapshot (text+metadata)")
     parser.add_argument("--outdir", default=os.path.join("logs", "normalized"))
     args = parser.parse_args()
 
     rows = read_snapshot(args.input)
+    rows = maybe_upgrade_with_full_text(rows, args.full)
     rows = filter_noise(rows)
     chunks, graph = chunks_and_graph(rows)
     write_outputs(chunks, graph, args.outdir)

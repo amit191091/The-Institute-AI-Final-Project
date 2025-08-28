@@ -10,6 +10,7 @@ from app.prompts import (
 	TABLE_PROMPT,
 	TABLE_SYSTEM,
 )
+from app.logger import trace_func
 try:
 	import os
 	from app.query_intent import get_intent  # optional LLM-based intent
@@ -22,6 +23,7 @@ class LLMCallable(Protocol):
 		...
 
 
+@trace_func
 def simplify_question(q: str) -> Dict:
 	"""Return a very simple, mostly-binary intent and a canonical query string.
 	No LLM, just regex/keywords. Keys:
@@ -48,7 +50,9 @@ def simplify_question(q: str) -> Dict:
 	# Flags
 	out["wants_exact"] = any(w in ql for w in ("exact", "precise"))
 	out["wants_summary"] = any(w in ql for w in ("summary", "summarize", "overview", "conclusion", "overall"))
-	out["wants_table"] = ("table" in ql) or bool(re.search(r"\bwear depth\b|\brms\b|\bfme\b|\bcrest factor\b", ql))
+	# Treat metrics/inventory and ratio questions as table lookups
+	_ratio_hit = bool(re.search(r"\b(transmission|transmition|gear)\s+ratio\b|\bz\s*driv(?:ing|en)\b|\bzdriv", ql))
+	out["wants_table"] = ("table" in ql) or _ratio_hit or bool(re.search(r"\bwear depth\b|\brms\b|\bfme\b|\bcrest factor\b", ql))
 	# Treat instrumentation/sensor inventory and threshold questions as table-style lookups
 	if any(w in ql for w in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation", "threshold", "alert threshold", "limits")):
 		out["wants_table"] = True
@@ -76,6 +80,8 @@ def simplify_question(q: str) -> Dict:
 		out["target_attr"] = "crest factor"
 	elif re.search(r"\bfme\b", ql):
 		out["target_attr"] = "fme"
+	elif _ratio_hit or "gear ratio" in ql:
+		out["target_attr"] = "transmission ratio"
 	elif any(w in ql for w in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation")):
 		out["target_attr"] = "sensors"
 
@@ -116,6 +122,7 @@ def simplify_question(q: str) -> Dict:
 	return out
 
 
+@trace_func
 def route_question_ex(q: str) -> Tuple[str, Dict]:
 	"""Return (route, trace) where trace explains which rule fired.
 	Routes: summary | table | needle
@@ -143,12 +150,14 @@ def route_question_ex(q: str) -> Tuple[str, Dict]:
 	return "needle", trace
 
 
+@trace_func
 def route_question(q: str) -> str:
 	# Backward-compatible wrapper
 	r, _ = route_question_ex(q)
 	return r
 
 
+@trace_func
 def render_context(docs: List[Document], max_chars: int = 8000) -> str:
 	out, n = [], 0
 	for d in docs:
@@ -173,20 +182,58 @@ def render_context(docs: List[Document], max_chars: int = 8000) -> str:
 	return "\n\n".join(out)
 
 
+@trace_func
 def answer_summary(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	ctx = render_context(docs)
 	prompt = SUMMARY_SYSTEM + "\n" + SUMMARY_PROMPT.format(context=ctx, question=question)
 	return llm(prompt).strip()
 
 
+@trace_func
 def answer_needle(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	ctx = render_context(docs)
 	prompt = NEEDLE_SYSTEM + "\n" + NEEDLE_PROMPT.format(context=ctx, question=question)
-	return llm(prompt).strip()
+	ans = (llm(prompt) or "").strip()
+	# Deterministic extractive fallback: pick the highest-overlap sentence from contexts
+	if not ans or "[LLM not configured]" in ans:
+		import re as _re
+		from app.retrieve import lexical_overlap as _ov
+		sentences: list[str] = []
+		# Split on sentence boundaries conservatively
+		for part in ctx.splitlines():
+			part = part.strip()
+			if not part:
+				continue
+			# Skip headers like [file pX Section]
+			if part.startswith("[") and "]" in part and part.index("]") < 80:
+				continue
+			sentences.extend([s.strip() for s in _re.split(r"(?<=[.!?])\s+", part) if s.strip()])
+		ql = (question or "").lower()
+		best = max(sentences or [ctx], key=lambda s: _ov(ql, s.lower()))
+		return best[:400]
+	return ans
 
 
+@trace_func
 def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
-	table_docs = [d for d in docs if d.metadata.get("section") in ("Table", "Figure")] or docs
+	# First, deterministic KV scan for common attributes like transmission ratio, wear depth, sensors
+	ql = (question or "").lower()
+	want_ratio = any(w in ql for w in ("transmission ratio", "transmition ratio", "gear ratio", "z / z", "zdriv", "driving/driven"))
+	if want_ratio:
+		# Search for KV mini-docs emitted by expand_table_kv_docs
+		for d in docs:
+			md = d.metadata or {}
+			if (md.get("section") == "TableCell" or md.get("section_type") == "TableCell"):
+				k = str(md.get("kv_key") or "").lower()
+				v = str(md.get("kv_value") or "").strip()
+				if not k:
+					continue
+				# Various header forms observed in extracted tables
+				if ("transmission ratio" in k) or ("gear" in k and "ratio" in k) or ("z" in k and ("driv" in k)):
+					if v:
+						return v
+	# Fallback to LLM over table/figure contexts
+	table_docs = [d for d in docs if d.metadata.get("section") in ("Table", "Figure", "TableCell")] or docs
 	# Sort to push most table-like content first
 	table_docs = table_docs + [d for d in docs if d not in table_docs]
 	ctx = render_context(table_docs)
