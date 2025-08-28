@@ -21,7 +21,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 	# Build a sleeker Blocks UI with tabs
 	from RAG.app.Gradio_apps.ui_tabs import (
 		build_ask_tab, build_figures_tab, build_agent_tab, 
-		build_inspect_tab, build_graph_tab, build_evaluation_tab, build_db_explorer_tab
+		build_inspect_tab, create_graph_ui_tab, build_evaluation_tab, build_db_explorer_tab
 	)
 	
 	with gr.Blocks(title="RAG System", theme=gr.themes.Soft()) as demo:
@@ -56,7 +56,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 			build_figures_tab(docs)
 			build_agent_tab(docs, hybrid, llm)
 			build_inspect_tab(docs)
-			build_graph_tab(docs)
+			create_graph_ui_tab(docs)
 			build_evaluation_tab(docs, hybrid, llm)
 			build_db_explorer_tab(docs)
 
