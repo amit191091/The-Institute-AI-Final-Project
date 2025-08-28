@@ -1,11 +1,12 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import os
 from app.logger import get_logger
+from app.logger import trace_func
 
 from app.metadata import classify_section_type, extract_keywords
 from app.utils import approx_token_len, simple_summarize, truncate_to_tokens, naive_markdown_table, split_into_sentences, slugify, sha1_short
 
-
+@trace_func
 def structure_chunks(elements, file_path: str) -> List[Dict]:
 	"""
 	Split by natural order: Title/Text, Table, Figure/Image, Appendix.
@@ -30,6 +31,19 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 	# Track per-page ordinals for deterministic anchors
 	page_ord: Dict[int, int] = {}
 
+	# Helper to read metadata values from either dict-like or attr-like containers
+	def _md_get(md: Any, key: str, default: Any = None) -> Any:
+		if md is None:
+			return default
+		try:
+			# dict-like first
+			if isinstance(md, dict):
+				return md.get(key, default)
+			# attr-like fallback
+			return getattr(md, key, default)
+		except Exception:
+			return default
+
 	# Pre-scan: collect caption lines per page like "Figure N: ..." or "Fig. N: ..." to align with image elements
 	# We rely on PDF reading order when coordinates are unavailable.
 	from typing import DefaultDict
@@ -37,7 +51,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 	for _idx, _el in enumerate(elements, start=1):
 		_kind = getattr(_el, "category", getattr(_el, "type", "Text")) or "Text"
 		_md = getattr(_el, "metadata", None)
-		_page = getattr(_md, "page_number", None) if _md is not None else None
+		_page = _md_get(_md, "page_number") if _md is not None else None
 		if _page is None:
 			continue
 		if str(_kind).lower() == "text":
@@ -64,20 +78,20 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 	for idx, el in enumerate(elements, start=1):
 		kind = getattr(el, "category", getattr(el, "type", "Text")) or "Text"
 		md = getattr(el, "metadata", None)
-		page = getattr(md, "page_number", None) if md is not None else None
+		page = _md_get(md, "page_number") if md is not None else None
 		# Derive a robust, non-null anchor
 		# Priority: explicit table/figure anchors -> element id -> file-based stems -> fallback
-		table_anchor = getattr(md, "table_anchor", None) if md is not None else None
-		figure_anchor = getattr(md, "figure_anchor", None) if md is not None else None
+		table_anchor = _md_get(md, "table_anchor") if md is not None else None
+		figure_anchor = _md_get(md, "figure_anchor") if md is not None else None
 		anchor = table_anchor or figure_anchor
 		if anchor is None:
-			anchor = getattr(md, "id", None) if md is not None else None
-		extractor = getattr(md, "extractor", None) if md is not None else None
-		table_md_path = getattr(md, "table_md_path", None) if md is not None else None
-		table_csv_path = getattr(md, "table_csv_path", None) if md is not None else None
-		table_number = getattr(md, "table_number", None) if md is not None else None
-		table_label = getattr(md, "table_label", None) if md is not None else None
-		table_caption = getattr(md, "table_caption", None) if md is not None else None
+			anchor = _md_get(md, "id") if md is not None else None
+		extractor = _md_get(md, "extractor") if md is not None else None
+		table_md_path = _md_get(md, "table_md_path") if md is not None else None
+		table_csv_path = _md_get(md, "table_csv_path") if md is not None else None
+		table_number = _md_get(md, "table_number") if md is not None else None
+		table_label = _md_get(md, "table_label") if md is not None else None
+		table_caption = _md_get(md, "table_caption") if md is not None else None
 		# If still no anchor, derive from known file paths or numbering
 		if anchor is None:
 			try:
@@ -109,7 +123,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 		if str(kind).lower() == "table":
 			as_text = raw_text
 			# Use the generated summary if available
-			table_summary = getattr(md, "table_summary", None) if md is not None else None
+			table_summary = _md_get(md, "table_summary") if md is not None else None
 			if table_summary:
 				distilled = table_summary
 			else:
@@ -216,7 +230,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			except Exception:
 				aligned_via = None
 			# Build a clean summary derived from caption (or metadata), but drop any leading "Figure X:" label
-			figure_summary = getattr(md, "figure_summary", None) if md is not None else None
+			figure_summary = _md_get(md, "figure_summary") if md is not None else None
 			try:
 				import re as _re
 				if figure_summary:
@@ -252,7 +266,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			caption = cap_clean
 			
 			# Try to detect image path from text or metadata
-			img_path = getattr(md, "image_path", None) if md is not None else None
+			img_path = _md_get(md, "image_path") if md is not None else None
 			if not img_path:
 				try:
 					import re as _re

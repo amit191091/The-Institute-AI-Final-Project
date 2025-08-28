@@ -6,12 +6,14 @@ from app.logger import get_logger
 from langchain.schema import Document
 from langchain.retrievers import EnsembleRetriever
 from app.agents import simplify_question
+from app.logger import trace_func
 try:
 	from app.query_intent import get_intent  # optional LLM router
 except Exception:
 	get_intent = None  # type: ignore
 
 
+@trace_func
 def query_analyzer(q: str) -> Dict:
 	"""Extract keywords, case/client IDs, dates to build metadata filters.
 	Also returns a 'canonical' simplified query from a rules-based pre-agent.
@@ -51,14 +53,21 @@ def query_analyzer(q: str) -> Dict:
 	}
 
 
+@trace_func
 def apply_filters(docs: List[Document], filters: Dict) -> List[Document]:
 	if not filters:
 		return docs
 	def ok(meta: dict):
 		for k, v in (filters or {}).items():
 			if k == "section":
-				if (meta.get("section") or meta.get("section_type")) != v:
-					return False
+				sec = (meta.get("section") or meta.get("section_type"))
+				# Treat TableCell mini-docs as part of Table for filtering purposes
+				if v == "Table":
+					if sec not in ("Table", "TableCell"):
+						return False
+				else:
+					if sec != v:
+						return False
 			elif k == "figure_number":
 				# Support int/str and fallback to label prefix
 				mn = meta.get("figure_number")
@@ -90,10 +99,12 @@ def apply_filters(docs: List[Document], filters: Dict) -> List[Document]:
 	return out
 
 
+@trace_func
 def build_hybrid_retriever(dense_store, sparse_retriever, dense_k: int = 10):
 	"""Create an ensemble retriever with tunable weights via env vars.
 	Defaults favor sparse slightly for keyword-heavy tech PDFs.
 	"""
+	print("this is me on the hybrid retriver")
 	dense = dense_store.as_retriever(search_kwargs={"k": dense_k})
 	try:
 		sw = float(os.getenv("RAG_SPARSE_WEIGHT", "0.65"))
@@ -105,6 +116,7 @@ def build_hybrid_retriever(dense_store, sparse_retriever, dense_k: int = 10):
 	return EnsembleRetriever(retrievers=[sparse_retriever, dense], weights=[sw, dw])
 
 
+@trace_func
 def lexical_overlap(a: str, b: str) -> float:
 	A, B = set(a.lower().split()), set(b.lower().split())
 	if not A or not B:
@@ -112,6 +124,7 @@ def lexical_overlap(a: str, b: str) -> float:
 	return len(A & B) / len(A | B)
 
 
+@trace_func
 def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) -> List[Document]:
 	ql = query.lower()
 	kws = set(re.findall(r"[A-Za-z0-9°%]+", ql))

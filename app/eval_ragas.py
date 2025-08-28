@@ -1,3 +1,4 @@
+from app.logger import trace_func
 # RAGAS imports with robust fallbacks
 try:
 	from ragas import evaluate
@@ -34,7 +35,7 @@ try:
 except Exception:  # pragma: no cover
 	precision_score = recall_score = f1_score = None  # type: ignore
 
-
+@trace_func
 def _simple_tokens(text: str) -> List[str]:
 	t = (text or "").lower()
 	# keep alphanumerics, collapse whitespace
@@ -42,7 +43,7 @@ def _simple_tokens(text: str) -> List[str]:
 	toks = [w for w in t.split() if len(w) >= 2]
 	return toks
 
-
+@trace_func
 def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, float]:
 	"""Compute a simple token-overlap precision/recall/F1 between reference and concatenated contexts.
 	If sklearn is available, use f1_score/precision_score/recall_score over token presence vectors.
@@ -75,7 +76,7 @@ def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, flo
 	r = inter / max(1, len(ref_tokens))
 	f1 = (2 * p * r / (p + r)) if (p + r) > 0 else 0.0
 	return float(p), float(r), float(f1)
-
+@trace_func
 def _setup_ragas_llm():
 	"""Setup LLM for RAGAS evaluation - supports both OpenAI and Google."""
     
@@ -104,7 +105,6 @@ def _setup_ragas_llm():
 			llm = ChatGoogleGenerativeAI(
 				model=preferred_model,
 				temperature=0,
-				convert_system_message_to_human=True,
 				safety_settings=safety_settings,
 			)
 			print(f"[RAGAS LLM] Using Google Gemini model: {preferred_model}")
@@ -113,7 +113,7 @@ def _setup_ragas_llm():
 			print(f"Failed to setup Google LLM for RAGAS: {e}")
 	
 	return None
-
+@trace_func
 def _setup_ragas_embeddings():
 	"""Setup embeddings for RAGAS evaluation - supports both OpenAI and Google."""
 	
@@ -145,7 +145,7 @@ def _setup_ragas_embeddings():
 	
 	return None
 
-
+@trace_func
 def run_eval(dataset):
 	if evaluate is None:
 		raise RuntimeError("ragas not installed. pip install ragas datasets evaluate")
@@ -208,6 +208,7 @@ def run_eval(dataset):
 		except Exception as e:
 			raise RuntimeError(f"RAGAS evaluation failed: {e}") from e
 	# Build summary robustly from per-question outputs
+	@trace_func
 	def _mean_safe(vals):
 		vals2 = []
 		for v in vals:
@@ -309,7 +310,7 @@ def run_eval(dataset):
 			"overlap_f1": float("nan"),
 		}
 
-
+@trace_func
 def run_eval_detailed(dataset):
 	"""Run RAGAS and return (summary_metrics, per_question) where per_question is a
 	list of dicts including metrics per item when available. Falls back to empty list otherwise.
@@ -473,6 +474,7 @@ def run_eval_detailed(dataset):
 		per_q = []
 
 	# Compute summary from per-question metrics as a robust fallback
+	@trace_func
 	def _mean_safe(values):
 		vals = [v for v in values if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
 		return float(sum(vals) / len(vals)) if vals else None
@@ -501,7 +503,7 @@ TARGETS = {
 	"table_qa_accuracy": 0.90,
 }
 
-
+@trace_func
 def pretty_metrics(m: dict) -> str:
 	def _fmt(x):
 		try:
@@ -527,4 +529,21 @@ def pretty_metrics(m: dict) -> str:
 		lines.append(f"Overlap recall (heuristic): {_fmt(m.get('overlap_recall'))}")
 		lines.append(f"Overlap F1 (heuristic): {_fmt(m.get('overlap_f1'))}")
 	return "\n".join(lines)
+
+@trace_func
+def append_eval_footer(per_question_path: str, summary: dict) -> None:
+	"""Append a summary footer line to the per-question JSONL for quick averages view."""
+	try:
+		import json as _json
+		footer = {
+			"__summary__": True,
+			"faithfulness": summary.get("faithfulness"),
+			"answer_relevancy": summary.get("answer_relevancy"),
+			"context_precision": summary.get("context_precision"),
+			"context_recall": summary.get("context_recall"),
+		}
+		with open(per_question_path, "a", encoding="utf-8") as f:
+			f.write(_json.dumps(footer, ensure_ascii=False) + "\n")
+	except Exception:
+		pass
 

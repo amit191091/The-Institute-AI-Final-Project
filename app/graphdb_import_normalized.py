@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from app.logger import trace_func
 """
 Import logs/normalized/graph.json and chunks.jsonl into Neo4j with richer semantics.
 
@@ -32,7 +32,15 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 
 try:
     from dotenv import load_dotenv  # type: ignore
-    load_dotenv(override=False)
+    from dotenv import dotenv_values, find_dotenv
+    try:
+        env_path = find_dotenv(usecwd=True, raise_error_if_not_found=False)
+        if env_path:
+            for k, v in (dotenv_values(env_path) or {}).items():
+                if v is not None and k not in os.environ:
+                    os.environ[k] = v
+    except Exception:
+        pass
 except Exception:
     pass
 
@@ -43,7 +51,7 @@ except Exception:  # pragma: no cover
     class Query(str):  # type: ignore
         pass
 
-
+@trace_func
 def _get_driver():
     uri = os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL")
     user = os.getenv("NEO4J_USER") or os.getenv("NEO4J_USERNAME")
@@ -54,14 +62,14 @@ def _get_driver():
         return None
     return GraphDatabase.driver(uri, auth=(user, pwd))
 
-
+@trace_func
 def _read_json(path: Path) -> Dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {"nodes": [], "edges": []}
 
-
+@trace_func
 def _read_chunks(path: Path) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     if not path.exists():
@@ -77,7 +85,7 @@ def _read_chunks(path: Path) -> List[Dict[str, Any]]:
                 pass
     return out
 
-
+@trace_func
 def import_normalized_graph(graph_path: str | os.PathLike[str], chunks_path: str | os.PathLike[str]) -> int:
     drv = _get_driver()
     if drv is None:

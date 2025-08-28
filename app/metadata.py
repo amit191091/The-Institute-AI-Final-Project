@@ -1,9 +1,11 @@
 from typing import Dict, List, Optional
+from app.logger import trace_func
 import re
 
 SECTION_ENUM = {"Summary", "Timeline", "Table", "Figure", "Analysis", "Conclusion", "Text"}
 
 
+@trace_func
 def classify_section_type(kind: str, text: str) -> str:
 	k = (kind or "").lower()
 	t = (text or "").lower()
@@ -27,12 +29,14 @@ _STOP = set(
 )
 
 
+@trace_func
 def extract_keywords(text: str, top_n: int = 10) -> List[str]:
 	words = re.findall(r"[A-Za-z0-9°%]+", text)
 	words = [w for w in words if w.lower() not in _STOP]
 	return words[:top_n]
 
 
+@trace_func
 def extract_entities(text: str) -> List[str]:
 	pats = [
 		r"\bCASE[-_ ]?\d+\b",
@@ -54,6 +58,7 @@ def extract_entities(text: str) -> List[str]:
 	return sorted(set(out))
 
 
+@trace_func
 def extract_date_tokens(text: str) -> Dict[str, List[str]]:
 	"""Extract month/day tokens from text to help date-specific retrieval.
 	Returns lowercase month names and day numbers as strings.
@@ -101,6 +106,7 @@ def extract_date_tokens(text: str) -> Dict[str, List[str]]:
 	return {"month_tokens": month_tokens, "day_tokens": day_tokens}
 
 
+@trace_func
 def extract_incident(text: str) -> Dict[str, Optional[str]]:
 	itype = None
 	if re.search(r"\bfail(ure|ed)|fracture|fatigue|overheat|seiz(e|ure)\b", text, re.I):
@@ -120,6 +126,7 @@ def extract_incident(text: str) -> Dict[str, Optional[str]]:
 	return {"IncidentType": itype, "IncidentDate": idate, "AmountRange": amount_range}
 
 
+@trace_func
 def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | None = None) -> Dict:
 	ents = extract_entities(chunk["content"])
 	inc = extract_incident(chunk["content"])

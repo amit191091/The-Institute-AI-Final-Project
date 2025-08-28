@@ -1,17 +1,17 @@
 from __future__ import annotations
-
+from app.logger import trace_func
 import math
 import hashlib
 import re
 
-
+@trace_func
 def slugify(s: str) -> str:
 	s = (s or "").strip().lower()
 	s = re.sub(r"[^a-z0-9\-_.]+", "-", s)
 	s = re.sub(r"-+", "-", s).strip("-")
 	return s or "doc"
 
-
+@trace_func
 def sha1_short(text: str, n: int = 12) -> str:
 	try:
 		h = hashlib.sha1(text.encode("utf-8", errors="ignore")).hexdigest()
@@ -19,19 +19,19 @@ def sha1_short(text: str, n: int = 12) -> str:
 	except Exception:
 		return "0" * n
 
-
+@trace_func
 def approx_token_len(text: str) -> int:
 	# very rough approx: 1 token ~ 4 chars
 	return max(1, math.ceil(len(text) / 4))
 
-
+@trace_func
 def truncate_to_tokens(text: str, max_tokens: int) -> str:
 	max_chars = max_tokens * 4
 	if len(text) <= max_chars:
 		return text
 	return text[:max_chars]
 
-
+@trace_func
 def simple_summarize(text: str, ratio: float = 0.1, min_lines: int = 1) -> str:
 	if not text:
 		return ""
@@ -41,7 +41,7 @@ def simple_summarize(text: str, ratio: float = 0.1, min_lines: int = 1) -> str:
 	n = max(min_lines, int(len(lines) * ratio))
 	return "\n".join(lines[: max(1, n)])
 
-
+@trace_func
 def naive_markdown_table(text: str) -> str:
 	"""Heuristic conversion of delimited text to Markdown table."""
 	lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
@@ -67,7 +67,7 @@ def naive_markdown_table(text: str) -> str:
 	out = [fmt(header), fmt(sep)] + [fmt(r) for r in body]
 	return "\n".join(out)
 
-
+@trace_func
 def split_into_sentences(text: str) -> list[str]:
 	if not text:
 		return []
