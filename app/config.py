@@ -14,6 +14,7 @@ class Settings:
 	K_TOP_K: int = 20
 	RERANK_TOP_K: int = 20
 	CONTEXT_TOP_N: int = 8
+	CONTEXT_LOW_N: int = 6 
 	CHUNK_TOK_AVG_RANGE: tuple[int, int] = (250, 500)
 	CHUNK_TOK_MAX: int = 800
 	MIN_PAGES: int = 10

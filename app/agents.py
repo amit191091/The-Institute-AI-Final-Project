@@ -9,6 +9,8 @@ from app.prompts import (
 	SUMMARY_SYSTEM,
 	TABLE_PROMPT,
 	TABLE_SYSTEM,
+	FEWSHOT_NEEDLE,
+	FEWSHOT_TABLE,
 )
 from app.logger import trace_func
 try:
@@ -192,7 +194,15 @@ def answer_summary(llm: LLMCallable, docs: List[Document], question: str) -> str
 @trace_func
 def answer_needle(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	ctx = render_context(docs)
-	prompt = NEEDLE_SYSTEM + "\n" + NEEDLE_PROMPT.format(context=ctx, question=question)
+	import os as _os
+	few = ""
+	try:
+		if _os.getenv("RAG_FEWSHOTS", "1").lower() in ("1","true","yes"):
+			ex = "\n".join([f"- Q: {r['q']}\n  A: {r['a']}" for r in FEWSHOT_NEEDLE])
+			few = f"\nFew-shot examples (follow style strictly):\n{ex}\n"
+	except Exception:
+		few = ""
+	prompt = NEEDLE_SYSTEM + few + "\n" + NEEDLE_PROMPT.format(context=ctx, question=question)
 	ans = (llm(prompt) or "").strip()
 	# Deterministic extractive fallback: pick the highest-overlap sentence from contexts
 	if not ans or "[LLM not configured]" in ans:
@@ -210,7 +220,15 @@ def answer_needle(llm: LLMCallable, docs: List[Document], question: str) -> str:
 			sentences.extend([s.strip() for s in _re.split(r"(?<=[.!?])\s+", part) if s.strip()])
 		ql = (question or "").lower()
 		best = max(sentences or [ctx], key=lambda s: _ov(ql, s.lower()))
-		return best[:400]
+		ans = best[:400]
+
+	# Post-filter: enforce one short sentence and ensure a citation
+	try:
+		ans = _enforce_one_sentence(ans)
+		if not _has_citation(ans):
+			ans = _append_fallback_citation(ans, docs)
+	except Exception:
+		pass
 	return ans
 
 
@@ -237,6 +255,54 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	# Sort to push most table-like content first
 	table_docs = table_docs + [d for d in docs if d not in table_docs]
 	ctx = render_context(table_docs)
-	prompt = TABLE_SYSTEM + "\n" + TABLE_PROMPT.format(table=ctx, question=question)
-	return llm(prompt).strip()
+	import os as _os
+	few = ""
+	try:
+		if _os.getenv("RAG_FEWSHOTS", "1").lower() in ("1","true","yes"):
+			ex = "\n".join([f"- Q: {r['q']}\n  A: {r['a']}" for r in FEWSHOT_TABLE])
+			few = f"\nFew-shot examples (follow style strictly):\n{ex}\n"
+	except Exception:
+		few = ""
+	prompt = TABLE_SYSTEM + few + "\n" + TABLE_PROMPT.format(table=ctx, question=question)
+	ans = (llm(prompt) or "").strip()
+	try:
+		ans = _enforce_one_sentence(ans)
+		if not _has_citation(ans):
+			ans = _append_fallback_citation(ans, table_docs)
+	except Exception:
+		pass
+	return ans
+
+# --- Output post-processing helpers ---
+def _has_citation(text: str) -> bool:
+	import re
+	return bool(re.search(r"\[[^\]]+ p\d+[^\]]*\]", text))
+
+def _append_fallback_citation(text: str, docs: List[Document]) -> str:
+	try:
+		if not docs:
+			return text
+		md = docs[0].metadata or {}
+		fn = md.get("file_name") or "file"
+		pg = md.get("page") or "?"
+		sec = md.get("section") or md.get("section_type")
+		sec_tag = f" {sec.lower()}" if isinstance(sec, str) else ""
+		return f"{text} [{fn} p{pg}{sec_tag}]"
+	except Exception:
+		return text
+
+def _enforce_one_sentence(text: str) -> str:
+	import re
+	# Remove bullets/newlines; keep first sentence up to ~20 words
+	clean = re.sub(r"[\n\r]+", " ", text).strip()
+	clean = re.sub(r"^[-*]\s*", "", clean)
+	# Truncate to first sentence ender
+	m = re.search(r"(.+?[\.!?])\s", clean)
+	if m:
+		clean = m.group(1)
+	# Hard cap ~20 words
+	words = clean.split()
+	if len(words) > 20:
+		clean = " ".join(words[:20]) + "…"
+	return clean
 

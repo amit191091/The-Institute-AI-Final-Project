@@ -6,6 +6,13 @@ from __future__ import annotations
 import os as _os
 _os.environ.setdefault("DOTENV_DISABLE", "1")
 
+# Default to headless + eval unless explicitly overridden, to avoid launching UI during CI/tasks
+# Users can override in their environment or a .env file.
+import os
+os.environ.setdefault("RAG_HEADLESS", "1")
+os.environ.setdefault("RAG_EVAL", "1")
+os.environ.setdefault("RAGAS_LLM_PROVIDER", "google")
+
 from app.pipeline import run
 def main() -> None:
     run()

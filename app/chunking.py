@@ -23,32 +23,56 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 		except Exception:
 			pass
 
+	# Import settings from config for dynamic chunking limits
+	from app.config import settings
+	
 	# Optional overrides for text splitting behavior to control chunk counts
 	try:
-		split_multi = os.getenv("RAG_TEXT_SPLIT_MULTI", "0").lower() in ("1", "true", "yes")
-		# Defaults tuned for larger, more informative chunks when env not set
-		TARGET_TOK = int(os.getenv("RAG_TEXT_TARGET_TOKENS", "450") or 450)
-		MAX_TOK = int(os.getenv("RAG_TEXT_MAX_TOKENS", "800") or 800)
-		SEMANTIC = os.getenv("RAG_SEMANTIC_CHUNKING", "0").lower() in ("1", "true", "yes")
-		OVERLAP_N = max(0, int(os.getenv("RAG_TEXT_OVERLAP_SENTENCES", "1") or 1))
+		# Defaults: semantic+multi ON; use config settings with env overrides
+		split_multi = os.getenv("RAG_TEXT_SPLIT_MULTI", "1").lower() in ("1", "true", "yes")
+		# Text chunks: target middle of range, max at upper bound
+		TEXT_TARGET_TOK = int(os.getenv("RAG_TEXT_TARGET_TOKENS", str((settings.CHUNK_TOK_AVG_RANGE[0] + settings.CHUNK_TOK_AVG_RANGE[1]) // 2)))
+		TEXT_MAX_TOK = int(os.getenv("RAG_TEXT_MAX_TOKENS", str(settings.CHUNK_TOK_AVG_RANGE[1])))
+		# Figure/Table chunks: higher limits for rich content
+		FIGURE_TABLE_MAX_TOK = int(os.getenv("RAG_FIGURE_TABLE_MAX_TOKENS", str(settings.CHUNK_TOK_MAX)))
+		SEMANTIC = os.getenv("RAG_SEMANTIC_CHUNKING", "1").lower() in ("1", "true", "yes")
+		OVERLAP_N = max(0, int(os.getenv("RAG_TEXT_OVERLAP_SENTENCES", "2") or 2))  # Increased overlap for better context
+		DISTILL_RATIO = float(os.getenv("RAG_DISTILL_RATIO", "0.05"))  # 5% distillation target
 	except Exception:
-		split_multi = False
-		TARGET_TOK, MAX_TOK = 450, 800
-		SEMANTIC, OVERLAP_N = False, 1
+		split_multi = True
+		TEXT_TARGET_TOK, TEXT_MAX_TOK = 375, 500  # Middle and upper of 250-500 range
+		FIGURE_TABLE_MAX_TOK = 800
+		SEMANTIC, OVERLAP_N = True, 2
+		DISTILL_RATIO = 0.05
 
 	# Trace the effective flags for visibility
 	if trace:
 		try:
 			log.info(
-				"FLAGS[chunking]: MULTI=%s SEMANTIC=%s TARGET_TOK=%d MAX_TOK=%d OVERLAP_SENT=%d",
+				"FLAGS[chunking]: MULTI=%s SEMANTIC=%s TEXT_TARGET=%d TEXT_MAX=%d FIG_TBL_MAX=%d OVERLAP=%d DISTILL=%.2f",
 				split_multi,
 				SEMANTIC,
-				TARGET_TOK,
-				MAX_TOK,
+				TEXT_TARGET_TOK,
+				TEXT_MAX_TOK,
+				FIGURE_TABLE_MAX_TOK,
 				OVERLAP_N,
+				DISTILL_RATIO,
 			)
 		except Exception:
 			pass
+	
+	# Helper function to get max tokens based on content type
+	def _get_max_tokens_for_type(section_type: str) -> int:
+		"""Return appropriate max tokens based on content type."""
+		if section_type and section_type.lower() in ("table", "figure", "image"):
+			return FIGURE_TABLE_MAX_TOK
+		return TEXT_MAX_TOK
+	
+	def _get_target_tokens_for_type(section_type: str) -> int:
+		"""Return appropriate target tokens based on content type."""
+		if section_type and section_type.lower() in ("table", "figure", "image"):
+			return int(FIGURE_TABLE_MAX_TOK * 0.6)  # ~480 for 800 max
+		return TEXT_TARGET_TOK
 	# Derive doc_id once per file
 	try:
 		doc_id = slugify(str(os.path.basename(file_path)))
@@ -275,8 +299,8 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				cur_tok = approx_token_len(raw_text)
 				j = idx + 1
 				# Soft cap to avoid overly large pre-merge blocks
-				cap_tok = int(MAX_TOK * 1.5)
-				while j <= len(elements) and cur_tok < max(TARGET_TOK, 1):
+				cap_tok = int(TEXT_MAX_TOK * 1.5)
+				while j <= len(elements) and cur_tok < max(TEXT_TARGET_TOK, 1):
 					_nel = elements[j - 1]
 					_nkind = getattr(_nel, "category", getattr(_nel, "type", "Text")) or "Text"
 					_nmd = getattr(_nel, "metadata", None)
@@ -296,10 +320,10 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 							break
 					j += 1
 				# If still too small, greedily pack following text elements ignoring headings until a minimum
-				min_tok = int(os.getenv("RAG_MIN_CHUNK_TOKENS", str(max(250, TARGET_TOK // 2))) or max(250, TARGET_TOK // 2))
+				min_tok = int(os.getenv("RAG_MIN_CHUNK_TOKENS", str(max(250, TEXT_TARGET_TOK // 2))) or max(250, TEXT_TARGET_TOK // 2))
 				if cur_tok < min_tok:
 					j2 = j
-					while j2 <= len(elements) and cur_tok < min(min_tok, MAX_TOK):
+					while j2 <= len(elements) and cur_tok < min(min_tok, TEXT_MAX_TOK):
 						_nel = elements[j2 - 1]
 						_nkind = getattr(_nel, "category", getattr(_nel, "type", "Text")) or "Text"
 						_nmd = getattr(_nel, "metadata", None)
@@ -311,7 +335,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 							block.append(_ntext)
 							cur_tok = approx_token_len("\n\n".join(block))
 							consumed.add(j2)
-							if cur_tok >= MAX_TOK:
+							if cur_tok >= TEXT_MAX_TOK:
 								break
 						j2 += 1
 				if block:
@@ -641,9 +665,11 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 					anchor_local = f"t{idx}"
 			else:
 				anchor_local = anchor
-			content_single = simple_summarize(raw_text, ratio=0.2)
+			content_single = simple_summarize(raw_text, ratio=DISTILL_RATIO)
 			def _create_chunk_dict(content: str, anchor_local: str) -> Dict[str, Any]:
-				content_c = truncate_to_tokens(content, MAX_TOK).strip()
+				# Use dynamic max tokens based on content type  
+				max_tokens = _get_max_tokens_for_type(section_type)
+				content_c = truncate_to_tokens(content, max_tokens).strip()
 				chunk_preview = (content_c or "").splitlines()[0][:200]
 				content_hash = sha1_short(content_c)
 				chunk_id = f"{doc_id}#p{page}:{section_type or 'Text'}/{anchor_local}"
@@ -680,7 +706,9 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 		else:
 			# Helpers available in this scope
 			def _create_chunk_dict(content: str, anchor_local: str) -> Dict[str, Any]:
-				content_c = truncate_to_tokens(content, MAX_TOK).strip()
+				# Use dynamic max tokens based on content type
+				max_tokens = _get_max_tokens_for_type(section_type) 
+				content_c = truncate_to_tokens(content, max_tokens).strip()
 				chunk_preview = (content_c or "").splitlines()[0][:200]
 				content_hash = sha1_short(content_c)
 				chunk_id = f"{doc_id}#p{page}:{section_type or 'Text'}/{anchor_local}"
@@ -728,14 +756,14 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 							continue
 						sim = float(emb[i] @ emb[i-1])
 						s_tok = approx_token_len(ss[i])
-						if sim >= th and (cur_tok + s_tok) <= MAX_TOK:
+						if sim >= th and (cur_tok + s_tok) <= TEXT_MAX_TOK:
 							cur.append(ss[i])
 							cur_tok += s_tok
 						else:
 							groups.append(cur)
 							cur = [ss[i]]
 							cur_tok = s_tok
-						if cur_tok >= MAX_TOK:
+						if cur_tok >= TEXT_MAX_TOK:
 							groups.append(cur)
 							cur = []
 							cur_tok = 0
@@ -749,7 +777,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			groups = _semantic_groups(sentences)
 			if groups:
 				# Merge adjacent groups to meet MIN/TARGET token thresholds without exceeding MAX
-				min_tok = int(os.getenv("RAG_MIN_CHUNK_TOKENS", str(max(250, TARGET_TOK // 2))) or max(250, TARGET_TOK // 2))
+				min_tok = int(os.getenv("RAG_MIN_CHUNK_TOKENS", str(max(250, TEXT_TARGET_TOK // 2))) or max(250, TEXT_TARGET_TOK // 2))
 				merged_groups: List[List[str]] = []
 				curg: List[str] = []
 				cur_tok = 0
@@ -760,7 +788,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 						curg = list(g)
 						cur_tok = g_tok
 						continue
-					if (cur_tok < max(min_tok, TARGET_TOK)) and (cur_tok + g_tok) <= MAX_TOK:
+					if (cur_tok < max(min_tok, TEXT_TARGET_TOK)) and (cur_tok + g_tok) <= TEXT_MAX_TOK:
 						curg.extend(g)
 						cur_tok += g_tok
 					else:
@@ -800,12 +828,12 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 					while si < len(sentences):
 						s = sentences[si]
 						s_tok = approx_token_len(s)
-						if cur_tokens + s_tok > MAX_TOK and buf:
+						if cur_tokens + s_tok > TEXT_MAX_TOK and buf:
 							break
 						buf.append(s)
 						cur_tokens += s_tok
 						si += 1
-						if cur_tokens >= TARGET_TOK:
+						if cur_tokens >= TEXT_TARGET_TOK:
 							break
 					content_local = " ".join(buf) if buf else sentences[si]
 					try:
@@ -927,9 +955,9 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 		pass
 		pass
 
-	# Post-process: merge adjacent small textual chunks to reach a minimum token size
+	# Post-process: merge adjacent small textual chunks to reach a minimum token size (target ~250)
 	try:
-		min_tok = int(os.getenv("RAG_MIN_CHUNK_TOKENS", "300") or 300)
+		min_tok = int(os.getenv("RAG_MIN_CHUNK_TOKENS", "250") or 250)
 		merged: List[Dict[str, Any]] = []
 		def _is_textual_chunk(ch: Dict[str, Any]) -> bool:
 			sec = (ch.get("section") or ch.get("section_type") or "Text")
@@ -947,8 +975,9 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				ct = approx_token_len(ch.get("content") or "")
 				if pt < min_tok or ct < min_tok:
 					combined = ((prev.get("content") or "").rstrip() + "\n\n" + (ch.get("content") or "")).strip()
-					# Respect MAX_TOK bound
-					if approx_token_len(combined) <= MAX_TOK:
+					# Respect max token bound for content type
+					max_tokens = _get_max_tokens_for_type(prev.get("section", "Text"))
+					if approx_token_len(combined) <= max_tokens:
 						prev["content"] = combined
 						prev["preview"] = (combined.splitlines()[0] if combined else "")[:200]
 						prev["keywords"] = extract_keywords(combined)
