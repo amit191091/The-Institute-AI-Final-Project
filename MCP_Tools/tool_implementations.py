@@ -18,13 +18,13 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union, Literal
 from datetime import datetime, UTC
 
-# Add Picture Tools to path
-picture_tools_path = Path("Pictures and Vibrations database/Picture/Picture Tools")
+# Add Picture Tools to path 
+picture_tools_path = Path(__file__).parent.parent / "Pictures and Vibrations database/Picture/Picture Tools"
 if picture_tools_path.exists():
     sys.path.insert(0, str(picture_tools_path))
 
 # Add RAG to path
-rag_path = Path("RAG")
+rag_path = Path(__file__).parent.parent / "RAG"
 if rag_path.exists():
     sys.path.insert(0, str(rag_path))
 
@@ -255,12 +255,13 @@ def rag_evaluate(eval_set: str) -> Dict[str, Any]:
 # ============================================================================
 
 @measure_timing
-def vision_align(image_path: str) -> Dict[str, Any]:
+def vision_align(image_path: str, fast_mode: bool = True) -> Dict[str, Any]:
     """
     Align an image for analysis.
     
     Args:
         image_path: Path to image file
+        fast_mode: If True, use faster but less accurate processing
         
     Returns:
         Dict with ok, aligned_path, transform, run_id, timings
@@ -281,10 +282,40 @@ def vision_align(image_path: str) -> Dict[str, Any]:
         # Simple alignment - detect gear center and rotate if needed
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
-        # Detect circles (gear outline)
+        # Resize image for faster processing - always resize for speed
+        if fast_mode:
+            max_dimension = 400  # Even smaller for fast mode
+        else:
+            max_dimension = 600  # Standard size for normal mode
+            
+        if max(gray.shape) > max_dimension:
+            scale_factor = max_dimension / max(gray.shape)
+            new_width = int(gray.shape[1] * scale_factor)
+            new_height = int(gray.shape[0] * scale_factor)
+            gray = cv2.resize(gray, (new_width, new_height))
+            logger.info(f"Resized image for faster processing: {gray.shape}")
+        
+        # Detect circles (gear outline) - optimized parameters for speed
+        height, width = gray.shape
+        
+        if fast_mode:
+            # Fast mode: use more aggressive parameters
+            min_radius = min(width, height) // 15  # Even smaller search area
+            max_radius = min(width, height) // 4   # Smaller max radius
+            param1, param2 = 20, 60  # Faster but less accurate
+            min_dist = 80  # Larger minimum distance
+        else:
+            # Normal mode: balance speed and accuracy
+            min_radius = min(width, height) // 10
+            max_radius = min(width, height) // 3
+            param1, param2 = 30, 50
+            min_dist = 50
+        
+        # Use optimized HoughCircles parameters
         circles = cv2.HoughCircles(
-            gray, cv2.HOUGH_GRADIENT, 1, 20,
-            param1=50, param2=30, minRadius=0, maxRadius=0
+            gray, cv2.HOUGH_GRADIENT, 1, min_dist,
+            param1=param1, param2=param2,
+            minRadius=min_radius, maxRadius=max_radius
         )
         
         transform = {
@@ -301,8 +332,9 @@ def vision_align(image_path: str) -> Dict[str, Any]:
             
             # Calculate rotation to align gear
             height, width = image.shape[:2]
-            center_offset_x = center_x - width // 2
-            center_offset_y = center_y - height // 2
+            # Convert to signed integers to avoid overflow warning
+            center_offset_x = int(center_x) - width // 2
+            center_offset_y = int(center_y) - height // 2
             
             # Apply transformation matrix
             M = cv2.getRotationMatrix2D((center_x, center_y), 0, 1.0)
@@ -632,13 +664,8 @@ def timeline_summarize(doc_path: str, mode: Literal["mapreduce", "refine"] = "ma
                 # Fallback to text extraction
                 text = f"PDF document: {doc_path.name}"
         elif doc_path.suffix.lower() in ['.docx', '.doc']:
-            # Word document
-            try:
-                from docx import Document
-                doc = Document(doc_path)
-                text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
-            except ImportError:
-                text = f"Word document: {doc_path.name}"
+            # Word documents not supported
+            text = f"Word document not supported: {doc_path.name}"
         else:
             # Text file
             with open(doc_path, 'r', encoding='utf-8') as f:
@@ -775,8 +802,8 @@ class RAGTools:
 class VisionTools:
     """Vision tool interface."""
     
-    def align(self, image_path: str):
-        return vision_align(image_path)
+    def align(self, image_path: str, fast_mode: bool = True):
+        return vision_align(image_path, fast_mode)
     
     def measure(self, image_path: str, healthy_ref: str = None):
         return vision_measure(image_path, healthy_ref)

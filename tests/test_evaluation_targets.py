@@ -21,9 +21,9 @@ def test_target_compliance():
         
         print("✅ Successfully imported evaluation functions")
         
-        	# Test targets
-	print("\n📋 Current Targets:")
-	for metric, target in settings.evaluation.EVALUATION_TARGETS.items():
+        # Test targets
+        print("\n📋 Current Targets:")
+        for metric, target in settings.evaluation.EVALUATION_TARGETS.items():
             print(f"   {metric}: ≥ {target}")
         
         # Test with sample metrics

@@ -1,6 +1,6 @@
 ﻿import os
 import re
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 from RAG.app.logger import get_logger
 
 from langchain.schema import Document
@@ -176,3 +176,79 @@ def rerank_candidates(q: str, candidates: List[Document], top_n: int = 8) -> Lis
     top_docs = _apply_diversity_filtering(scored_docs, top_n)
     
     return top_docs
+
+
+def filter_documents_by_source(documents: List[Document], source_type: str) -> List[Document]:
+    """
+    Filter documents based on the required data source type.
+    
+    Args:
+        documents: List of documents to filter
+        source_type: "report", "database", or "other"
+        
+    Returns:
+        List[Document]: Filtered documents from the specified source
+    """
+    from RAG.app.config import DATA_SOURCES
+    import fnmatch
+    
+    if source_type not in DATA_SOURCES:
+        return documents  # Return all if source type not recognized
+    
+    # Get the file patterns for this source type
+    source_patterns = DATA_SOURCES[source_type]
+    
+    filtered_docs = []
+    for doc in documents:
+        file_name = doc.metadata.get('file_name', '')
+        
+        # Check if this document matches any pattern for the source type
+        for pattern in source_patterns:
+            if fnmatch.fnmatch(file_name, pattern):
+                filtered_docs.append(doc)
+                break
+    
+    return filtered_docs
+
+
+def smart_retrieve_with_source_filtering(
+    question: str, 
+    hybrid_retriever, 
+    all_documents: List[Document], 
+    top_k: int = 8
+) -> Tuple[List[Document], Dict[str, Any]]:
+    """
+    Smart retrieval that analyzes the question and filters documents by source type.
+    
+    Args:
+        question: User question
+        hybrid_retriever: The hybrid retriever to use
+        all_documents: All available documents
+        top_k: Number of documents to retrieve
+        
+    Returns:
+        Tuple[List[Document], Dict]: Retrieved documents and source analysis info
+    """
+    from RAG.app.Agent_Components.agents import analyze_source_requirement
+    
+    # Analyze the question to determine appropriate source
+    source_analysis = analyze_source_requirement(question)
+    source_type = source_analysis["source_type"]
+    
+    # Filter documents by source type
+    filtered_docs = filter_documents_by_source(all_documents, source_type)
+    
+    # If no documents found for the source type, fall back to all documents
+    if not filtered_docs:
+        filtered_docs = all_documents
+        source_analysis["fallback"] = True
+        source_analysis["reasoning"] += " (fallback to all sources)"
+    
+    # Use the hybrid retriever to get candidates from filtered documents
+    # Note: This is a simplified approach - in a full implementation,
+    # you'd need to modify the retriever to work with the filtered document set
+    
+    # For now, we'll use the existing rerank_candidates function
+    candidates = rerank_candidates(question, filtered_docs, top_k)
+    
+    return candidates, source_analysis
