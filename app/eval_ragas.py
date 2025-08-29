@@ -1,4 +1,5 @@
 from app.logger import trace_func
+from app.logger import trace_func
 # RAGAS imports with robust fallbacks
 try:
 	from ragas import evaluate
@@ -40,7 +41,13 @@ from dotenv import dotenv_values, find_dotenv, load_dotenv
 # Load .env file
 load_dotenv()
 
+from dotenv import dotenv_values, find_dotenv, load_dotenv
 
+# Load .env file
+load_dotenv()
+
+
+@trace_func
 @trace_func
 def _simple_tokens(text: str) -> List[str]:
 	t = (text or "").lower()
@@ -49,6 +56,7 @@ def _simple_tokens(text: str) -> List[str]:
 	toks = [w for w in t.split() if len(w) >= 2]
 	return toks
 
+@trace_func
 @trace_func
 def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, float]:
 	"""Compute a simple token-overlap precision/recall/F1 between reference and concatenated contexts.
@@ -83,7 +91,17 @@ def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, flo
 	f1 = (2 * p * r / (p + r)) if (p + r) > 0 else 0.0
 	return float(p), float(r), float(f1)
 @trace_func
+@trace_func
 def _setup_ragas_llm():
+	"""Setup LLM for RAGAS evaluation - supports both OpenAI and Google."""
+    
+	# Allow explicit provider override
+	provider = (os.getenv("RAGAS_LLM_PROVIDER") or "").lower().strip()
+	try_openai_first = provider == "openai" or (provider == "" and os.getenv("OPENAI_API_KEY"))
+	try_google_next = provider == "google" or (provider == "" and os.getenv("GOOGLE_API_KEY"))
+	open_ai_api = os.getenv("OPENAI_API_KEY")
+	# Prefer OpenAI for RAGAS (compatibility with evaluation prompts)
+	if try_openai_first:
 	"""Setup LLM for RAGAS evaluation.
 	Policy: Use Google by default whenever a GOOGLE_API_KEY is present. Do NOT fall back to OpenAI
 	unless explicitly allowed via RAGAS_USE_OPENAI=1 (or true/yes).
@@ -111,13 +129,31 @@ def _setup_ragas_llm():
 		try:
 			from langchain_openai import ChatOpenAI
 			openai_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
-			llm = ChatOpenAI(model=openai_model, temperature=0)
+			llm = ChatOpenAI(model=openai_model, temperature=0, api_key=open_ai_api)
 			print(f"[RAGAS LLM] Using OpenAI model: {openai_model}")
 			return llm
 		except Exception as e:
 			print(f"Failed to setup OpenAI LLM for RAGAS: {e}")
 
+	# Fallback to Google Gemini if available
+	if try_google_next:
+		try:
+			from langchain_google_genai import ChatGoogleGenerativeAI
+			preferred_model = os.getenv("GOOGLE_CHAT_MODEL", "gemini-1.5-pro")
+			safety_settings = None  # keep default safety behavior; avoid enum incompatibilities
+			llm = ChatGoogleGenerativeAI(
+				model=preferred_model,
+				temperature=0,
+				safety_settings=safety_settings,
+			)
+			print(f"[RAGAS LLM] Using Google Gemini model: {preferred_model}")
+			return llm
+		except Exception as e:
+			print(f"Failed to setup Google LLM for RAGAS: {e}")
+	
+
 	return None
+@trace_func
 @trace_func
 def _setup_ragas_embeddings():
 	"""Setup embeddings for RAGAS evaluation - supports both OpenAI and Google."""
@@ -150,6 +186,7 @@ def _setup_ragas_embeddings():
 	
 	return None
 
+@trace_func
 @trace_func
 def run_eval(dataset):
 	if evaluate is None:
@@ -208,6 +245,8 @@ def run_eval(dataset):
 				result = evaluate(ds, metrics=metrics, llm=llm, embeddings=emb)  # type: ignore
 		except Exception as e:
 			raise RuntimeError(f"RAGAS evaluation failed: {e}") from e
+	# Build summary robustly from per-question outputs
+	@trace_func
 
 	@trace_func
 	def _mean_safe(vals):
@@ -310,6 +349,7 @@ def run_eval(dataset):
 			"overlap_f1": float("nan"),
 		}
 
+@trace_func
 @trace_func
 def run_eval_detailed(dataset):
 	"""Run RAGAS and return (summary_metrics, per_question) where per_question is a
@@ -475,6 +515,7 @@ def run_eval_detailed(dataset):
 
 	# Compute summary from per-question metrics as a robust fallback
 	@trace_func
+	@trace_func
 	def _mean_safe(values):
 		vals = [v for v in values if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
 		return float(sum(vals) / len(vals)) if vals else None
@@ -504,6 +545,7 @@ TARGETS = {
 }
 
 @trace_func
+@trace_func
 def pretty_metrics(m: dict) -> str:
 	def _fmt(x):
 		try:
@@ -529,6 +571,23 @@ def pretty_metrics(m: dict) -> str:
 		lines.append(f"Overlap recall (heuristic): {_fmt(m.get('overlap_recall'))}")
 		lines.append(f"Overlap F1 (heuristic): {_fmt(m.get('overlap_f1'))}")
 	return "\n".join(lines)
+
+@trace_func
+def append_eval_footer(per_question_path: str, summary: dict) -> None:
+	"""Append a summary footer line to the per-question JSONL for quick averages view."""
+	try:
+		import json as _json
+		footer = {
+			"__summary__": True,
+			"faithfulness": summary.get("faithfulness"),
+			"answer_relevancy": summary.get("answer_relevancy"),
+			"context_precision": summary.get("context_precision"),
+			"context_recall": summary.get("context_recall"),
+		}
+		with open(per_question_path, "a", encoding="utf-8") as f:
+			f.write(_json.dumps(footer, ensure_ascii=False) + "\n")
+	except Exception:
+		pass
 
 @trace_func
 def append_eval_footer(per_question_path: str, summary: dict) -> None:
