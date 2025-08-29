@@ -25,7 +25,7 @@ NEEDLE_PROMPT = (
 	"Question: {question}\n"
 	"Instructions: Use only the context. Prefer exact phrases and numeric values with units."
 	" Add a citation [file_name pX]. If not in context, answer exactly: Not found in context."
-	" Keep the answer concise (<= 1 short sentence).\n"
+	" Keep the answer to one short sentence (max ~20 words).\n"
 	"Answer:"
 )
 TABLE_PROMPT = (
@@ -33,9 +33,23 @@ TABLE_PROMPT = (
 	"Question: {question}\n"
 	"Instructions: Use only the provided table/figure. Prefer exact cell values with units."
 	" If computing, show a one-line calculation. Always cite as [file_name pX table/figure]."
-	" If the value is not present, answer exactly: Not found in context. Keep the answer concise.\n"
+	" If the value is not present, answer exactly: Not found in context. Keep the answer to one short sentence.\n"
 	"Answer:"
 )
+
+# Minimal few-shot patterns to guide extractive behavior (aligned with dataset)
+FEWSHOT_NEEDLE = [
+	{"q": "What two steady speeds were used for data acquisition (in RPS)?", "a": "15 and 45 RPS [Gear wear Failure.pdf pX]."},
+	{"q": "What was the sampling rate per record?", "a": "50 kHz [Gear wear Failure.pdf pX]."},
+	{"q": "Which lubricant and viscosity grade were in service?", "a": "2640 semi-synthetic (15W/40) [Gear wear Failure.pdf pX]."},
+	{"q": "What lubricant brand was used?", "a": "Not found in context."},
+]
+
+FEWSHOT_TABLE = [
+	{"q": "What is the wear depth for case W24 (in μm)?", "a": "579 μm [Gear wear Failure.pdf pX table]."},
+	{"q": "Which wear case corresponds to 466 μm?", "a": "W19 [Gear wear Failure.pdf pX table]."},
+	{"q": "What is the wear depth for case W33 (in μm)?", "a": "853 μm [Gear wear Failure.pdf pX table]."},
+]
 
 # Planner: produce a concrete step-by-step plan to diagnose and fix metadata issues
 PLANNER_SYSTEM = (

@@ -83,6 +83,11 @@ except Exception:  # pragma: no cover
 from app.validate import validate_min_pages
 from app.logger import get_logger, trace_func, trace_here
 from app.eval_ragas import run_eval_detailed, pretty_metrics
+try:
+    from app.eval_deepeval import run_eval as run_eval_deepeval  # type: ignore
+except Exception:  # pragma: no cover
+    def run_eval_deepeval(dataset):
+        return None, []
 
 
 @trace_func
@@ -251,7 +256,7 @@ def build_pipeline(paths: List[Path]):
             "FLAGS[chunking]: MULTI=%s SEMANTIC=%s TARGET_TOK=%s MAX_TOK=%s OVERLAP_N=%s HEADING_MIN_FONT=%s",
             os.getenv("RAG_TEXT_SPLIT_MULTI", "1"),
             os.getenv("RAG_SEMANTIC_CHUNKING", "1"),
-            os.getenv("RAG_TEXT_TARGET_TOKENS", "350"),
+            os.getenv("RAG_TEXT_TARGET_TOKENS", "250"),
             os.getenv("RAG_TEXT_MAX_TOKENS", "500"),
             os.getenv("RAG_TEXT_OVERLAP_SENTENCES", "1"),
             os.getenv("RAG_HEADING_MIN_FONT", "12"),
@@ -762,9 +767,10 @@ def run_evaluation(docs, hybrid, llm: _LLM):
     if not qa_path:
         log.warning("Evaluation requested but QA file not found.")
         return
+    # Prefer Google for RAGAS if available; do not force OpenAI provider
     try:
-        if os.getenv("OPENAI_API_KEY"):
-            os.environ.setdefault("RAGAS_LLM_PROVIDER", "openai")
+        if os.getenv("GOOGLE_API_KEY") and not os.getenv("RAGAS_LLM_PROVIDER"):
+            os.environ.setdefault("RAGAS_LLM_PROVIDER", "google")
     except Exception:
         pass
     qa_rows = _load_json_or_jsonl(qa_path)
@@ -871,11 +877,11 @@ def run_evaluation(docs, hybrid, llm: _LLM):
     out_dir = Path("logs")
     out_dir.mkdir(exist_ok=True)
     with open(out_dir / "eval_ragas_summary.json", "w", encoding="utf-8") as f:
-        json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2)
+        json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2, allow_nan=False)
     per_q_path = out_dir / "eval_ragas_per_question.jsonl"
     with open(per_q_path, "w", encoding="utf-8") as f:
         for rec in per_q:
-            f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False) + "\n")
+            f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False, allow_nan=False) + "\n")
         # Footer: averaged metrics across all questions for quick inspection
         try:
             s = _nan_to_none(summary)
@@ -886,7 +892,7 @@ def run_evaluation(docs, hybrid, llm: _LLM):
                 "context_precision": (s.get("context_precision") if isinstance(s, dict) else None),
                 "context_recall": (s.get("context_recall") if isinstance(s, dict) else None),
             }
-            f.write(json.dumps(footer, ensure_ascii=False) + "\n")
+            f.write(json.dumps(footer, ensure_ascii=False, allow_nan=False) + "\n")
         except Exception:
             pass
     log = get_logger()
@@ -897,15 +903,39 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         log.info("Saved summary to %s and per-question to %s", str(out_dir / "eval_ragas_summary.json"), str(per_q_path))
     except Exception:
         pass
+    # Optional: run DeepEval side-by-side
+    try:
+        de_sum, de_rows = run_eval_deepeval(ds)
+        if de_sum:
+            print("\nDeepEval summary:")
+            try:
+                print(json.dumps(de_sum, indent=2))
+            except Exception:
+                print(str(de_sum))
+    except Exception as e:
+        try:
+            log.warning("DeepEval run failed: %s", e)
+        except Exception:
+            pass
     print("\nPer-question results:")
     try:
         for rec in per_q:
             q = rec.get("question", "")
             ans = rec.get("answer", "")
             mets = {k: v for k, v in rec.items() if k not in ("question", "answer", "contexts", "ground_truths")}
+            # Sanitize any NaN values for console printing as well
+            def _nan_to_none_local(x):
+                import math as _m
+                if isinstance(x, float) and _m.isnan(x):
+                    return None
+                if isinstance(x, list):
+                    return [_nan_to_none_local(v) for v in x]
+                if isinstance(x, dict):
+                    return {k: _nan_to_none_local(v) for k, v in x.items()}
+                return x
             print("- Q:", q)
             print("  A:", (ans or "")[:400])
-            print("  metrics:", json.dumps(mets, ensure_ascii=False))
+            print("  metrics:", json.dumps(_nan_to_none_local(mets), ensure_ascii=False))
     except Exception:
         pass
 
@@ -937,6 +967,12 @@ def run() -> None:
     except Exception:
         pass
     _clean_run_outputs()
+    # Default-enable DeepEval when API key is present unless explicitly disabled
+    try:
+        if (os.getenv("CONFIDENT_API_KEY") or os.getenv("DEEPEVAL_API_KEY")) and os.getenv("RAG_DEEPEVAL") is None:
+            os.environ.setdefault("RAG_DEEPEVAL", "1")
+    except Exception:
+        pass
     paths = _discover_input_paths()
     if not paths:
         print("No input files found. Place PDFs/DOCs under data/ or the root PDF.")

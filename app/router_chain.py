@@ -49,11 +49,11 @@ def _build_router():
     prompt_infos = [
         {
             "name": "summary",
-            "description": "Summaries, overviews, conclusions across the whole report or multiple tests.",
+            "description": "Summaries and overviews only when explicitly requested; avoid choosing summary for short eval-style questions.",
         },
         {
             "name": "table",
-            "description": "Questions about values, charts, tables, figures, transmission ratios, wear depth, sensors, thresholds.",
+            "description": "Questions about values, charts, tables, figures, transmission ratios, wear depth, sensors, thresholds; prefer this for short, specific queries.",
         },
         {
             "name": "graph",
@@ -77,6 +77,7 @@ Return a markdown JSON with a single key "destination" and value in ["summary","
 {{input}}
 
 << ROUTING DECISION >>
+Rules: Prefer table for numeric/figure/table lookups; prefer needle for exact facts in text; choose summary only when the user explicitly asks for an overview.
 """
 
     try:

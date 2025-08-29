@@ -84,31 +84,30 @@ def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, flo
 	return float(p), float(r), float(f1)
 @trace_func
 def _setup_ragas_llm():
-	"""Setup LLM for RAGAS evaluation - supports both OpenAI and Google."""
-    
-	# Allow explicit provider override. Default: prefer Google; avoid OpenAI unless explicitly requested.
-	provider = (os.getenv("RAGAS_LLM_PROVIDER") or "").lower().strip()
-	try_google_first = (provider in ("", "google")) and bool(os.getenv("GOOGLE_API_KEY"))
-	try_openai_next = (provider == "openai") and bool(os.getenv("OPENAI_API_KEY"))
+	"""Setup LLM for RAGAS evaluation.
+	Policy: Use Google by default whenever a GOOGLE_API_KEY is present. Do NOT fall back to OpenAI
+	unless explicitly allowed via RAGAS_USE_OPENAI=1 (or true/yes).
+	"""
+	# Hard-disable OpenAI for eval unless explicitly enabled
+	allow_openai = (os.getenv("RAGAS_USE_OPENAI", "").lower().strip() in ("1", "true", "yes"))
 
-	# Prefer Google Gemini by default
-	if try_google_first:
+	# If Google is available, always take it (default-first policy)
+	if os.getenv("GOOGLE_API_KEY"):
 		try:
 			from langchain_google_genai import ChatGoogleGenerativeAI
 			preferred_model = os.getenv("GOOGLE_CHAT_MODEL", "gemini-1.5-pro")
-			safety_settings = None  # keep default safety behavior; avoid enum incompatibilities
 			llm = ChatGoogleGenerativeAI(
 				model=preferred_model,
 				temperature=0,
-				safety_settings=safety_settings,
+				safety_settings=None,
 			)
 			print(f"[RAGAS LLM] Using Google Gemini model: {preferred_model}")
 			return llm
 		except Exception as e:
 			print(f"Failed to setup Google LLM for RAGAS: {e}")
 
-	# Only use OpenAI if explicitly requested
-	if try_openai_next:
+	# Only consider OpenAI if explicitly allowed
+	if allow_openai and os.getenv("OPENAI_API_KEY"):
 		try:
 			from langchain_openai import ChatOpenAI
 			openai_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
@@ -117,7 +116,7 @@ def _setup_ragas_llm():
 			return llm
 		except Exception as e:
 			print(f"Failed to setup OpenAI LLM for RAGAS: {e}")
-	
+
 	return None
 @trace_func
 def _setup_ragas_embeddings():
