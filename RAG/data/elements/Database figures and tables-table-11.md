@@ -1,0 +1,19 @@
+<a name="table-11"></a>
+### Table 11: Wear severities dimensions from image processing for tooth 11.: Wear severities dimensions from image processing for tooth 11.
+
+| Case | Wear depth |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  |  | Wear depth |  | Wear depth |  | Wear depth |
+|  |  | Case |  | Case |  | Case |  |
+|  |  |  | [μm] |  | [μm] |  | [μm] |
+|  |  |  |  |  |  |  |  |
+|  |  |  |  |  |  |  |  |
+| Healthy | 0 | W9 | 274 | W18 | 449 | W27 | 731 |
+| W1 | 38 | W10 | 283 | W19 | 450 | W28 | 731 |
+| W2 | 75 | W11 | 301 | W20 | 498 | W29 | 745 |
+| W3 | 118 | W12 | 336 | W21 | 529 | W30 | 751 |
+| W4 | 154 | W13 | 340 | W22 | 529 | W31 | 830 |
+| W5 | 159 | W14 | 340 | W23 | 558 | W32 | 876 |
+| W6 | 181 | W15 | 380 | W24 | 571 | W33 | 939 |
+| W7 | 262 | W16 | 414 | W25 | 633 | W34 | 1046 |
+| W8 | 272 | W17 | 414 | W26 | 731 | W35 | 1046 |

@@ -1,0 +1,257 @@
+﻿from __future__ import annotations
+
+"""Refactored pipeline module using modular components.
+
+This module now orchestrates the pipeline using separate modules for:
+- pipeline_ingestion: Document loading and processing
+- pipeline_query: Query processing and answering  
+- pipeline_utils: Utility functions and helpers
+- pipeline_core: Main orchestration
+
+The original functionality is preserved while improving modularity and maintainability.
+"""
+
+import os
+import json
+import math
+import difflib
+from datetime import datetime, UTC
+from pathlib import Path
+from typing import List, Tuple
+
+from dotenv import load_dotenv
+
+from RAG.app.config import settings
+from RAG.app.ui_gradio import build_ui
+from RAG.app.logger import get_logger
+
+# Import our modular components directly
+from RAG.app.pipeline_modules.pipeline_core import build_pipeline, get_pipeline_components
+from RAG.app.pipeline_modules.pipeline_query import answer_question, answer_with_contexts
+from RAG.app.pipeline_modules.pipeline_utils import (
+    LLM, 
+    load_json_or_jsonl, 
+    discover_eval_files, 
+    normalize_ground_truth, 
+    nan_to_none,
+    get_embeddings
+)
+from RAG.app.pipeline_modules.pipeline_ingestion import clean_run_outputs, discover_input_paths
+
+# Optional graph visualization/database modules. Provide no-op fallbacks if missing.
+try:
+    from RAG.app.Gradio_apps.graph import build_networkx_graph, render_graph_html  # type: ignore
+except Exception:  # pragma: no cover
+    def build_networkx_graph(docs):
+        return None
+    def render_graph_html(G, out_path: str):
+        return None
+
+from RAG.app.Evaluation_Analysis.evaluation_utils import run_eval_detailed, pretty_metrics
+
+
+# Legacy function aliases removed - use the actual functions directly
+
+
+def run_evaluation(docs, hybrid, llm: LLM):
+    log = get_logger()
+    qa_path, gt_path = discover_eval_files()
+    if not qa_path:
+        log.warning("Evaluation requested but QA file not found.")
+        return
+    try:
+        if os.getenv("OPENAI_API_KEY"):
+            os.environ.setdefault("RAGAS_LLM_PROVIDER", "openai")
+    except Exception:
+        pass
+    qa_rows = load_json_or_jsonl(qa_path)
+    gt_rows = load_json_or_jsonl(gt_path) if gt_path else []
+    gt_map = normalize_ground_truth(gt_rows)
+    rows_out = []
+    any_gt = False
+    for i, row in enumerate(qa_rows, start=1):
+        if not isinstance(row, dict):
+            continue
+        q = row.get("question") or row.get("q") or row.get("prompt") or row.get("text")
+        if not q:
+            continue
+        try:
+            ans, ctx_docs = answer_with_contexts(docs, hybrid, llm, q)
+        except Exception as e:
+            continue
+        ctxs = [getattr(d, "page_content", "") for d in (ctx_docs or []) if getattr(d, "page_content", None)]
+        if not ctxs:
+            ctxs = [getattr(docs[0], "page_content", "")] if docs else [""]
+        norm_q = str(q).lower().strip()
+        norm_q = " ".join(norm_q.split())
+        norm_q = norm_q.strip(".,:;!?-Γאפ\u2013\u2014\"'()[]{}")
+        gts = gt_map.get(norm_q, [])
+        if not gts and gt_map:
+            keys = list(gt_map.keys())
+            best = None
+            best_score = 0.0
+            for k in keys:
+                s = difflib.SequenceMatcher(None, norm_q, k).ratio()
+                if s > best_score:
+                    best_score = s
+                    best = k
+            if best is not None and best_score >= 0.75:
+                gts = gt_map.get(best, [])
+        if (not gts) and isinstance(row.get("answer"), (str, int, float)):
+            ans_txt = str(row["answer"]).strip()
+            if ans_txt:
+                gts = [ans_txt]
+        if gts:
+            any_gt = True
+        ref = gts[0] if isinstance(gts, list) and gts else ""
+        rows_out.append({
+            "question": q,
+            "answer": ans or "",
+            "contexts": ctxs,
+            "ground_truths": gts,
+            "reference": ref,
+        })
+        try:
+            log.info("EVAL Q[%d]: %s", i, q)
+        except Exception:
+            pass
+    if not rows_out:
+        print("No evaluation rows to process.")
+        return
+    ds = {"question": [], "answer": [], "contexts": [], "reference": [], "ground_truths": []}
+    for r in rows_out:
+        ds["question"].append(r["question"])
+        ds["answer"].append(r["answer"])
+        ds["contexts"].append(r["contexts"])
+        ds["reference"].append(r.get("reference", ""))
+        ds["ground_truths"].append(r.get("ground_truths", []))  # type: ignore[index]
+    try:
+        summary, per_q = run_eval_detailed(ds)
+    except Exception as e:
+        print(f"RAGAS evaluation failed: {e}")
+        return
+    def _nan_to_none(x):
+        if isinstance(x, float) and math.isnan(x):
+            return None
+        if isinstance(x, list):
+            return [_nan_to_none(v) for v in x]
+        if isinstance(x, dict):
+            return {k: _nan_to_none(v) for k, v in x.items()}
+        return x
+    out_dir = settings.LOGS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with open(out_dir / "eval_ragas_summary.json", "w", encoding="utf-8") as f:
+        json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2)
+    with open(out_dir / "eval_ragas_per_question.jsonl", "w", encoding="utf-8") as f:
+        for rec in per_q:
+            f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False) + "\n")
+    print("RAGAS summary:\n" + pretty_metrics(summary))
+    print("\nPer-question results:")
+    try:
+        for rec in per_q:
+            q = rec.get("question", "")
+            ans = rec.get("answer", "")
+            mets = {k: v for k, v in rec.items() if k not in ("question", "answer", "contexts", "ground_truths")}
+            print("- Q:", q)
+            print("  A:", (ans or "")[:400])
+            print("  metrics:", json.dumps(mets, ensure_ascii=False))
+    except Exception:
+        pass
+
+
+def run() -> None:
+    """Entry point that mirrors the prior Main.main() behavior."""
+    # Load environment variables
+    load_dotenv(override=True)
+    
+    # Set logging level to reduce verbose output
+    import logging
+    logging.getLogger().setLevel(logging.WARNING)
+    
+    # Get logger for this module
+    log = get_logger()
+    log.info("Starting RAG pipeline...")
+    
+    # Use RAGService for business logic
+    from RAG.app.rag_service import RAGService
+    service = RAGService()
+    
+    try:
+        # Run the pipeline using service
+        result = service.run_pipeline(use_normalized=False)
+        docs = result["docs"]
+        hybrid = result["hybrid_retriever"]
+        debug = None  # Debug info not needed for UI
+    except Exception as e:
+        log.error(f"Pipeline failed: {e}")
+        print(f"❌ Pipeline failed: {e}")
+        return
+    # Build a lightweight graph and render it for UI
+    try:
+        G = build_graph(docs)
+        settings.paths.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        graph_html = str(settings.paths.LOGS_DIR / "graph.html")
+        render_graph_html(G, graph_html)
+    except Exception:
+        graph_html = None
+    llm = LLM()
+    # Optional: evaluation mode
+    if os.getenv("RAG_EVAL", "").lower() in ("1", "true", "yes"):
+        run_evaluation(docs, hybrid, llm)
+        if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
+            return
+    # Launch Gradio UI (skip in headless mode)
+    if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
+        print("[HEADLESS] Ingestion complete. Skipping UI launch.")
+        return
+    try:
+        ui = build_ui(docs, hybrid, llm, debug)
+        share = os.getenv("GRADIO_SHARE", "").lower() in ("1", "true", "yes")
+        port = int(os.getenv("GRADIO_PORT", "7860"))
+        server_name = os.getenv("GRADIO_SERVER_NAME", "127.0.0.1")
+        
+        # Auto-open browser when UI is ready
+        import webbrowser
+        import threading
+        import time
+        
+        def open_browser():
+            """Open browser after a short delay to ensure server is ready."""
+            time.sleep(2)  # Wait 2 seconds for server to start
+            url = f"http://{server_name}:{port}"
+            try:
+                webbrowser.open(url)
+                print(f"🌐 Browser opened automatically: {url}")
+            except Exception as e:
+                print(f"⚠️  Could not open browser automatically: {e}")
+                print(f"📱 Please open manually: {url}")
+        
+        # Start browser opening in background thread
+        browser_thread = threading.Thread(target=open_browser, daemon=True)
+        browser_thread.start()
+        
+        try:
+            ui.launch(
+                share=share, 
+                server_name=server_name, 
+                server_port=port, 
+                show_error=True, 
+                inbrowser=False,
+                quiet=False  # Show server status
+            )
+        except KeyboardInterrupt:
+            print("\n🔄 Keyboard interruption in main thread... closing server.")
+            try:
+                ui.close()
+            except:
+                pass
+            print("✅ Server closed gracefully.")
+        except Exception as e:
+            print(f"Server error: {e}")
+            try:
+                ui.close()
+            except:
+                pass
+    except Exception as e:
+        print(f"UI failed to launch: {e}")
+        print(ask(docs, hybrid, llm, "Summarize the failure modes described."))
