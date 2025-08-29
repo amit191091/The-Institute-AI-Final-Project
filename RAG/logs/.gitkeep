@@ -1,4 +1,0 @@
-# This folder will contain RAG system logs and snapshots
-# Files will be automatically generated when running the RAG system
-# - queries.jsonl: Query history and responses
-# - db_snapshot.jsonl: Database state snapshots
