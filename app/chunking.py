@@ -1,11 +1,14 @@
 from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any
 import os
 from app.logger import get_logger
+from app.logger import trace_func
 from app.logger import trace_func
 
 from app.metadata import classify_section_type, extract_keywords
 from app.utils import approx_token_len, simple_summarize, truncate_to_tokens, naive_markdown_table, split_into_sentences, split_into_paragraphs, slugify, sha1_short
 
+@trace_func
 @trace_func
 def structure_chunks(elements, file_path: str) -> List[Dict]:
 	"""
@@ -22,6 +25,18 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			log.debug("Chunking: %d input elements from %s", len(elements or []), file_path)
 		except Exception:
 			pass
+
+	# Optional overrides for text splitting behavior to control chunk counts
+	try:
+		split_multi = os.getenv("RAG_TEXT_SPLIT_MULTI", "0").lower() in ("1", "true", "yes")
+		TARGET_TOK = int(os.getenv("RAG_TEXT_TARGET_TOKENS", "350") or 350)
+		MAX_TOK = int(os.getenv("RAG_TEXT_MAX_TOKENS", "500") or 500)
+		SEMANTIC = os.getenv("RAG_SEMANTIC_CHUNKING", "0").lower() in ("1", "true", "yes")
+		OVERLAP_N = max(0, int(os.getenv("RAG_TEXT_OVERLAP_SENTENCES", "1") or 1))
+	except Exception:
+		split_multi = False
+		TARGET_TOK, MAX_TOK = 350, 500
+		SEMANTIC, OVERLAP_N = False, 1
 
 	# Import settings from config for dynamic chunking limits
 	from app.config import settings
@@ -216,6 +231,140 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 		except Exception:
 			return default
 
+	# ---------------------------
+	# Lightweight heading detection + hierarchy stack
+	# We don't have font sizes here, so use robust text heuristics and known titles.
+	# Maintain a stack of current sections by level (1..3) and generate stable IDs.
+	# ---------------------------
+
+	def _is_heading_by_style(md: Any) -> bool:
+		"""Best-effort: detect heading using metadata style hints (font size/bold)."""
+		try:
+			if md is None:
+				return False
+			font_size = None
+			bold = False
+			if isinstance(md, dict):
+				font_size = md.get("font_size")
+				bold = bool(md.get("bold"))
+			else:
+				font_size = getattr(md, "font_size", None)
+				bold = bool(getattr(md, "bold", False))
+			min_font = float(os.getenv("RAG_HEADING_MIN_FONT", "12") or 12)
+			if isinstance(font_size, (int, float)) and float(font_size) >= min_font:
+				return True
+			if bold:
+				return True
+		except (ValueError, TypeError):
+			return False
+		return False
+
+	def _looks_like_heading(line: str) -> bool:
+		"""Heuristic: short-ish line, mostly Title Case, not ending with period, not a table/caption marker."""
+		ln = (line or "").strip()
+		if not ln:
+			return False
+		# Skip page headers like "1 | P a g e"
+		if "| p a g e" in ln.lower() or "| page" in ln.lower():
+			return False
+		# Skip obvious captions
+		low = ln.lower()
+		if low.startswith("figure ") or low.startswith("fig.") or low.startswith("table "):
+			return False
+		# Length constraint
+		if len(ln) < 3 or len(ln) > 120:
+			return False
+		# Avoid lines that look like sentences
+		if ln.endswith(('.', '!', '?', ';')):
+			return False
+		# Title case proportion
+		words = [w for w in ln.split() if w.isalpha()]
+		if not words:
+			return False
+		cap = sum(1 for w in words if w[0].isupper())
+		if cap / max(1, len(words)) < 0.5:
+			return False
+		return True
+
+	def _heading_level(line: str) -> int:
+		"""Infer heading level based on numbering prefix or known keywords."""
+		import re as _re
+		ln = (line or "").strip()
+		# Numeric like "1.", "2.1", "3.4.2": depth = dot count + 1 (max 3)
+		m = _re.match(r"^\d+(?:\.\d+)*\b", ln)
+		if m:
+			parts = m.group(0).split('.')
+			return min(3, len(parts))
+		# Advanced heading keywords
+		if _re.match(r"^(chapter|section)\s+\d+(?:\.\d+)*\b", ln, _re.I):
+			return 1 if ln.lower().startswith("chapter") else 2
+		if _re.match(r"^appendix\s+[a-z]", ln, _re.I):
+			return 1
+		# Known primary sections
+		primary = {"introduction","executive summary","summary","system description","conclusion","recommendations"}
+		if (ln or "").strip().lower() in primary:
+			return 1
+		# Fallback medium level
+		return 2
+
+	def _detect_heading_in_text(raw: str, md: Any = None) -> Optional[Tuple[str, int]]:
+		# Prefer style-based if metadata indicates heading
+		try:
+			if _is_heading_by_style(md):
+				first_line = (raw or "").strip().splitlines()[0] if raw else None
+				if first_line:
+					return (first_line.strip(), _heading_level(first_line))
+		except Exception:
+			pass
+		# Check first ~10 non-empty lines for a heading candidate
+		lines = [l.strip() for l in (raw or "").splitlines()]
+		seen = 0
+		for l in lines:
+			if not l.strip():
+				continue
+			seen += 1
+			if _looks_like_heading(l):
+				return (l.strip(), _heading_level(l))
+			if seen >= 10:
+				break
+		return None
+
+	def _make_section_id(doc: str, title: str, counter: int) -> str:
+		return f"{doc}#sec-{counter:03d}-{slugify(title)[:40]}"
+
+	# Section hierarchy state
+	section_stack: List[Dict[str, Any]] = []  # each: {id,title,level,breadcrumbs}
+	section_counter = 0
+
+	def _update_section_context(new_title: str, new_level: int) -> Dict[str, Any]:
+		nonlocal section_counter, section_stack
+		# Pop deeper or equal levels
+		while section_stack and section_stack[-1]["level"] >= new_level:
+			section_stack.pop()
+		section_counter += 1
+		sec_id = _make_section_id(doc_id, new_title, section_counter)
+		parent_id = section_stack[-1]["id"] if section_stack else None
+		breadcrumbs = (section_stack[-1]["breadcrumbs"] + [new_title]) if section_stack else [new_title]
+		ctx = {"id": sec_id, "title": new_title, "level": new_level, "parent_id": parent_id, "breadcrumbs": breadcrumbs}
+		section_stack.append(ctx)
+		return ctx
+
+	def _current_section_context() -> Optional[Dict[str, Any]]:
+		return section_stack[-1] if section_stack else None
+
+	# Helper to read metadata values from either dict-like or attr-like containers
+	def _md_get(md: Any, key: str, default: Any = None) -> Any:
+		if md is None:
+			return default
+		try:
+			# dict-like first
+			if isinstance(md, dict):
+				return md.get(key, default)
+			# attr-like fallback
+			return getattr(md, key, default)
+		except Exception:
+			return default
+
 	# Pre-scan: collect caption lines per page like "Figure N: ..." or "Fig. N: ..." to align with image elements
 	# We rely on PDF reading order when coordinates are unavailable.
 	from typing import DefaultDict
@@ -223,6 +372,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 	for _idx, _el in enumerate(elements, start=1):
 		_kind = getattr(_el, "category", getattr(_el, "type", "Text")) or "Text"
 		_md = getattr(_el, "metadata", None)
+		_page = _md_get(_md, "page_number") if _md is not None else None
 		_page = _md_get(_md, "page_number") if _md is not None else None
 		if _page is None:
 			continue
@@ -256,12 +406,22 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 		kind = getattr(el, "category", getattr(el, "type", "Text")) or "Text"
 		md = getattr(el, "metadata", None)
 		page = _md_get(md, "page_number") if md is not None else None
+		page = _md_get(md, "page_number") if md is not None else None
 		# Derive a robust, non-null anchor
 		# Priority: explicit table/figure anchors -> element id -> file-based stems -> fallback
 		table_anchor = _md_get(md, "table_anchor") if md is not None else None
 		figure_anchor = _md_get(md, "figure_anchor") if md is not None else None
+		table_anchor = _md_get(md, "table_anchor") if md is not None else None
+		figure_anchor = _md_get(md, "figure_anchor") if md is not None else None
 		anchor = table_anchor or figure_anchor
 		if anchor is None:
+			anchor = _md_get(md, "id") if md is not None else None
+		extractor = _md_get(md, "extractor") if md is not None else None
+		table_md_path = _md_get(md, "table_md_path") if md is not None else None
+		table_csv_path = _md_get(md, "table_csv_path") if md is not None else None
+		table_number = _md_get(md, "table_number") if md is not None else None
+		table_label = _md_get(md, "table_label") if md is not None else None
+		table_caption = _md_get(md, "table_caption") if md is not None else None
 			anchor = _md_get(md, "id") if md is not None else None
 		extractor = _md_get(md, "extractor") if md is not None else None
 		table_md_path = _md_get(md, "table_md_path") if md is not None else None
@@ -354,6 +514,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			as_text = raw_text
 			# Use the generated summary if available
 			table_summary = _md_get(md, "table_summary") if md is not None else None
+			table_summary = _md_get(md, "table_summary") if md is not None else None
 			if table_summary:
 				distilled = table_summary
 			else:
@@ -395,8 +556,42 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				except Exception:
 					return ""
 			analysis = _analyze_table_markdown(md or as_text)
+			# Structured analysis on markdown to extract basic numeric stats per column
+			def _analyze_table_markdown(md_text: str) -> str:
+				try:
+					lines = [ln for ln in (md_text or "").splitlines() if ln.strip().startswith("|")]
+					if len(lines) < 3:
+						return ""
+					hdr = [c.strip() for c in lines[0].strip("|").split("|")]
+					data_rows = []
+					for ln in lines[2:]:
+						cells = [c.strip() for c in ln.strip("|").split("|")]
+						if len(cells) != len(hdr):
+							continue
+						data_rows.append(cells)
+					stats = []
+					for ci, name in enumerate(hdr):
+						vals: List[float] = []
+						for r in data_rows:
+							try:
+								v = r[ci].replace(",", "")
+								if v.endswith("%"):
+									v = v[:-1]
+								vals.append(float(v))
+							except (ValueError, IndexError):
+								continue
+						if vals:
+							stats.append((name or f"col{ci}", min(vals), max(vals)))
+					if not stats:
+						return ""
+					lines_out = ["ANALYSIS:"] + [f"- {n}: min={vmin:g}, max={vmax:g}" for (n, vmin, vmax) in stats[:4]]
+					return "\n".join(lines_out)
+				except Exception:
+					return ""
+			analysis = _analyze_table_markdown(md or as_text)
 			# If a full label exists, include at the top for clarity
 			label_hdr = f"LABEL: {table_label}\n" if (table_label and str(table_label).strip()) else ""
+			content = f"[TABLE]\n{label_hdr}SUMMARY:\n{distilled}\n{(analysis + '\n') if analysis else ''}MARKDOWN:\n{md or as_text}\nRAW:\n{as_text}"
 			content = f"[TABLE]\n{label_hdr}SUMMARY:\n{distilled}\n{(analysis + '\n') if analysis else ''}MARKDOWN:\n{md or as_text}\nRAW:\n{as_text}"
 			tok = approx_token_len(content)
 			if tok > 800:
@@ -426,6 +621,8 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				order_val = None
 			# Attach hierarchy context to table chunk
 			_sec = _current_section_context()
+			# Attach hierarchy context to table chunk
+			_sec = _current_section_context()
 			chunks.append(
 				{
 					"file_name": file_path,
@@ -451,6 +648,12 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 					"section_level": _sec.get("level") if _sec else None,
 					"section_parent_id": _sec.get("parent_id") if _sec else None,
 					"section_breadcrumbs": _sec.get("breadcrumbs") if _sec else None,
+					# hierarchy
+					"section_id": _sec.get("id") if _sec else None,
+					"section_title": _sec.get("title") if _sec else None,
+					"section_level": _sec.get("level") if _sec else None,
+					"section_parent_id": _sec.get("parent_id") if _sec else None,
+					"section_breadcrumbs": _sec.get("breadcrumbs") if _sec else None,
 					"content": content.strip(),
 					"preview": chunk_preview,
 					"keywords": extract_keywords(content),
@@ -458,6 +661,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			)
 			continue
 
+		elif str(kind).lower() in ("figure", "image"):
 		elif str(kind).lower() in ("figure", "image"):
 			# Increment document-level figure order
 			try:
@@ -502,6 +706,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				aligned_via = None
 			# Build a clean summary derived from caption (or metadata), but drop any leading "Figure X:" label
 			figure_summary = _md_get(md, "figure_summary") if md is not None else None
+			figure_summary = _md_get(md, "figure_summary") if md is not None else None
 			try:
 				import re as _re
 				if figure_summary:
@@ -537,6 +742,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			caption = cap_clean
 			
 			# Try to detect image path from text or metadata
+			img_path = _md_get(md, "image_path") if md is not None else None
 			img_path = _md_get(md, "image_path") if md is not None else None
 			if not img_path:
 				try:
@@ -605,6 +811,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				order_val = None
 			# Store finalized figure chunk
 			_sec = _current_section_context()
+			_sec = _current_section_context()
 			chunks.append(
 				{
 					"file_name": file_path,
@@ -630,6 +837,12 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 					"section_level": _sec.get("level") if _sec else None,
 					"section_parent_id": _sec.get("parent_id") if _sec else None,
 					"section_breadcrumbs": _sec.get("breadcrumbs") if _sec else None,
+					# hierarchy
+					"section_id": _sec.get("id") if _sec else None,
+					"section_title": _sec.get("title") if _sec else None,
+					"section_level": _sec.get("level") if _sec else None,
+					"section_parent_id": _sec.get("parent_id") if _sec else None,
+					"section_breadcrumbs": _sec.get("breadcrumbs") if _sec else None,
 					"content": content.strip(),
 					"preview": chunk_preview,  # Keep preview short for overview displays
 					"keywords": extract_keywords(content),
@@ -649,10 +862,198 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 		except Exception:
 			pass
 
+		# Sentence-aware chunking to target TOKEN ranges; optionally split one text element into multiple chunks
+		sentences = split_into_sentences(raw_text)
+			# (no-op: figure handled)
+
+		# Default: narrative text
+		# Update section context if this text block begins with a heading
+		try:
+			h = _detect_heading_in_text(raw_text, md)
+			if h:
+				h_title, h_level = h
+				_update_section_context(h_title, h_level)
+		except Exception:
+			pass
+
 		# Paragraph-aware then sentence-aware chunking to hit token targets
 		paras = split_into_paragraphs(raw_text)
 		sentences = split_into_sentences("\n\n".join(paras))
 		if not sentences:
+			# Single distilled chunk
+			if anchor is None:
+				try:
+					if page is not None:
+						page_ord[page] = page_ord.get(page, 0) + 1
+						anchor_local = f"p{int(page)}-t{page_ord[page]}"
+					else:
+						anchor_local = f"t{idx}"
+				except Exception:
+					anchor_local = f"t{idx}"
+			else:
+				anchor_local = anchor
+			content_single = simple_summarize(raw_text, ratio=0.2)
+			def _create_chunk_dict(content: str, anchor_local: str) -> Dict[str, Any]:
+				content_c = truncate_to_tokens(content, MAX_TOK).strip()
+				chunk_preview = (content_c or "").splitlines()[0][:200]
+				content_hash = sha1_short(content_c)
+				chunk_id = f"{doc_id}#p{page}:{section_type or 'Text'}/{anchor_local}"
+				try:
+					order_val = page_ord.get(int(page)) if page is not None else None
+				except Exception:
+					order_val = None
+				_sec = _current_section_context()
+				return {
+					"file_name": file_path,
+					"page": page,
+					"section_type": section_type or "Text",
+					"section": section_type or "Text",
+					"anchor": anchor_local,
+					"order": order_val,
+					"doc_id": doc_id,
+					"chunk_id": chunk_id,
+					"content_hash": content_hash,
+					"section_id": _sec.get("id") if _sec else None,
+					"section_title": _sec.get("title") if _sec else None,
+					"section_level": _sec.get("level") if _sec else None,
+					"section_parent_id": _sec.get("parent_id") if _sec else None,
+					"section_breadcrumbs": _sec.get("breadcrumbs") if _sec else None,
+					"content": content_c,
+					"preview": chunk_preview,
+					"keywords": extract_keywords(content_c),
+				}
+			chunks.append(_create_chunk_dict(content_single, anchor_local))
+			if trace:
+				try:
+					log.debug("CHUNK-OUT[%d]: section=%s words=%d", idx, section_type or "Text", len((content_single or "").split()))
+				except Exception:
+					pass
+		else:
+				# Helper available in this scope
+				def _create_chunk_dict(content: str, anchor_local: str) -> Dict[str, Any]:
+					content_c = truncate_to_tokens(content, MAX_TOK).strip()
+					chunk_preview = (content_c or "").splitlines()[0][:200]
+					content_hash = sha1_short(content_c)
+					chunk_id = f"{doc_id}#p{page}:{section_type or 'Text'}/{anchor_local}"
+					try:
+						order_val = page_ord.get(int(page)) if page is not None else None
+					except Exception:
+						order_val = None
+					_sec = _current_section_context()
+					return {
+						"file_name": file_path,
+						"page": page,
+						"section_type": section_type or "Text",
+						"section": section_type or "Text",
+						"anchor": anchor_local,
+						"order": order_val,
+						"doc_id": doc_id,
+						"chunk_id": chunk_id,
+						"content_hash": content_hash,
+						"section_id": _sec.get("id") if _sec else None,
+						"section_title": _sec.get("title") if _sec else None,
+						"section_level": _sec.get("level") if _sec else None,
+						"section_parent_id": _sec.get("parent_id") if _sec else None,
+						"section_breadcrumbs": _sec.get("breadcrumbs") if _sec else None,
+						"content": content_c,
+						"preview": chunk_preview,
+						"keywords": extract_keywords(content_c),
+					}
+
+				def _semantic_groups(ss: List[str]) -> List[List[str]]:
+					if not SEMANTIC:
+						return []
+					try:
+						from sentence_transformers import SentenceTransformer
+						model_name = os.getenv("RAG_SEMANTIC_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+						st = SentenceTransformer(model_name)
+						emb = st.encode(ss, normalize_embeddings=True, show_progress_bar=False)
+						th = float(os.getenv("RAG_SEMANTIC_SIM_THRESHOLD", "0.52"))
+						groups: List[List[str]] = []
+						cur: List[str] = []
+						cur_tok = 0
+						for i in range(len(ss)):
+							if not cur:
+								cur = [ss[i]]
+								cur_tok = approx_token_len(ss[i])
+								continue
+							sim = float(emb[i] @ emb[i-1])
+							s_tok = approx_token_len(ss[i])
+							if sim >= th and (cur_tok + s_tok) <= MAX_TOK:
+								cur.append(ss[i])
+								cur_tok += s_tok
+							else:
+								groups.append(cur)
+								cur = [ss[i]]
+								cur_tok = s_tok
+							if cur_tok >= MAX_TOK:
+								groups.append(cur)
+								cur = []
+								cur_tok = 0
+						if cur:
+							groups.append(cur)
+						return groups
+					except Exception:
+						return []
+
+				groups = _semantic_groups(sentences)
+				if not groups:
+					# Greedy packing with overlap
+					si = 0
+					while si < len(sentences):
+						buf: List[str] = []
+						cur_tokens = 0
+						start_si = si
+						while si < len(sentences):
+							s = sentences[si]
+							s_tok = approx_token_len(s)
+							if cur_tokens + s_tok > MAX_TOK and buf:
+								break
+							buf.append(s)
+							cur_tokens += s_tok
+							si += 1
+							if cur_tokens >= TARGET_TOK:
+								break
+						content_local = " ".join(buf) if buf else sentences[si]
+						try:
+							if page is not None:
+								page_ord[page] = page_ord.get(page, 0) + 1
+								anchor_local = f"p{int(page)}-t{page_ord[page]}"
+							else:
+								anchor_local = f"t{idx}-{page_ord.get(-1,0)+1}"
+						except Exception:
+							anchor_local = f"t{idx}"
+						chunks.append(_create_chunk_dict(content_local, anchor_local))
+						if trace:
+							try:
+								log.debug("CHUNK-OUT[%d.%s]: section=%s words=%d", idx, anchor_local, section_type or "Text", len((content_local or "").split()))
+							except Exception:
+								pass
+						if not split_multi:
+							break
+						# overlap
+						step = max(1, (si - start_si) - OVERLAP_N)
+						si = start_si + step
+				else:
+					for g in groups:
+						if not g:
+							continue
+						try:
+							if page is not None:
+								page_ord[page] = page_ord.get(page, 0) + 1
+								anchor_local = f"p{int(page)}-t{page_ord[page]}"
+							else:
+								anchor_local = f"t{idx}-{page_ord.get(-1,0)+1}"
+						except Exception:
+							anchor_local = f"t{idx}"
+						chunks.append(_create_chunk_dict(" ".join(g), anchor_local))
+						if trace:
+							try:
+								log.debug("CHUNK-OUT[%d.%s]: semantic group sentences=%d", idx, anchor_local, len(g))
+							except Exception:
+								pass
+						if not split_multi:
+							break
 			# Single distilled chunk
 			if anchor is None:
 				try:

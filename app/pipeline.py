@@ -45,12 +45,15 @@ from app.agents import (
     route_question_ex,
 )
 from app.ui_gradio import build_ui
+<<<<<<< HEAD
 # Optional LLM-based router (safe no-op if unavailable)
 try:
     from app.router_chain import route_llm  # type: ignore
 except Exception:  # pragma: no cover
     def route_llm(question: str) -> str:  # type: ignore
         return "DEFAULT"
+=======
+>>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
 # Optional LlamaIndex export
 try:
     from app.llamaindex_export import export_llamaindex_for  # type: ignore
@@ -205,12 +208,21 @@ class _LLM:
                 from langchain_openai import ChatOpenAI
                 model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
                 try:
+<<<<<<< HEAD
                     self._backend = ChatOpenAI(model=model, temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                 except Exception:
                     try:
                         self._backend = ChatOpenAI(model_name=model, temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                     except Exception:
                         self._backend = ChatOpenAI(model=model, temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
+=======
+                    self._backend = ChatOpenAI(model=model, temperature=0.1, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
+                except Exception:
+                    try:
+                        self._backend = ChatOpenAI(model_name=model, temperature=0.1, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
+                    except Exception:
+                        self._backend = ChatOpenAI(model=model, temperature=0.1, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
+>>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
                 self._which = "openai"
             except Exception:
                 self._backend = None
@@ -877,11 +889,19 @@ def run_evaluation(docs, hybrid, llm: _LLM):
     out_dir = Path("logs")
     out_dir.mkdir(exist_ok=True)
     with open(out_dir / "eval_ragas_summary.json", "w", encoding="utf-8") as f:
+<<<<<<< HEAD
         json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2, allow_nan=False)
     per_q_path = out_dir / "eval_ragas_per_question.jsonl"
     with open(per_q_path, "w", encoding="utf-8") as f:
         for rec in per_q:
             f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False, allow_nan=False) + "\n")
+=======
+        json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2)
+    per_q_path = out_dir / "eval_ragas_per_question.jsonl"
+    with open(per_q_path, "w", encoding="utf-8") as f:
+        for rec in per_q:
+            f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False) + "\n")
+>>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
         # Footer: averaged metrics across all questions for quick inspection
         try:
             s = _nan_to_none(summary)
@@ -892,7 +912,11 @@ def run_evaluation(docs, hybrid, llm: _LLM):
                 "context_precision": (s.get("context_precision") if isinstance(s, dict) else None),
                 "context_recall": (s.get("context_recall") if isinstance(s, dict) else None),
             }
+<<<<<<< HEAD
             f.write(json.dumps(footer, ensure_ascii=False, allow_nan=False) + "\n")
+=======
+            f.write(json.dumps(footer, ensure_ascii=False) + "\n")
+>>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
         except Exception:
             pass
     log = get_logger()
@@ -903,6 +927,7 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         log.info("Saved summary to %s and per-question to %s", str(out_dir / "eval_ragas_summary.json"), str(per_q_path))
     except Exception:
         pass
+<<<<<<< HEAD
     # Optional: run DeepEval side-by-side
     try:
         de_sum, de_rows = run_eval_deepeval(ds)
@@ -917,6 +942,8 @@ def run_evaluation(docs, hybrid, llm: _LLM):
             log.warning("DeepEval run failed: %s", e)
         except Exception:
             pass
+=======
+>>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
     print("\nPer-question results:")
     try:
         for rec in per_q:

@@ -16,8 +16,11 @@ evaluate>=0.4.2
 pdfplumber>=0.11.4
 # True cross-encoder reranker
 sentence-transformers>=2.7.0
+<<<<<<< HEAD
 # Optional: Confident AI DeepEval for additional evaluation metrics
 deepeval>=2.0.0
+=======
+>>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
 # Optional table extractor
 camelot-py[base]>=0.11.0
 # Tabula (Java-based) Python bindings

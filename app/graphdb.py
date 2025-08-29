@@ -1,5 +1,6 @@
 from __future__ import annotations
 from app.logger import trace_func
+from app.logger import trace_func
 """
 Neo4j graph database integration: build a persistent graph from docs and run Cypher queries.
 
@@ -16,6 +17,15 @@ from typing import Any, Dict, Iterable, List, Tuple, Sequence
 
 try:
     # Ensure .env is loaded even if caller didn't load it yet (won't override existing env)
+    from dotenv import dotenv_values, find_dotenv  # type: ignore
+    try:
+        env_path = find_dotenv(usecwd=True, raise_error_if_not_found=False)
+        if env_path:
+            for k, v in (dotenv_values(env_path) or {}).items():
+                if v is not None and k not in os.environ:
+                    os.environ[k] = v
+    except Exception:
+        pass
     from dotenv import dotenv_values, find_dotenv  # type: ignore
     try:
         env_path = find_dotenv(usecwd=True, raise_error_if_not_found=False)

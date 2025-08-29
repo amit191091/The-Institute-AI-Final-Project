@@ -112,38 +112,6 @@ def _env_enabled(var_name: str, default: bool = False) -> bool:
     value = os.environ.get(var_name, "1" if default else "0")
     return str(value).lower() in ("1", "true", "yes", "on")
 
-@trace_func
-def _extract_text_via_ocr(image_path: Path) -> str:
-    """Extract text from image using OCR (Tesseract).
-    
-    Returns extracted text or empty string if OCR fails or is unavailable.
-    """
-    if not OCR_AVAILABLE or not Image or not pytesseract or not image_path.exists():
-        return ""
-    
-    try:
-        # Open image and perform OCR
-        with Image.open(image_path) as img:
-            # Convert to RGB if needed for better OCR results
-            if img.mode not in ('RGB', 'L'):
-                img = img.convert('RGB')
-            
-            # Extract text using Tesseract
-            extracted_text = pytesseract.image_to_string(img, config='--psm 6').strip()
-            
-            # Clean up the text - remove excessive whitespace
-            cleaned_text = " ".join(extracted_text.split())
-            
-            # Only return if we got meaningful text (more than just noise)
-            if len(cleaned_text) > 10 and any(c.isalpha() for c in cleaned_text):
-                return cleaned_text
-                
-    except Exception as e:
-        get_logger().debug(f"OCR extraction failed for {image_path}: {e}")
-    
-    return ""
-
-@trace_func
 def _export_tables_to_files(elements: List[Element], path: Path) -> None:
     """Persist detected table elements to data/elements as Markdown and CSV files.
 
@@ -469,63 +437,9 @@ def _try_pymupdf_images(pdf_path: Path) -> List[Element]:
                         "page_number": pno + 1,
                         "image_path": str(out_path.as_posix()),
                         "figure_order": idx,
-                        "image_width": iw,
-                        "image_height": ih,
                     }
-                    
-                    # Enhanced text extraction: try OCR if enabled
-                    ocr_text = ""
-                    if _env_enabled("RAG_USE_OCR", True):
-                        ocr_text = _extract_text_via_ocr(out_path)
-                        if ocr_text:
-                            meta["ocr_text"] = ocr_text
-                    
-                    # Try to find associated text around the figure
-                    figure_context = ""
-                    try:
-                        # Extract text blocks from the page for context
-                        text_blocks = page.get_text("dict").get("blocks", [])
-                        page_text_parts = []
-                        for block in text_blocks:
-                            if "lines" in block:
-                                for line in block["lines"]:
-                                    for span in line.get("spans", []):
-                                        text = span.get("text", "").strip()
-                                        if text:
-                                            page_text_parts.append(text)
-                        
-                        page_text = " ".join(page_text_parts)
-                        # Look for figure references (Figure 1, Fig. 2, etc.)
-                        fig_refs = re.findall(rf"(?:Figure|Fig\.?)\s*{idx}[:\.]?\s*([^.!?]*[.!?])", page_text, re.IGNORECASE)
-                        if fig_refs:
-                            figure_context = " ".join(fig_refs[:2])  # Take first 2 matches
-                            meta["figure_context"] = figure_context
-                    except Exception:
-                        pass
-                    
-                    # Build comprehensive text description
-                    txt_parts = [f"[FIGURE]"]
-                    
-                    # Add OCR text if available
-                    if ocr_text:
-                        txt_parts.append(f"OCR Text: {ocr_text}")
-                    
-                    # Add figure context if found
-                    if figure_context:
-                        txt_parts.append(f"Context: {figure_context}")
-                    
-                    # Add basic metadata
-                    txt_parts.append(f"Image file: {out_path.as_posix()}")
-                    txt_parts.append(f"Page: {pno+1}")
-                    txt_parts.append(f"Figure {idx}")
-                    
-                    txt = "\n".join(txt_parts)
-                    # Mark tiny images as assets (icons, bullets)
-                    try:
-                        if isinstance(iw, int) and isinstance(ih, int) and (iw < 128 or ih < 128):
-                            meta["is_asset"] = True
-                    except Exception:
-                        pass
+                    # Minimal text payload to let chunker identify this as a figure
+                    txt = f"[FIGURE]\nImage file: {out_path.as_posix()}\nPage: {pno+1}"
                     elements.append(Figure(text=txt, metadata=meta))
                 except Exception:
                     continue
