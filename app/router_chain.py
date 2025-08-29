@@ -118,3 +118,39 @@ def route_llm(question: str) -> str:
         return dest
     except Exception:
         return "DEFAULT"
+
+
+@trace_func
+def route_llm_ex(question: str):
+    """Return a dict with route, constraints, and strategy for transparency.
+
+    Example:
+    {"route": "table", "constraints": {"section": "Table"}, "strategy": "Use table QA with reranked contexts"}
+
+    Falls back to {"route": "DEFAULT"} if unsupported.
+    """
+    if os.getenv("RAG_USE_LC_ROUTER", "1").lower() in ("0","false","no"):
+        return {"route": "DEFAULT"}
+    rc = get_router()
+    if rc is None:
+        return {"route": "DEFAULT"}
+    try:
+        out = rc.invoke({"input": question})
+        dest = (out or {}).get("destination") or "DEFAULT"
+        if dest not in ("summary","table","graph","needle"):
+            dest = "DEFAULT"
+        # Heuristic constraints/strategy to mirror the decision for UI trace
+        ql = (question or "").lower()
+        constraints = {}
+        if dest in ("table","graph") or any(k in ql for k in ("table","figure","value","ratio","sensitivity","sampling")):
+            constraints["section"] = "Table"
+        strategy = {
+            "summary": "Synthesize overview from top contexts",
+            "table": "Use table/figure contexts and deterministic KV when possible",
+            "graph": "Route to table agent until dedicated graph agent exists",
+            "needle": "Answer from exact sentences in text contexts",
+            "DEFAULT": "Fallback to heuristic router",
+        }.get(dest, "Heuristic fallback")
+        return {"route": dest, "constraints": constraints, "strategy": strategy}
+    except Exception:
+        return {"route": "DEFAULT"}

@@ -14,6 +14,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 from typing import List, Tuple
 from app.logger import trace_func
+from langchain.schema import Document
 
 # Prefer a safe .env loader to avoid parse spam; we update os.environ manually
 from dotenv import dotenv_values, find_dotenv
@@ -45,15 +46,12 @@ from app.agents import (
     route_question_ex,
 )
 from app.ui_gradio import build_ui
-<<<<<<< HEAD
 # Optional LLM-based router (safe no-op if unavailable)
 try:
     from app.router_chain import route_llm  # type: ignore
 except Exception:  # pragma: no cover
     def route_llm(question: str) -> str:  # type: ignore
         return "DEFAULT"
-=======
->>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
 # Optional LlamaIndex export
 try:
     from app.llamaindex_export import export_llamaindex_for  # type: ignore
@@ -86,6 +84,10 @@ except Exception:  # pragma: no cover
 from app.validate import validate_min_pages
 from app.logger import get_logger, trace_func, trace_here
 from app.eval_ragas import run_eval_detailed, pretty_metrics
+try:
+    from app.agent_orchestrator import run as run_orchestrator  # type: ignore
+except Exception:
+    run_orchestrator = None  # type: ignore
 try:
     from app.eval_deepeval import run_eval as run_eval_deepeval  # type: ignore
 except Exception:  # pragma: no cover
@@ -208,21 +210,12 @@ class _LLM:
                 from langchain_openai import ChatOpenAI
                 model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
                 try:
-<<<<<<< HEAD
                     self._backend = ChatOpenAI(model=model, temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                 except Exception:
                     try:
                         self._backend = ChatOpenAI(model_name=model, temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                     except Exception:
                         self._backend = ChatOpenAI(model=model, temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
-=======
-                    self._backend = ChatOpenAI(model=model, temperature=0.1, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
-                except Exception:
-                    try:
-                        self._backend = ChatOpenAI(model_name=model, temperature=0.1, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
-                    except Exception:
-                        self._backend = ChatOpenAI(model=model, temperature=0.1, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
->>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
                 self._which = "openai"
             except Exception:
                 self._backend = None
@@ -567,12 +560,30 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
         pass
     for i, d in enumerate(top_docs, start=1):
         log.info("ctx[%d] score=%.4f | %s", i, _score(d), _doc_head(d))
-    if route == "summary":
-        ans = answer_summary(_LLM(), top_docs, question)
-    elif route == "table" or route == "graph":  # temporary: route graph to table agent until dedicated graph agent is added
-        ans = answer_table(_LLM(), top_docs, question)
-    else:
-        ans = answer_needle(_LLM(), top_docs, question)
+    # Orchestrator: prefer orchestrated answer by default (with trace for transparency)
+    reasoning_trace = None
+    ans = None
+    try:
+        if run_orchestrator is not None and os.getenv("RAG_USE_ORCHESTRATOR", "1").lower() in ("1","true","yes"):
+            reasoning_trace = run_orchestrator(question, docs, hybrid, _LLM(), do_answer=True)
+            try:
+                if isinstance(reasoning_trace, dict):
+                    ans = reasoning_trace.get("answer") or None
+                    # If orchestrator selected a route, prefer it for logging
+                    if reasoning_trace.get("route"):
+                        route = reasoning_trace.get("route") or route
+            except Exception:
+                pass
+    except Exception:
+        reasoning_trace = None
+    # Fallback to route-based agents if orchestrator didn't answer
+    if not ans:
+        if route == "summary":
+            ans = answer_summary(_LLM(), top_docs, question)
+        elif route == "table" or route == "graph":  # temporary: route graph to table agent until dedicated graph agent is added
+            ans = answer_table(_LLM(), top_docs, question)
+        else:
+            ans = answer_needle(_LLM(), top_docs, question)
     try:
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
@@ -593,7 +604,8 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
                 }
                 for d in top_docs
             ],
-            "answer_preview": (ans or "")[:400],
+            "answer_preview": (ans or ""),
+            "reasoning_trace": reasoning_trace,
         }
         with open(log_dir / "queries.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -604,7 +616,10 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
 
 @trace_func
 def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
-    """Answer a question and also return the contexts used (top_docs)."""
+    """Answer a question and also return the contexts used (top_docs) and the reasoning trace when available.
+
+    Returns: tuple(answer, top_docs, reasoning_trace)
+    """
     log = get_logger()
     qa = query_analyzer(question)
     q_exec = qa.get("canonical") or question
@@ -625,17 +640,30 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
         top_docs = candidates[: settings.CONTEXT_TOP_N] if candidates else []
     if not top_docs:
         top_docs = docs[: settings.CONTEXT_TOP_N]
-    # Use LLM router with fallback to heuristic
-    route = route_llm(question)
-    if route == "DEFAULT":
-        route = route_question(question)
-    if route == "summary":
-        ans = answer_summary(llm, top_docs, question)
-    elif route == "table" or route == "graph":
-        ans = answer_table(llm, top_docs, question)
-    else:
-        ans = answer_needle(llm, top_docs, question)
-    return ans, top_docs
+    # Prefer orchestrator for answering when enabled, fallback to route-based agents
+    ans = None
+    trace = None
+    try:
+        if run_orchestrator is not None and os.getenv("RAG_USE_ORCHESTRATOR", "1").lower() in ("1","true","yes"):
+            tr = run_orchestrator(question, docs, hybrid, llm, do_answer=True)
+            if isinstance(tr, dict):
+                ans = tr.get("answer") or None
+                trace = tr
+    except Exception:
+        ans = None
+        trace = None
+    if not ans:
+        # Use LLM router with fallback to heuristic
+        route = route_llm(question)
+        if route == "DEFAULT":
+            route = route_question(question)
+        if route == "summary":
+            ans = answer_summary(llm, top_docs, question)
+        elif route == "table" or route == "graph":
+            ans = answer_table(llm, top_docs, question)
+        else:
+            ans = answer_needle(llm, top_docs, question)
+    return ans, top_docs, trace
 
 
 @trace_func
@@ -809,7 +837,7 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         if not q:
             continue
         try:
-            ans, ctx_docs = answer_with_contexts(docs, hybrid, llm, q)
+            ans, ctx_docs, tr = answer_with_contexts(docs, hybrid, llm, q)
         except Exception:
             continue
         ctxs = [getattr(d, "page_content", "") for d in (ctx_docs or []) if getattr(d, "page_content", None)]
@@ -848,6 +876,7 @@ def run_evaluation(docs, hybrid, llm: _LLM):
             "contexts": ctxs,
             "ground_truths": gts,
             "reference": ref,
+            "reasoning_trace": tr,
         }
         rows_out.append(rec)
         try:
@@ -866,13 +895,14 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         except Exception:
             pass
         return
-    ds = {"question": [], "answer": [], "contexts": [], "reference": [], "ground_truths": []}
+    ds = {"question": [], "answer": [], "contexts": [], "reference": [], "ground_truths": [], "reasoning_trace": []}
     for r in rows_out:
         ds["question"].append(r["question"])
         ds["answer"].append(r["answer"])
         ds["contexts"].append(r["contexts"])
         ds["reference"].append(r.get("reference", ""))
         ds["ground_truths"].append(r.get("ground_truths", []))  # type: ignore[index]
+        ds["reasoning_trace"].append(r.get("reasoning_trace"))
     try:
         summary, per_q = run_eval_detailed(ds)
     except Exception as e:
@@ -889,19 +919,11 @@ def run_evaluation(docs, hybrid, llm: _LLM):
     out_dir = Path("logs")
     out_dir.mkdir(exist_ok=True)
     with open(out_dir / "eval_ragas_summary.json", "w", encoding="utf-8") as f:
-<<<<<<< HEAD
         json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2, allow_nan=False)
     per_q_path = out_dir / "eval_ragas_per_question.jsonl"
     with open(per_q_path, "w", encoding="utf-8") as f:
         for rec in per_q:
             f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False, allow_nan=False) + "\n")
-=======
-        json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2)
-    per_q_path = out_dir / "eval_ragas_per_question.jsonl"
-    with open(per_q_path, "w", encoding="utf-8") as f:
-        for rec in per_q:
-            f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False) + "\n")
->>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
         # Footer: averaged metrics across all questions for quick inspection
         try:
             s = _nan_to_none(summary)
@@ -911,12 +933,16 @@ def run_evaluation(docs, hybrid, llm: _LLM):
                 "answer_relevancy": (s.get("answer_relevancy") if isinstance(s, dict) else None),
                 "context_precision": (s.get("context_precision") if isinstance(s, dict) else None),
                 "context_recall": (s.get("context_recall") if isinstance(s, dict) else None),
+                "table_qa_accuracy": (s.get("table_qa_accuracy") if isinstance(s, dict) else None),
+                # mirror factual fields for convenience
+                "factual_em_rate": (s.get("factual_em_rate") if isinstance(s, dict) else None),
+                "factual_token_f1": (s.get("factual_token_f1") if isinstance(s, dict) else None),
+                "factual_numeric": (s.get("factual_numeric") if isinstance(s, dict) else None),
+                "factual_range": (s.get("factual_range") if isinstance(s, dict) else None),
+                "factual_list_f1": (s.get("factual_list_f1") if isinstance(s, dict) else None),
+                "factual_score": (s.get("factual_score") if isinstance(s, dict) else None),
             }
-<<<<<<< HEAD
             f.write(json.dumps(footer, ensure_ascii=False, allow_nan=False) + "\n")
-=======
-            f.write(json.dumps(footer, ensure_ascii=False) + "\n")
->>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
         except Exception:
             pass
     log = get_logger()
@@ -927,7 +953,6 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         log.info("Saved summary to %s and per-question to %s", str(out_dir / "eval_ragas_summary.json"), str(per_q_path))
     except Exception:
         pass
-<<<<<<< HEAD
     # Optional: run DeepEval side-by-side
     try:
         de_sum, de_rows = run_eval_deepeval(ds)
@@ -942,8 +967,6 @@ def run_evaluation(docs, hybrid, llm: _LLM):
             log.warning("DeepEval run failed: %s", e)
         except Exception:
             pass
-=======
->>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
     print("\nPer-question results:")
     try:
         for rec in per_q:
@@ -993,6 +1016,82 @@ def run() -> None:
                         os.environ[k] = v
     except Exception:
         pass
+    # Fast path: UI-only mode to reuse existing artifacts (skip ingestion/indexing)
+    try:
+        ui_only = os.getenv("RAG_UI_ONLY", "0").lower() in ("1", "true", "yes")
+    except Exception:
+        ui_only = False
+    if ui_only:
+        # Don't clean artifacts; assume vector DB and snapshots are already present
+        try:
+            os.environ["RAG_CLEAN_RUN"] = "0"
+        except Exception:
+            pass
+        try:
+            # Load docs from full snapshot for UI context/debug (if present)
+            docs: List[Document] = []
+            snap_full = Path("logs") / "db_snapshot_full.jsonl"
+            if snap_full.exists():
+                with open(snap_full, "r", encoding="utf-8") as f:
+                    for ln in f:
+                        try:
+                            rec = json.loads(ln)
+                            txt = rec.get("text") or ""
+                            md = rec.get("metadata") or {}
+                            # Fallback to minimal fields if metadata missing
+                            if not md:
+                                md = {
+                                    "file_name": rec.get("file"),
+                                    "page": rec.get("page"),
+                                    "section": rec.get("section"),
+                                    "anchor": rec.get("anchor"),
+                                }
+                            docs.append(Document(page_content=txt, metadata=md))
+                        except Exception:
+                            continue
+            else:
+                print("[UI-ONLY] Missing logs/db_snapshot_full.jsonl; cannot load docs for UI.")
+                docs = []
+            # Reuse persisted Chroma if configured, else build a minimal in-memory hybrid from docs
+            emb = _get_embeddings()
+            dense_store = None
+            try:
+                from langchain_community.vectorstores import Chroma  # type: ignore
+                persist_dir = os.getenv("RAG_CHROMA_DIR")
+                collection = os.getenv("RAG_CHROMA_COLLECTION")
+                if persist_dir:
+                    Path(persist_dir).mkdir(parents=True, exist_ok=True)
+                    dense_store = Chroma(embedding_function=emb, persist_directory=persist_dir, collection_name=collection) if collection else Chroma(embedding_function=emb, persist_directory=persist_dir)
+                else:
+                    print("[UI-ONLY] RAG_CHROMA_DIR not set; dense retrieval will be in-memory from docs.")
+            except Exception as e:
+                print(f"[UI-ONLY] Failed to open persisted Chroma: {e}")
+                dense_store = None
+            # Sparse retriever from current docs (used both for hybrid and UI previews)
+            sparse = build_sparse_retriever(docs, k=settings.SPARSE_K)
+            # If no persisted dense store, fall back to creating an in-memory vectorstore for docs
+            if dense_store is None:
+                dense_store = build_dense_index(docs, emb)
+            hybrid = build_hybrid_retriever(dense_store, sparse, dense_k=settings.DENSE_K)
+            # Basic graph render (best-effort; optional)
+            try:
+                G = build_graph(docs)
+                Path("logs").mkdir(exist_ok=True)
+                render_graph_html(G, str(Path("logs") / "graph.html"))
+            except Exception:
+                pass
+            llm = _LLM()
+            # Launch UI directly
+            try:
+                ui = build_ui(docs, hybrid, llm, debug=None)
+                share = os.getenv("GRADIO_SHARE", "").lower() in ("1", "true", "yes")
+                port = int(os.getenv("GRADIO_PORT", "7860"))
+                ui.launch(share=share, server_name=os.getenv("GRADIO_SERVER_NAME", "127.0.0.1"), server_port=port, show_error=True)
+            except Exception as e:
+                print(f"UI failed to launch (UI-ONLY): {e}")
+            return
+        except Exception as e:
+            print(f"[UI-ONLY] Fallback to full pipeline due to error: {e}")
     _clean_run_outputs()
     # Default-enable DeepEval when API key is present unless explicitly disabled
     try:

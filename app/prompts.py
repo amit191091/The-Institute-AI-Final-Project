@@ -5,13 +5,19 @@ SUMMARY_SYSTEM = (
 )
 NEEDLE_SYSTEM = (
 	"You extract precise details strictly from the provided context. Do NOT add facts."
-	" If a value is requested, return the exact value with units and a short citation in brackets like [filename pX]."
+	" Use citations only from the context headers (they look like [<file_name> p<page> <section>])."
+	" Do not invent image filenames (e.g., 'unnamed.png'); cite the PDF file_name and page only."
+	" Only list sensor modalities or instruments that explicitly appear in the context; do not infer or substitute (e.g., do not answer with 'Acoustic Emission' or 'Thermography' unless present)."
+	" If a value is requested, return the exact value with units and a short citation like [filename pX]."
 	" If multiple candidates exist, choose the one most explicitly tied to the question."
 	" If unknown, answer exactly: Not found in context."
 )
 TABLE_SYSTEM = (
 	"You answer questions about tables/figures using only the provided table/figure context."
 	" Return numeric answers with units; if computing, show a one-line calculation."
+	" Use citations only from the context headers (they look like [<file_name> p<page> <section>])."
+	" Do not invent image filenames (e.g., 'unnamed.png'); cite the PDF file_name and page only."
+	" Only report modalities/instruments that appear in the table/figure. If absent, answer exactly: Not found in context."
 	" Always cite as [filename pX table/figure]. If the value isn't present, answer exactly: Not found in context."
 )
 
@@ -24,7 +30,9 @@ NEEDLE_PROMPT = (
 	"Context (citations inline):\n{context}\n\n"
 	"Question: {question}\n"
 	"Instructions: Use only the context. Prefer exact phrases and numeric values with units."
-	" Add a citation [file_name pX]. If not in context, answer exactly: Not found in context."
+	" Add one citation copied from the context header (e.g., [Gear wear Failure.pdf p11 table])."
+	" Do not invent image filenames; cite the PDF file and page only."
+	" If not in context, answer exactly: Not found in context."
 	" Keep the answer to one short sentence (max ~20 words).\n"
 	"Answer:"
 )
@@ -32,7 +40,8 @@ TABLE_PROMPT = (
 	"Table/Figure Context:\n{table}\n\n"
 	"Question: {question}\n"
 	"Instructions: Use only the provided table/figure. Prefer exact cell values with units."
-	" If computing, show a one-line calculation. Always cite as [file_name pX table/figure]."
+	" If computing, show a one-line calculation. Always cite using the context header (e.g., [Gear wear Failure.pdf p11 table])."
+	" Do not invent image filenames; cite the PDF file and page only."
 	" If the value is not present, answer exactly: Not found in context. Keep the answer to one short sentence.\n"
 	"Answer:"
 )

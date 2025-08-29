@@ -2,6 +2,8 @@ from typing import List, Any, Dict
 import os
 from pathlib import Path
 
+ 
+
 from langchain_core.documents import Document
 from app.logger import trace_func
 from langchain_community.retrievers import BM25Retriever
@@ -107,6 +109,7 @@ def build_dense_index(docs: List[Document], embedding_fn):
 		except Exception:
 			return _try_faiss()
 
+ 
 
 @trace_func
 def dump_chroma_snapshot(vectorstore, out_path: Path) -> None:

@@ -6,16 +6,21 @@ from __future__ import annotations
 import os as _os
 _os.environ.setdefault("DOTENV_DISABLE", "1")
 
-<<<<<<< HEAD
 # Default to headless + eval unless explicitly overridden, to avoid launching UI during CI/tasks
 # Users can override in their environment or a .env file.
 import os
 os.environ.setdefault("RAG_HEADLESS", "1")
 os.environ.setdefault("RAG_EVAL", "1")
 os.environ.setdefault("RAGAS_LLM_PROVIDER", "google")
+os.environ.setdefault("RAG_USE_CE_RERANKER", "1")
+os.environ.setdefault("RAG_TRIM_ANSWERS", "1")
+# Prefer highly extractive behavior during eval to boost faithfulness
+os.environ.setdefault("RAG_EXTRACTIVE_FORCE", "1")
+# Prune low-signal contexts to improve precision (keep recall via hybrid retrieval)
+os.environ.setdefault("RAG_MIN_CTX_SCORE", "0.05")
+# Try DeepEval if keys are present; safe no-op otherwise
+os.environ.setdefault("RAG_DEEPEVAL", "1")
 
-=======
->>>>>>> 12c9e25a8609b65b22a5a959c780baa265946b73
 from app.pipeline import run
 def main() -> None:
     run()

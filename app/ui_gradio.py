@@ -5,6 +5,7 @@ from pathlib import Path
 import difflib
 import re
 import html as _html
+import os
 
 
 from app.agents import answer_needle, answer_summary, answer_table, route_question_ex
@@ -28,6 +29,12 @@ except Exception:
 	tool_retrieve_filtered = None  # type: ignore
 	tool_list_figures = None  # type: ignore
 
+# Optional orchestrator trace
+try:
+	from app.agent_orchestrator import run as run_orchestrator
+except Exception:
+	run_orchestrator = None  # type: ignore
+
 
 def _render_router_info(route: str, top_docs):
 	heads = [f"[{d.metadata.get('file_name')} p{d.metadata.get('page')} {d.metadata.get('section')}]" for d in top_docs[:3]]
@@ -47,6 +54,7 @@ def _rows_to_df(rows):
 		"table_md",
 		"table_csv",
 		"image",
+		"score",
 		"preview",
 	]
 	try:
@@ -77,14 +85,14 @@ def _extract_table_figure_context(docs):
 			except Exception:
 				pass
 		# Fallback to the chunk page content
-		out.append(f"{head}\n{d.page_content[:1000]}")
+		out.append(f"{head}\n{d.page_content[:2000]}")
 	return "\n\n---\n\n".join(out)
 
 
 def _fmt_docs(docs, max_items=8):
 	out = []
 	for d in docs[:max_items]:
-		out.append(f"[{d.metadata.get('file_name')} p{d.metadata.get('page')} {d.metadata.get('section')}]\n{d.page_content[:300]}")
+		out.append(f"[{d.metadata.get('file_name')} p{d.metadata.get('page')} {d.metadata.get('section')}]\n{d.page_content[:1500]}")
 	return "\n\n---\n\n".join(out) if out else "(none)"
 
 
@@ -133,6 +141,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				md.get("table_md_path") or "",
 				md.get("table_csv_path") or "",
 				md.get("image_path") or "",
+				round(float(md.get("_score") or 0.0), 4),
 				prev,
 			])
 		return rows
@@ -625,6 +634,18 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		except Exception:
 			pass
 		r, rtrace = route_question_ex(q)
+		# Optional orchestrator reasoning trace + default answer
+		reasoning_trace = None
+		ans_from_orch = None
+		try:
+			if run_orchestrator is not None and os.getenv("RAG_USE_ORCHESTRATOR", "1").lower() in ("1","true","yes"):
+				reasoning_trace = run_orchestrator(q, docs, hybrid, llm, do_answer=True)
+				try:
+					ans_from_orch = reasoning_trace.get("answer") if isinstance(reasoning_trace, dict) else None
+				except Exception:
+					ans_from_orch = None
+		except Exception:
+			reasoning_trace = None
 		# Special-case: list all figures — return a deterministic list from metadata
 		try:
 			if (qa.get("filters") or {}).get("section") == "Figure" and re.search(r"\b(list|all|show)\b.*\bfigures\b", q, re.I):
@@ -661,7 +682,9 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				trace = f"Keywords: {qa['keywords']} | Filters: {qa['filters']}"
 				# Compose outputs — keep debug panels wired
 				_dbg_visible = bool(debug_toggle)
-				_dbg_router_md = f"**Route:** {r}  \n**Rules:** {', '.join(rtrace.get('matched', []))}  \n**Canonical:** {qa.get('canonical')}"
+				sig = (rtrace.get('signals') or {}) if isinstance(rtrace, dict) else {}
+				sig_txt = ", ".join([k for k, v in sig.items() if v])
+				_dbg_router_md = f"**Route:** {r}  \n**Rules:** {', '.join(rtrace.get('matched', []))}  \n**Canonical:** {qa.get('canonical')}  \n**Signals:** {sig_txt}"
 				_dbg_filters_json = {"filters": qa.get("filters"), "keywords": qa.get("keywords"), "canonical": qa.get("canonical")}
 				_dbg_dense_md = "Dense (top≈10):\n\n" + _fmt_docs(dense_docs)
 				_dbg_sparse_md = "Sparse (top≈10):\n\n" + _fmt_docs(sparse_docs)
@@ -679,22 +702,33 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					gr.update(value=_dbg_hybrid_md, visible=_dbg_visible),
 					gr.update(value=_dbg_top_df, visible=_dbg_visible),
 					_compare_upd,
+					gr.update(value=reasoning_trace or {}, visible=_dbg_visible),
 					None,
 				)
+		except Exception:
+			pass
+		# If orchestrator produced a route, prefer to display it
+		try:
+			if isinstance(reasoning_trace, dict) and reasoning_trace.get("route"):
+				r = reasoning_trace.get("route") or r
 		except Exception:
 			pass
 		router_info = _render_router_info(r, top_docs) + f" | Agent: {r} | Rules: {', '.join(rtrace.get('matched', []))}"
 		trace = f"Keywords: {qa['keywords']} | Filters: {qa['filters']}"
 		# Build structured debug outputs
 		_dbg_visible = bool(debug_toggle)
-		_dbg_router_md = f"**Route:** {r}  \n**Rules:** {', '.join(rtrace.get('matched', []))}  \n**Canonical:** {qa.get('canonical')}"
+		sig = (rtrace.get('signals') or {}) if isinstance(rtrace, dict) else {}
+		sig_txt = ", ".join([k for k, v in sig.items() if v])
+		_dbg_router_md = f"**Route:** {r}  \n**Rules:** {', '.join(rtrace.get('matched', []))}  \n**Canonical:** {qa.get('canonical')}  \n**Signals:** {sig_txt}"
 		_dbg_filters_json = {"filters": qa.get("filters"), "keywords": qa.get("keywords"), "canonical": qa.get("canonical")}
 		_dbg_dense_md = "Dense (top≈10):\n\n" + _fmt_docs(dense_docs)
 		_dbg_sparse_md = "Sparse (top≈10):\n\n" + _fmt_docs(sparse_docs)
 		_dbg_hybrid_md = "Hybrid candidates (pre-filter):\n\n" + _fmt_docs(cands)
 		_dbg_top_df = _rows_to_df(_rows_from_docs(top_docs))
+		ans_raw = ans_from_orch
 		if r == "summary":
-			ans_raw = answer_summary(llm, top_docs, q)
+			if not ans_raw:
+				ans_raw = answer_summary(llm, top_docs, q)
 			out = f"{router_info}\n\n{ans_raw}\n\n(trace: {trace})"
 		elif r == "table":
 			# If user asked for a specific figure/table number, prioritize matching docs
@@ -731,7 +765,8 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 			except Exception:
 				pass
 			table_ctx = _extract_table_figure_context(top_docs)
-			ans_raw = answer_table(llm, top_docs, q)
+			if not ans_raw:
+				ans_raw = answer_table(llm, top_docs, q)
 			# If a relevant figure was retrieved, prefer displaying via an Image component
 			fig_path = None
 			try:
@@ -772,7 +807,8 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 			# We keep markdown preview for table context, and the actual image will show in a Gallery component
 			out = f"{router_info}\n\nTable/Figure context preview:\n{table_ctx}\n\n---\n\n{ans_raw}\n\n(trace: {trace})"
 		else:
-			ans_raw = answer_needle(llm, top_docs, q)
+			if not ans_raw:
+				ans_raw = answer_needle(llm, top_docs, q)
 			out = f"{router_info}\n\n{ans_raw}\n\n(trace: {trace})"
 
 		# Always compute metrics per query using GT/QA maps
@@ -828,8 +864,8 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 			missing = sorted(list(ref_t - ans_t))[:20]
 			extra = sorted(list(ans_t - ref_t))[:20]
 			compare_dict = {
-				"reference_excerpt": ref[:400],
-				"answer_excerpt": (ans_raw or "")[:400],
+				"reference_excerpt": ref,
+				"answer_excerpt": (ans_raw or ""),
 				"missing_ref_tokens_in_answer": missing,
 				"extra_answer_tokens_not_in_reference": extra,
 			}
@@ -852,6 +888,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				"question": q,
 				"route": r,
 				"router_trace": rtrace,
+				"reasoning_trace": reasoning_trace,
 				"answer": out,
 				"metrics": metrics_txt,
 				"contexts": [
@@ -876,9 +913,10 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		_hybrid_upd = gr.update(value=_dbg_hybrid_md, visible=_dbg_visible)
 		_topdocs_upd = gr.update(value=_dbg_top_df, visible=_dbg_visible)
 		_compare_upd = gr.update(value=compare_dict, visible=_dbg_visible)
+		_reason_upd = gr.update(value=reasoning_trace or {}, visible=_dbg_visible)
 		# Update figure preview slot when available; leave None to avoid clearing external viewers
 		fig_update = gr.update(value=fig_path) if 'fig_path' in locals() and fig_path else None
-		return out, metrics_txt, _acc_upd, _router_upd, _filters_upd, _dense_upd, _sparse_upd, _hybrid_upd, _topdocs_upd, _compare_upd, fig_update
+		return out, metrics_txt, _acc_upd, _router_upd, _filters_upd, _dense_upd, _sparse_upd, _hybrid_upd, _topdocs_upd, _compare_upd, _reason_upd, fig_update
 
 	# Build a sleeker Blocks UI with tabs
 	with gr.Blocks(title="Hybrid RAG – Failure Reports") as demo:
@@ -900,10 +938,11 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					dbg_hybrid = gr.Markdown()
 					dbg_topdocs = gr.Dataframe(interactive=False)
 					dbg_compare = gr.JSON(label="Answer vs Reference (tokens)")
+					dbg_reason = gr.JSON(label="Reasoning trace")
 				btn.click(
 					on_ask,
 					inputs=[q, dbg],
-					outputs=[ans, metrics, dbg_acc, dbg_router, dbg_filters, dbg_dense, dbg_sparse, dbg_hybrid, dbg_topdocs, dbg_compare, fig_preview],
+					outputs=[ans, metrics, dbg_acc, dbg_router, dbg_filters, dbg_dense, dbg_sparse, dbg_hybrid, dbg_topdocs, dbg_compare, dbg_reason, fig_preview],
 				)
 
 

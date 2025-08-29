@@ -41,9 +41,10 @@ except ImportError:
     camelot = None
 
 try:
-    import tabula  # type: ignore
-except ImportError:
-    tabula = None
+    # Prefer the public API; Pylance flags tabula.read_pdf as private otherwise
+    from tabula.io import read_pdf as tabula_read_pdf  # type: ignore
+except Exception:
+    tabula_read_pdf = None  # type: ignore
 
 # Images via PyMuPDF (fitz)
 try:
@@ -53,12 +54,12 @@ except Exception:
 
 # OCR capabilities for enhanced figure text extraction
 try:
-    from PIL import Image
-    import pytesseract
+    from PIL import Image  # type: ignore
+    import pytesseract  # type: ignore
     OCR_AVAILABLE = True
-except ImportError:
-    Image = None
-    pytesseract = None
+except Exception:
+    Image = None  # type: ignore
+    pytesseract = None  # type: ignore
     OCR_AVAILABLE = False
 
 # Optional LlamaParse for enhanced parsing
@@ -112,6 +113,38 @@ def _env_enabled(var_name: str, default: bool = False) -> bool:
     value = os.environ.get(var_name, "1" if default else "0")
     return str(value).lower() in ("1", "true", "yes", "on")
 
+@trace_func
+def _extract_text_via_ocr(image_path: Path) -> str:
+    """Extract text from image using OCR (Tesseract).
+    
+    Returns extracted text or empty string if OCR fails or is unavailable.
+    """
+    if not OCR_AVAILABLE or not Image or not pytesseract or not image_path.exists():
+        return ""
+    
+    try:
+        # Open image and perform OCR
+        with Image.open(image_path) as img:
+            # Convert to RGB if needed for better OCR results
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            
+            # Extract text using Tesseract
+            extracted_text = pytesseract.image_to_string(img, config='--psm 6').strip()
+            
+            # Clean up the text - remove excessive whitespace
+            cleaned_text = " ".join(extracted_text.split())
+            
+            # Only return if we got meaningful text (more than just noise)
+            if len(cleaned_text) > 10 and any(c.isalpha() for c in cleaned_text):
+                return cleaned_text
+                
+    except Exception as e:
+        get_logger().debug(f"OCR extraction failed for {image_path}: {e}")
+    
+    return ""
+
+@trace_func
 def _export_tables_to_files(elements: List[Element], path: Path) -> None:
     """Persist detected table elements to data/elements as Markdown and CSV files.
 
@@ -308,7 +341,7 @@ def _try_tabula_tables(pdf_path: Path) -> List[Element]:
     - Emits GitHub-flavored markdown for each table.
     - Controlled by RAG_USE_TABULA (truthy to enable).
     """
-    if not tabula or not _env_enabled("RAG_USE_TABULA"):
+    if not tabula_read_pdf or not _env_enabled("RAG_USE_TABULA"):
         return []
 
     log = get_logger()
@@ -345,21 +378,36 @@ def _try_tabula_tables(pdf_path: Path) -> List[Element]:
             # Fallback: let Tabula find tables across all pages (no page_number available)
             dfs = []
             try:
-                dfs = tabula.read_pdf(str(pdf_path), pages="all", multiple_tables=True, lattice=True)
+                if tabula_read_pdf:
+                    dfs = tabula_read_pdf(str(pdf_path), pages="all", multiple_tables=True, lattice=True)
             except Exception:
                 pass
             if not dfs:
                 try:
-                    dfs = tabula.read_pdf(str(pdf_path), pages="all", multiple_tables=True, stream=True)
+                    if tabula_read_pdf:
+                        dfs = tabula_read_pdf(str(pdf_path), pages="all", multiple_tables=True, stream=True)
                 except Exception:
                     dfs = []
             if debug:
                 log.info(f"tabula: Found {len(dfs)} tables (no page count available)")
             for i, df in enumerate(dfs):
                 try:
-                    markdown = df.to_markdown(index=False)
+                    to_md = getattr(df, "to_markdown", None)
+                    to_csv = getattr(df, "to_csv", None)
+                    if callable(to_md):
+                        markdown = to_md(index=False)
+                    elif callable(to_csv):
+                        markdown = to_csv(index=False)
+                    else:
+                        markdown = str(df)
                 except Exception:
-                    markdown = df.to_csv(index=False)  # last resort
+                    try:
+                        to_csv = getattr(df, "to_csv", None)
+                        markdown = to_csv(index=False) if callable(to_csv) else str(df)
+                    except Exception:
+                        markdown = str(df)
+                # Ensure string type for element text
+                markdown = str(markdown or "")
                 metadata = {
                     "extractor": "tabula",
                     "table_index": i,
@@ -370,9 +418,12 @@ def _try_tabula_tables(pdf_path: Path) -> List[Element]:
             for p in range(1, page_count + 1):
                 try:
                     # Try lattice mode first (grid-like tables), then stream mode (spaces/lines)
-                    dfs = tabula.read_pdf(str(pdf_path), pages=str(p), multiple_tables=True, lattice=True)
+                    dfs = []
+                    if tabula_read_pdf:
+                        dfs = tabula_read_pdf(str(pdf_path), pages=str(p), multiple_tables=True, lattice=True)
                     if not dfs:
-                        dfs = tabula.read_pdf(str(pdf_path), pages=str(p), multiple_tables=True, stream=True)
+                        if tabula_read_pdf:
+                            dfs = tabula_read_pdf(str(pdf_path), pages=str(p), multiple_tables=True, stream=True)
                 except Exception as e:
                     if debug:
                         log.warning(f"tabula: page {p} extraction failed: {e}")
@@ -383,9 +434,22 @@ def _try_tabula_tables(pdf_path: Path) -> List[Element]:
                     log.info(f"tabula: page {p} -> {len(dfs)} tables")
                 for i, df in enumerate(dfs):
                     try:
-                        markdown = df.to_markdown(index=False)
+                        to_md = getattr(df, "to_markdown", None)
+                        to_csv = getattr(df, "to_csv", None)
+                        if callable(to_md):
+                            markdown = to_md(index=False)
+                        elif callable(to_csv):
+                            markdown = to_csv(index=False)
+                        else:
+                            markdown = str(df)
                     except Exception:
-                        markdown = df.to_csv(index=False)
+                        try:
+                            to_csv = getattr(df, "to_csv", None)
+                            markdown = to_csv(index=False) if callable(to_csv) else str(df)
+                        except Exception:
+                            markdown = str(df)
+                    # Ensure string type for element text
+                    markdown = str(markdown or "")
                     metadata = {
                         "extractor": "tabula",
                         "page_number": p,
@@ -437,9 +501,78 @@ def _try_pymupdf_images(pdf_path: Path) -> List[Element]:
                         "page_number": pno + 1,
                         "image_path": str(out_path.as_posix()),
                         "figure_order": idx,
+                        "image_width": iw,
+                        "image_height": ih,
                     }
-                    # Minimal text payload to let chunker identify this as a figure
-                    txt = f"[FIGURE]\nImage file: {out_path.as_posix()}\nPage: {pno+1}"
+                    
+                    # Enhanced text extraction: try OCR if enabled
+                    ocr_text = ""
+                    if _env_enabled("RAG_USE_OCR", True):
+                        ocr_text = _extract_text_via_ocr(out_path)
+                        if ocr_text:
+                            meta["ocr_text"] = ocr_text
+                    
+                    # Try to find associated text around the figure
+                    figure_context = ""
+                    try:
+                        # Extract text blocks from the page for context
+                        _gt = getattr(page, "get_text", None) or getattr(page, "getText", None)
+                        text_dict: dict = {}
+                        if callable(_gt):
+                            try:
+                                _res = _gt("dict")
+                                if isinstance(_res, dict):
+                                    text_dict = _res
+                                else:
+                                    text_dict = {}
+                            except Exception:
+                                try:
+                                    _res2 = _gt()
+                                    text_dict = _res2 if isinstance(_res2, dict) else {}
+                                except Exception:
+                                    text_dict = {}
+                        text_blocks = text_dict.get("blocks", []) if isinstance(text_dict, dict) else []
+                        page_text_parts = []
+                        for block in text_blocks:
+                            if "lines" in block:
+                                for line in block["lines"]:
+                                    for span in line.get("spans", []):
+                                        text = span.get("text", "").strip()
+                                        if text:
+                                            page_text_parts.append(text)
+                        
+                        page_text = " ".join(page_text_parts)
+                        # Look for figure references (Figure 1, Fig. 2, etc.)
+                        fig_refs = re.findall(rf"(?:Figure|Fig\.?)\s*{idx}[:\.]?\s*([^.!?]*[.!?])", page_text, re.IGNORECASE)
+                        if fig_refs:
+                            figure_context = " ".join(fig_refs[:2])  # Take first 2 matches
+                            meta["figure_context"] = figure_context
+                    except Exception:
+                        pass
+                    
+                    # Build comprehensive text description
+                    txt_parts = [f"[FIGURE]"]
+                    
+                    # Add OCR text if available
+                    if ocr_text:
+                        txt_parts.append(f"OCR Text: {ocr_text}")
+                    
+                    # Add figure context if found
+                    if figure_context:
+                        txt_parts.append(f"Context: {figure_context}")
+                    
+                    # Add basic metadata
+                    txt_parts.append(f"Image file: {out_path.as_posix()}")
+                    txt_parts.append(f"Page: {pno+1}")
+                    txt_parts.append(f"Figure {idx}")
+                    
+                    txt = "\n".join(txt_parts)
+                    # Mark tiny images as assets (icons, bullets)
+                    try:
+                        if isinstance(iw, int) and isinstance(ih, int) and (iw < 128 or ih < 128):
+                            meta["is_asset"] = True
+                    except Exception:
+                        pass
                     elements.append(Figure(text=txt, metadata=meta))
                 except Exception:
                     continue
@@ -591,7 +724,7 @@ def load_elements(path: Path) -> List[Element]:
             "pdfplumber": _env_enabled("RAG_USE_PDFPLUMBER", True),
             "camelot": _env_enabled("RAG_USE_CAMELOT", False),
             "tabula": _env_enabled("RAG_USE_TABULA", False),
-            "llamaparse": _env_enabled("RAG_USE_LLAMAPARSE"),
+            "llamaparse": _env_enabled("RAG_USE_LLAMA_PARSE"),
             "pymupdf": _env_enabled("RAG_USE_PYMUPDF", True),
         }
         log.info(

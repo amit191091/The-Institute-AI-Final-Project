@@ -1,5 +1,4 @@
 from app.logger import trace_func
-from app.logger import trace_func
 # RAGAS imports with robust fallbacks
 try:
 	from ragas import evaluate
@@ -29,6 +28,7 @@ import os
 import math
 import re
 from typing import List, Tuple
+from app.eval_factual import compute_factual_metrics
 
 # Optional sklearn for overlap F1
 try:
@@ -41,13 +41,7 @@ from dotenv import dotenv_values, find_dotenv, load_dotenv
 # Load .env file
 load_dotenv()
 
-from dotenv import dotenv_values, find_dotenv, load_dotenv
 
-# Load .env file
-load_dotenv()
-
-
-@trace_func
 @trace_func
 def _simple_tokens(text: str) -> List[str]:
 	t = (text or "").lower()
@@ -56,7 +50,6 @@ def _simple_tokens(text: str) -> List[str]:
 	toks = [w for w in t.split() if len(w) >= 2]
 	return toks
 
-@trace_func
 @trace_func
 def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, float]:
 	"""Compute a simple token-overlap precision/recall/F1 between reference and concatenated contexts.
@@ -91,17 +84,7 @@ def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, flo
 	f1 = (2 * p * r / (p + r)) if (p + r) > 0 else 0.0
 	return float(p), float(r), float(f1)
 @trace_func
-@trace_func
 def _setup_ragas_llm():
-	"""Setup LLM for RAGAS evaluation - supports both OpenAI and Google."""
-    
-	# Allow explicit provider override
-	provider = (os.getenv("RAGAS_LLM_PROVIDER") or "").lower().strip()
-	try_openai_first = provider == "openai" or (provider == "" and os.getenv("OPENAI_API_KEY"))
-	try_google_next = provider == "google" or (provider == "" and os.getenv("GOOGLE_API_KEY"))
-	open_ai_api = os.getenv("OPENAI_API_KEY")
-	# Prefer OpenAI for RAGAS (compatibility with evaluation prompts)
-	if try_openai_first:
 	"""Setup LLM for RAGAS evaluation.
 	Policy: Use Google by default whenever a GOOGLE_API_KEY is present. Do NOT fall back to OpenAI
 	unless explicitly allowed via RAGAS_USE_OPENAI=1 (or true/yes).
@@ -129,31 +112,13 @@ def _setup_ragas_llm():
 		try:
 			from langchain_openai import ChatOpenAI
 			openai_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
-			llm = ChatOpenAI(model=openai_model, temperature=0, api_key=open_ai_api)
+			llm = ChatOpenAI(model=openai_model, temperature=0)
 			print(f"[RAGAS LLM] Using OpenAI model: {openai_model}")
 			return llm
 		except Exception as e:
 			print(f"Failed to setup OpenAI LLM for RAGAS: {e}")
 
-	# Fallback to Google Gemini if available
-	if try_google_next:
-		try:
-			from langchain_google_genai import ChatGoogleGenerativeAI
-			preferred_model = os.getenv("GOOGLE_CHAT_MODEL", "gemini-1.5-pro")
-			safety_settings = None  # keep default safety behavior; avoid enum incompatibilities
-			llm = ChatGoogleGenerativeAI(
-				model=preferred_model,
-				temperature=0,
-				safety_settings=safety_settings,
-			)
-			print(f"[RAGAS LLM] Using Google Gemini model: {preferred_model}")
-			return llm
-		except Exception as e:
-			print(f"Failed to setup Google LLM for RAGAS: {e}")
-	
-
 	return None
-@trace_func
 @trace_func
 def _setup_ragas_embeddings():
 	"""Setup embeddings for RAGAS evaluation - supports both OpenAI and Google."""
@@ -186,7 +151,6 @@ def _setup_ragas_embeddings():
 	
 	return None
 
-@trace_func
 @trace_func
 def run_eval(dataset):
 	if evaluate is None:
@@ -245,8 +209,6 @@ def run_eval(dataset):
 				result = evaluate(ds, metrics=metrics, llm=llm, embeddings=emb)  # type: ignore
 		except Exception as e:
 			raise RuntimeError(f"RAGAS evaluation failed: {e}") from e
-	# Build summary robustly from per-question outputs
-	@trace_func
 
 	@trace_func
 	def _mean_safe(vals):
@@ -331,13 +293,27 @@ def run_eval(dataset):
 		relev = _mean_safe([r.get("answer_relevancy") for r in items])
 		cprec = _mean_safe([r.get("context_precision") for r in items])
 		crec = _mean_safe([r.get("context_recall") for r in items])
-		base = {
+		out = {
 			"faithfulness": faith,
 			"answer_relevancy": relev,
 			"context_precision": cprec,
 			"context_recall": crec,
 		}
-		return base
+		# Add heuristic overlap metrics
+		try:
+			refs = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
+			ctxs = dataset.get("contexts") if isinstance(dataset, dict) else dataset["contexts"]
+			if refs and ctxs:
+				p_list, r_list, f1_list = [], [], []
+				for ref, ctx in zip(refs, ctxs):
+					p, r, f1v = overlap_prf1(ref or "", list(ctx or []))
+					p_list.append(p); r_list.append(r); f1_list.append(f1v)
+				out["overlap_precision"] = _mean_safe(p_list)
+				out["overlap_recall"] = _mean_safe(r_list)
+				out["overlap_f1"] = _mean_safe(f1_list)
+		except Exception:
+			pass
+		return out
 	except Exception:
 		return {
 			"faithfulness": float("nan"),
@@ -349,7 +325,6 @@ def run_eval(dataset):
 			"overlap_f1": float("nan"),
 		}
 
-@trace_func
 @trace_func
 def run_eval_detailed(dataset):
 	"""Run RAGAS and return (summary_metrics, per_question) where per_question is a
@@ -409,6 +384,40 @@ def run_eval_detailed(dataset):
 			result = evaluate(ds, metrics=metrics)  # type: ignore
 	# Per-question extraction aligned with original inputs
 	per_q = []
+
+	def _is_table_like_question(q: str | None) -> bool:
+		if not q:
+			return False
+		ql = str(q).lower()
+		import re as _re
+		pats = [
+			r"wear\s*depth",
+			r"\bwhich\s+wear\s+case\b",
+			r"\btransmission\s+ratio\b|\bgear\s+ratio\b|\bz\s*/\s*z\b",
+			r"\bmodule\b",
+			r"sampling\s*rate|k\s*s\s*/\s*s|khz|hz",
+			r"\bsensitivity\b|m\s*v\s*/\s*g",
+			r"\btachometer\b|\baccelerometer\b",
+			r"\blubricant\b|viscosity",
+		]
+		return any(_re.search(p, ql) for p in pats)
+
+	def _table_correct(rec: dict) -> bool:
+		"""Heuristic correctness for table-like Qs using factual metrics."""
+		if not _is_table_like_question(rec.get("question")):
+			return False
+			
+		# Strong signals for correctness
+		if bool(rec.get("factual_em")):
+			return True
+		if (rec.get("factual_numeric") or 0.0) >= 0.99:
+			return True
+		if (rec.get("factual_list_f1") or 0.0) >= 0.99:
+			return True
+		# Token F1 high threshold
+		if (rec.get("factual_token_f1") or 0.0) >= 0.9:
+			return True
+		return False
 	def _maybe_float(x):
 		try:
 			return float(x)
@@ -426,6 +435,8 @@ def run_eval_detailed(dataset):
 		q_list = list(_get_col("question"))
 		a_list = list(_get_col("answer"))
 		r_list = list(_get_col("reference"))
+		tr_raw = _get_col("reasoning_trace")
+		tr_list = list(tr_raw) if tr_raw else []
 		n = max(len(q_list), len(a_list), len(r_list))
 
 		def _pick(series_like, names):
@@ -462,11 +473,18 @@ def run_eval_detailed(dataset):
 					"question": q_list[i] if i < len(q_list) else None,
 					"answer": a_list[i] if i < len(a_list) else None,
 					"reference": r_list[i] if i < len(r_list) else None,
+					"reasoning_trace": (tr_list[i] if i < len(tr_list) else None),
 					"faithfulness": _maybe_float(_pick(row, ["faithfulness", "faithfulness_score", "faith"])),
 					"answer_relevancy": _maybe_float(_pick(row, ["answer_relevancy", "relevancy", "answer_rel"])) ,
 					"context_precision": _maybe_float(_pick(row, ["context_precision", "ctx_precision", "precision"])),
 					"context_recall": _maybe_float(_pick(row, ["context_recall", "ctx_recall", "recall"])),
 				}
+				# Factual metrics against reference
+				try:
+					fm = compute_factual_metrics(rec.get("answer") or "", rec.get("reference") or "")
+					rec.update(fm)
+				except Exception:
+					pass
 				# Add overlap metrics per-question
 				try:
 					ref = rec.get("reference") or ""
@@ -476,6 +494,9 @@ def run_eval_detailed(dataset):
 					rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
 				except Exception:
 					pass
+				# mark table QA correctness
+				rec["table_like"] = _is_table_like_question(rec.get("question"))
+				rec["table_correct"] = _table_correct(rec)
 				per_q.append(rec)
 		elif hasattr(result, "results"):
 			items = list(getattr(result, "results") or [])
@@ -486,11 +507,17 @@ def run_eval_detailed(dataset):
 					"question": q_list[i] if i < len(q_list) else None,
 					"answer": a_list[i] if i < len(a_list) else None,
 					"reference": r_list[i] if i < len(r_list) else None,
+					"reasoning_trace": (tr_list[i] if i < len(tr_list) else None),
 					"faithfulness": _maybe_float(_pick(item, ["faithfulness", "faithfulness_score", "faith"])),
 					"answer_relevancy": _maybe_float(_pick(item, ["answer_relevancy", "relevancy", "answer_rel"])) ,
 					"context_precision": _maybe_float(_pick(item, ["context_precision", "ctx_precision", "precision"])),
 					"context_recall": _maybe_float(_pick(item, ["context_recall", "ctx_recall", "recall"])),
 				}
+				try:
+					fm = compute_factual_metrics(rec.get("answer") or "", rec.get("reference") or "")
+					rec.update(fm)
+				except Exception:
+					pass
 				try:
 					ref = rec.get("reference") or ""
 					ctxs = _get_col("contexts")[i] if i < len(_get_col("contexts")) else []
@@ -498,6 +525,9 @@ def run_eval_detailed(dataset):
 					rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
 				except Exception:
 					pass
+				# mark table QA correctness
+				rec["table_like"] = _is_table_like_question(rec.get("question"))
+				rec["table_correct"] = _table_correct(rec)
 				per_q.append(rec)
 		# If results shorter than dataset, pad remaining with None metrics
 		for i in range(len(per_q), n):
@@ -505,16 +535,18 @@ def run_eval_detailed(dataset):
 				"question": q_list[i] if i < len(q_list) else None,
 				"answer": a_list[i] if i < len(a_list) else None,
 				"reference": r_list[i] if i < len(r_list) else None,
+				"reasoning_trace": (tr_list[i] if i < len(tr_list) else None),
 				"faithfulness": None,
 				"answer_relevancy": None,
 				"context_precision": None,
 				"context_recall": None,
+				"table_like": _is_table_like_question(q_list[i] if i < len(q_list) else None),
+				"table_correct": None,
 			})
 	except Exception:
 		per_q = []
 
 	# Compute summary from per-question metrics as a robust fallback
-	@trace_func
 	@trace_func
 	def _mean_safe(values):
 		vals = [v for v in values if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
@@ -526,11 +558,32 @@ def run_eval_detailed(dataset):
 		"context_precision": _mean_safe([r.get("context_precision") for r in per_q]),
 		"context_recall": _mean_safe([r.get("context_recall") for r in per_q]),
 	}
+	# Factual summary
+	try:
+		summary["factual_em_rate"] = _mean_safe([1.0 if r.get("factual_em") else 0.0 for r in per_q])
+		summary["factual_token_f1"] = _mean_safe([r.get("factual_token_f1") for r in per_q])
+		summary["factual_numeric"] = _mean_safe([r.get("factual_numeric") for r in per_q])
+		summary["factual_range"] = _mean_safe([r.get("factual_range") for r in per_q])
+		summary["factual_list_f1"] = _mean_safe([r.get("factual_list_f1") for r in per_q])
+		summary["factual_score"] = _mean_safe([r.get("factual_score") for r in per_q])
+	except Exception:
+		pass
 	# Compute overlap metrics summary
 	try:
 		summary["overlap_precision"] = _mean_safe([r.get("overlap_precision") for r in per_q])
 		summary["overlap_recall"] = _mean_safe([r.get("overlap_recall") for r in per_q])
 		summary["overlap_f1"] = _mean_safe([r.get("overlap_f1") for r in per_q])
+	except Exception:
+		pass
+
+	# Table QA accuracy
+	try:
+		table_items = [r for r in per_q if r.get("table_like")]
+		if table_items:
+			correct = [1 for r in table_items if r.get("table_correct")]
+			summary["table_qa_accuracy"] = float(sum(correct) / len(table_items))
+		else:
+			summary["table_qa_accuracy"] = None
 	except Exception:
 		pass
 
@@ -544,7 +597,6 @@ TARGETS = {
 	"table_qa_accuracy": 0.90,
 }
 
-@trace_func
 @trace_func
 def pretty_metrics(m: dict) -> str:
 	def _fmt(x):
@@ -565,6 +617,16 @@ def pretty_metrics(m: dict) -> str:
 		f"Context precision: {_fmt(m.get('context_precision'))}",
 		f"Context recall: {_fmt(m.get('context_recall'))}",
 	]
+	if "table_qa_accuracy" in m:
+		lines.append(f"Table QA accuracy: {_fmt(m.get('table_qa_accuracy'))}")
+	# Factual metrics (context-agnostic)
+	if any(k in m for k in ("factual_score", "factual_em_rate", "factual_token_f1", "factual_numeric", "factual_range", "factual_list_f1")):
+		lines.append(f"Factual score: {_fmt(m.get('factual_score'))}")
+		lines.append(f"Factual EM rate: {_fmt(m.get('factual_em_rate'))}")
+		lines.append(f"Factual token F1: {_fmt(m.get('factual_token_f1'))}")
+		lines.append(f"Factual numeric: {_fmt(m.get('factual_numeric'))}")
+		lines.append(f"Factual range: {_fmt(m.get('factual_range'))}")
+		lines.append(f"Factual list F1: {_fmt(m.get('factual_list_f1'))}")
 	# Optional heuristic overlap metrics (no LLM/embeddings required)
 	if any(k in m for k in ("overlap_precision", "overlap_recall", "overlap_f1")):
 		lines.append(f"Overlap precision (heuristic): {_fmt(m.get('overlap_precision'))}")
@@ -583,23 +645,12 @@ def append_eval_footer(per_question_path: str, summary: dict) -> None:
 			"answer_relevancy": summary.get("answer_relevancy"),
 			"context_precision": summary.get("context_precision"),
 			"context_recall": summary.get("context_recall"),
-		}
-		with open(per_question_path, "a", encoding="utf-8") as f:
-			f.write(_json.dumps(footer, ensure_ascii=False) + "\n")
-	except Exception:
-		pass
-
-@trace_func
-def append_eval_footer(per_question_path: str, summary: dict) -> None:
-	"""Append a summary footer line to the per-question JSONL for quick averages view."""
-	try:
-		import json as _json
-		footer = {
-			"__summary__": True,
-			"faithfulness": summary.get("faithfulness"),
-			"answer_relevancy": summary.get("answer_relevancy"),
-			"context_precision": summary.get("context_precision"),
-			"context_recall": summary.get("context_recall"),
+			"factual_em_rate": summary.get("factual_em_rate"),
+			"factual_token_f1": summary.get("factual_token_f1"),
+			"factual_numeric": summary.get("factual_numeric"),
+			"factual_range": summary.get("factual_range"),
+			"factual_list_f1": summary.get("factual_list_f1"),
+			"factual_score": summary.get("factual_score"),
 		}
 		with open(per_question_path, "a", encoding="utf-8") as f:
 			f.write(_json.dumps(footer, ensure_ascii=False) + "\n")
