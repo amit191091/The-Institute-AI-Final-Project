@@ -1,50 +1,69 @@
+# Core Data Science Libraries
 numpy>=1.21.0
+pandas>=1.3.0
 opencv-python>=4.5.0
 matplotlib>=3.4.0
-pandas>=1.3.0
-
-# Machine Learning
+scipy>=1.7.0
 scikit-learn>=1.0.0
 
-# RAG Application Dependencies
-# Core RAG and AI
+# RAG System Dependencies
 langchain>=0.1.0
 langchain-community>=0.0.20
 langchain-openai>=0.1.0
 langchain-google-genai>=0.1.0
+openai>=1.0.0
+sentence-transformers>=2.0.0
 
-# Vector Databases and Retrieval
-chromadb>=0.4.0
-
-# Document Processing
-unstructured[all-docs]>=0.10.0
-pypdf>=3.0.0
-PyMuPDF>=1.23.0
-tabula-py>=2.8.0
-camelot-py[cv]>=0.11.0
-
-# Optional System Dependencies (not installed via pip)
-# Poppler: Required for advanced PDF table extraction (tabula-py, camelot-py)
-# Download from: https://github.com/oschwartz10612/poppler-windows/releases/
-# Extract and add bin/ folder to system PATH
-# Current path: C:\Users\amitl\Downloads\Release-25.07.0-0\poppler-25.07.0\Library\bin
-
-# Environment Variables (optional - set to suppress warnings)
-# RAG_OCR_LANG=eng  # Set OCR language (default: eng for English)
-# RAG_LOG_LEVEL=WARNING  # Reduce verbosity: DEBUG, INFO, WARNING, ERROR (default: INFO)
+# MCP Integration (Model Context Protocol)
+mcp>=1.0.0
+pydantic>=2.0.0
 
 # Web Interface
 gradio>=4.0.0
 
-# Graph Database and Visualization
-neo4j>=5.0.0
+# Graph Operations and Visualization
 networkx>=3.0.0
 pyvis>=0.3.0
+neo4j>=5.0.0
 
-# Environment and Utilities
-python-dotenv>=1.0.0
+# CLI and Environment
 typer[all]>=0.9.0
+python-dotenv>=1.0.0
 
 # Testing
 pytest>=7.0.0
-pytest-cov>=4.0.0 
+
+# Document Processing (Essential for PDF and DOCX)
+PyPDF2>=3.0.0
+PyMuPDF>=1.23.0
+pdfplumber>=0.9.0
+python-docx>=0.8.11
+tabula-py>=2.7.0
+unstructured[all-docs]>=0.10.0
+camelot-py[cv]>=0.11.0
+
+# Excel File Support
+openpyxl>=3.0.0  # For .xlsx files
+xlrd>=2.0.0      # For .xls files
+
+# Vector Database and Embeddings
+chromadb>=0.4.0
+faiss-cpu>=1.7.0
+
+# Evaluation and Metrics
+ragas>=0.1.0
+datasets>=2.0.0
+
+# Additional Visualization
+seaborn>=0.11.0
+
+# Environment Variables Required:
+# OPENAI_API_KEY=your_openai_api_key
+# GOOGLE_API_KEY=your_google_api_key
+# RAG_DATA_PATH=path_to_your_data_folder
+# RAG_INDEX_PATH=path_to_your_index_folder
+# RAG_LOG_PATH=path_to_your_logs_folder
+
+# Optional Environment Variables:
+# RAG_OCR_LANG=eng  # Set OCR language (default: eng for English)
+# RAG_LOG_LEVEL=WARNING  # Reduce verbosity: DEBUG, INFO, WARNING, ERROR (default: INFO) 

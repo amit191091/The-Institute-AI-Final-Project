@@ -20,12 +20,12 @@ from typing import Dict, List, Optional, Tuple, Any, Union, Literal
 from datetime import datetime, UTC
 
 # Add Picture Tools to path
-picture_tools_path = Path("Pictures and Vibrations database/Picture/Picture Tools")
+picture_tools_path = Path(__file__).parent.parent / "Pictures and Vibrations database/Picture/Picture Tools"
 if picture_tools_path.exists():
     sys.path.insert(0, str(picture_tools_path))
 
 # Add RAG to path
-rag_path = Path("RAG")
+rag_path = Path(__file__).parent.parent / "RAG"
 if rag_path.exists():
     sys.path.insert(0, str(rag_path))
 

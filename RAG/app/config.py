@@ -285,6 +285,28 @@ class EvaluationSettings:
         return list(self.ANSWER_CORRECTNESS_WEIGHTS.values())
 
 
+# Data Source Classification
+DATA_SOURCES = {
+    "report": [
+        "Gear wear Failure.pdf",
+        "Gear wear Failure-table-01.csv",
+        "Gear wear Failure-table-02.csv", 
+        "Gear wear Failure-table-03.csv"
+    ],
+    "database": [
+        "Database figures and tables.pdf",
+        "Database figures and tables-table-*.csv",
+        "Database figures and tables-table-*.md"
+    ],
+    "other": [
+        # No other files currently needed
+    ]
+}
+
+# Source priority for ambiguous queries
+SOURCE_PRIORITY = ["report", "database"]
+
+
 @dataclass(frozen=True)
 class Settings:
     """Main settings class that combines all configuration components."""

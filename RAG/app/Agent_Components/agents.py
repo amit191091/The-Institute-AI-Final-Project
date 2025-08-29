@@ -215,3 +215,64 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	# Fallback to original response if JSON parsing fails
 	return result
 
+
+def analyze_source_requirement(q: str) -> Dict:
+	"""Analyze question to determine which data source is most appropriate.
+	
+	Returns:
+		Dict with:
+		- source_type: "report" | "database" | "both"
+		- confidence: float (0-1)
+		- reasoning: str
+	"""
+	import re
+	ql = (q or "").lower()
+	
+	# Keywords that indicate database queries
+	database_keywords = [
+		"database", "all cases", "statistics", "across", "multiple", "various",
+		"different", "range", "distribution", "average", "mean", "median",
+		"standard deviation", "variance", "trend", "pattern", "comparison",
+		"between cases", "across cases", "all wear cases", "database analysis"
+	]
+	
+	# Keywords that indicate report-specific queries
+	report_keywords = [
+		"this case", "this gearbox", "this failure", "the report", "the study",
+		"specific case", "particular case", "investigated gearbox", "mg-5025a",
+		"ins haifa", "this vessel", "the gearbox", "this analysis"
+	]
+	
+	# Check for database intent
+	database_score = sum(1 for keyword in database_keywords if keyword in ql)
+	
+	# Check for report intent  
+	report_score = sum(1 for keyword in report_keywords if keyword in ql)
+	
+	# Check for specific wear case queries (W1, W2, etc.) - these should be from report
+	wear_case_match = re.search(r"\bw\d{1,3}\b", ql)
+	if wear_case_match:
+		report_score += 2  # Strong indicator for report source
+	
+	# Determine source type
+	if database_score > report_score:
+		source_type = "database"
+		confidence = min(0.9, database_score / 3)
+		reasoning = f"Question contains {database_score} database-related keywords"
+	elif report_score > database_score:
+		source_type = "report"
+		confidence = min(0.9, report_score / 3)
+		reasoning = f"Question contains {report_score} report-specific keywords"
+	else:
+		source_type = "report"  # Default to report for ambiguous questions
+		confidence = 0.5
+		reasoning = "Ambiguous question, defaulting to main report"
+	
+	return {
+		"source_type": source_type,
+		"confidence": confidence,
+		"reasoning": reasoning,
+		"database_score": database_score,
+		"report_score": report_score
+	}
+

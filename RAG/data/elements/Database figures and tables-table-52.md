@@ -1,0 +1,41 @@
+<a name="table-52"></a>
+### Table 52
+
+| Record number | RMS at high speed [g] | RMS at low speed [g] | Status |
+| --- | --- | --- | --- |
+| 1 | 1.05 | 0.19 | Healthy |
+| 2 | 1.04 | 0.19 | Healthy |
+| 3 | 1.02 | 0.18 | Healthy |
+| 4 | 1.06 | 0.18 | Healthy |
+| 5 | 1.04 | 0.18 | Healthy |
+| 6 | 1.02 | 0.18 | Healthy |
+| 7 | 1.02 | 0.19 | Healthy |
+| 8 | 1.04 | 0.28 | Healthy |
+| 9 | 0.87 | 0.28 | Healthy |
+| 10 | 0.87 | 0.28 | Healthy |
+| 11 | 0.86 | 0.28 | Healthy |
+| 12 | 0.85 | 0.28 | Healthy |
+| 13 | 0.87 | 0.28 | Healthy |
+| 14 | 0.85 | 0.28 | Healthy |
+| 15 | 0.83 | 0.28 | Healthy |
+| 16 | 0.81 | 0.28 | Healthy |
+| 17 | 0.82 | 0.20 | Healthy |
+| 18 | 0.84 | 0.20 | Healthy |
+| 19 | 0.81 | 0.20 | Healthy |
+| 20 | 0.78 | 0.20 | Healthy |
+| 21 | 0.76 | 0.19 | Healthy |
+| 22 | 0.75 | 0.19 | Healthy |
+| 23 | 0.76 | 0.19 | Healthy |
+| 24 | 0.73 | 0.19 | Healthy |
+| 25 | 0.84 | 0.17 | Healthy |
+| 26 | 0.87 | 0.18 | Healthy |
+| 27 | 0.89 | 0.18 | Healthy |
+| 28 | 0.92 | 0.18 | Healthy |
+| 29 | 0.94 | 0.18 | Healthy |
+| 30 | 0.96 | 0.18 | Healthy |
+| 31 | 0.96 | 0.18 | Healthy |
+| 32 | 0.96 | 0.18 | Healthy |
+| 33 | 0.60 | 0.19 | Healthy |
+| 34 | 0.61 | 0.19 | Healthy |
+| 35 | 0.60 | 0.18 | Healthy |
+| 36 | 0.59 | 0.18 | Healthy |

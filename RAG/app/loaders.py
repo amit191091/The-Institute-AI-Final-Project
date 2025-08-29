@@ -70,10 +70,48 @@ from RAG.app.loader_modules.loader_utils import (
     partition_text
 )
 
+from RAG.app.loader_modules.excel_loaders import (
+    load_excel_file,
+    load_excel_as_text
+)
+
 def load_elements(path: Path):
-	"""Return Unstructured elements for PDF/DOCX/TXT with page metadata kept."""
+	"""Return Unstructured elements for PDF/DOCX/TXT/Excel with page metadata kept."""
 	ext = path.suffix.lower()
-	if ext == ".pdf":
+	if ext in [".xlsx", ".xls"]:
+		# Handle Excel files
+		log = get_logger()
+		log.info(f"Loading Excel file: {path.name}")
+		
+		# Load Excel as structured data
+		excel_elements = load_excel_file(path)
+		
+		# Convert to Unstructured-like format
+		els = []
+		for element in excel_elements:
+			# Convert DataFrame content to text representation
+			content = element.get("content", [])
+			if isinstance(content, list) and content:
+				# Convert list of dictionaries to text
+				import pandas as pd
+				df = pd.DataFrame(content)
+				text_content = f"Sheet: {element.get('sheet_name', 'Unknown')}\n\n"
+				text_content += df.to_string(index=False)
+			else:
+				text_content = str(content)
+			
+			# Create a shim object similar to Unstructured elements
+			class _ExcelShim:
+				def __init__(self, element_data, text_content):
+					self.text = text_content
+					self.category = element_data.get("type", "Table")
+					self.metadata = element_data.get("metadata", {})
+					self.sheet_name = element_data.get("sheet_name", "")
+					self.file_name = element_data.get("file_name", "")
+			els.append(_ExcelShim(element, text_content))
+		
+		return els
+	elif ext == ".pdf":
 		els = None
 		# Lazy import unstructured if needed
 		_import_unstructured_pdf()

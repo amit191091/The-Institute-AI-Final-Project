@@ -9,8 +9,12 @@ Demonstrates all the tool implementations with the exact signature format.
 import sys
 from pathlib import Path
 
-# Import the tool implementations
-from tool_implementations import rag, vision, vib, timeline
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+# Import the tool implementations from MCP_Tools
+from MCP_Tools.tool_implementations import rag, vision, vib, timeline
 
 def test_rag_tools():
     """Test RAG tools."""

@@ -17,10 +17,10 @@ import pytest
 from typer.testing import CliRunner
 
 # Add project root to path for imports
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from RAG.app.rag_cli import app
+from RAG.rag_cli import app
 
 
 class TestRAGCLI:

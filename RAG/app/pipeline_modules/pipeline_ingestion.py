@@ -80,7 +80,30 @@ def discover_input_paths() -> List[Path]:
     ]
     
     # Supported file extensions
-    supported_extensions = {'.pdf', '.docx', '.txt', '.md', '.csv'}
+    supported_extensions = {'.pdf', '.xlsx', '.xls'} # {'.pdf', '.txt', '.md', '.csv', '.docx', '.doc'} Optional
+    
+    # Files to exclude from processing
+    excluded_files = {
+        'הנחיות פרויקט גמר.pdf',  # Hebrew project guidelines - not part of analysis
+        'README.md',
+        'requirements.txt',
+        '.gitignore'
+    }
+    
+    # Skip temporary Excel files
+    def should_skip_file(file_path: Path) -> bool:
+        """Check if file should be skipped based on name patterns."""
+        file_name = file_path.name
+        
+        # Skip excluded files
+        if file_name in excluded_files:
+            return True
+            
+        # Skip temporary Excel files (start with ~$)
+        if file_name.startswith('~$'):
+            return True
+            
+        return False
     
     discovered_paths = []
     
@@ -95,6 +118,11 @@ def discover_input_paths() -> List[Path]:
             if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
                 # Skip files in certain directories
                 if any(skip_dir in str(file_path) for skip_dir in ['__pycache__', '.git', 'node_modules', '.pytest_cache']):
+                    continue
+                
+                # Skip excluded files and temporary files
+                if should_skip_file(file_path):
+                    log.debug(f"Skipping file: {file_path}")
                     continue
                     
                 discovered_paths.append(file_path)
