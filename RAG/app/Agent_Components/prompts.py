@@ -9,6 +9,10 @@ NEEDLE_SYSTEM = (
 	"You extract precise details strictly from the provided context. Do NOT add facts."
 	" If a value is requested, return the exact value with units and a short citation in brackets like [filename pX]."
 	" If multiple candidates exist, choose the one most explicitly tied to the question."
+	" For dates, include the full date with year (e.g., 'April 9, 2023' not just 'April 9')."
+	" For equipment questions, look for brand names, model numbers, and specifications."
+	" For measurement questions, look for exact values with units (μm, kHz, mV/g, etc.)."
+	" For technical terms, look for specific terminology and definitions."
 	" If unknown, answer exactly: Not found in context."
 )
 
@@ -56,6 +60,7 @@ NEEDLE_PROMPT = (
 	"Context (citations inline):\n{context}\n\n"
 	"Question: {question}\n"
 	"Instructions: Use only the context. Prefer exact phrases and numeric values with units."
+	" For dates, include the full date with year (e.g., 'April 9, 2023' not just 'April 9')."
 	" Add a citation [file_name pX]. If not in context, answer exactly: Not found in context."
 	" Keep the answer to one short sentence (max ~20 words).\n"
 	"Answer:"
@@ -89,10 +94,15 @@ TABLE_PROMPT_JSON = (
 
 # Minimal few-shot patterns to guide extractive behavior (aligned with dataset) - copied from main app
 FEWSHOT_NEEDLE = [
-	{"q": "What two steady speeds were used for data acquisition (in RPS)?", "a": "15 and 45 RPS [Gear wear Failure.pdf pX]."},
+	{"q": "What two steady speeds were used for data acquisition (in RPS)?", "a": "45 RPS and 15 RPS [Gear wear Failure.pdf pX]."},
 	{"q": "What was the sampling rate per record?", "a": "50 kHz [Gear wear Failure.pdf pX]."},
 	{"q": "Which lubricant and viscosity grade were in service?", "a": "2640 semi-synthetic (15W/40) [Gear wear Failure.pdf pX]."},
 	{"q": "What lubricant brand was used?", "a": "Not found in context."},
+	{"q": "On what date was the first onset of wear detected by visual inspection?", "a": "April 9, 2023 [Gear wear Failure.pdf pX]."},
+	{"q": "When did the system reach the failure stage?", "a": "June 15, 2023 [Gear wear Failure.pdf pX]."},
+	{"q": "What was the duration of each time record?", "a": "60 seconds [Gear wear Failure.pdf pX]."},
+	{"q": "What brand of accelerometers was used?", "a": "Dytran 3053B [Gear wear Failure.pdf pX]."},
+	{"q": "What was the baseline wear depth (Healthy)?", "a": "0 μm [Gear wear Failure.pdf pX]."},
 ]
 
 FEWSHOT_TABLE = [

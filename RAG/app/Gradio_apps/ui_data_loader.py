@@ -115,12 +115,9 @@ def _load_qa_file(path: str | dict | object):
 			a = r.get("answer") or r.get("reference")
 			if q and a:
 				m[str(q)] = str(a)
-		qa_map["__loaded__"] = True
-		qa_map["map"] = m
-		qa_map["norm"] = { _norm_q(k): v for k, v in m.items() }
-		return f"Loaded {len(m)} QA pairs from {p}"
+		return m, f"Loaded {len(m)} QA pairs from {p}"
 	except Exception as e:
-		return f"(failed to load QA: {e})"
+		return {}, f"(failed to load QA: {e})"
 
 def load_ground_truth_and_qa():
     """Auto-load default ground truths and QA if files exist."""
@@ -150,18 +147,18 @@ def load_ground_truth_and_qa():
         pass
     try:
         for _cand in [
-            Path("RAG/data/gear_wear_qa_context_free.jsonl"),
-            Path("RAG/data/gear_wear_qa.jsonl"),
-            Path("gear_wear_qa_context_free.jsonl"),
-            Path("data")/"gear_wear_qa_context_free.jsonl",
+            Path("RAG/data/gear_wear_qa.jsonl"),  # Primary: questions with answers
+            Path("RAG/data/gear_wear_qa_context_free.jsonl"),  # Fallback: questions only
             Path("gear_wear_qa.jsonl"),
             Path("data")/"gear_wear_qa.jsonl",
+            Path("gear_wear_qa_context_free.jsonl"),
+            Path("data")/"gear_wear_qa_context_free.jsonl",
             Path("gear_wear_qa.json"),
             Path("data")/"gear_wear_qa.json",
         ]:
             if _cand.exists():
                 m, msg = _load_qa_file(str(_cand))
-                if m:
+                if isinstance(m, dict) and m:
                     qa_map["__loaded__"] = True
                     qa_map["map"] = m
                     qa_map["norm"] = { _norm_q(k): v for k, v in m.items() }

@@ -10,7 +10,8 @@ from RAG.app.Gradio_apps.graphdb import run_cypher as _run_cypher
 from RAG.app.Data_Management.normalized_loader import load_normalized_docs
 
 try:
-    from RAG.app.Gradio_apps.graph import build_networkx_graph, render_graph_html
+    from RAG.app.Gradio_apps.graph import build_graph, render_graph_html
+    build_networkx_graph = build_graph  # alias for compatibility
 except Exception:
     build_networkx_graph = None  # type: ignore
     render_graph_html = None  # type: ignore

@@ -92,7 +92,7 @@ def read_snapshot(path: str) -> List[SnapshotRow]:
             try:
                 data = json.loads(line)
                 rows.append(SnapshotRow(data))
-            except Exception:
+            except Exception as e:
                 # skip malformed
                 continue
     return rows

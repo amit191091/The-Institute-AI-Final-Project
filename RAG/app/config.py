@@ -40,6 +40,8 @@ class LLMSettings:
     
     # Temperature settings
     TEMPERATURE: float = 0.0    # For response creativity (0.0 = deterministic, 1.0 = creative)
+    MAX_TOKENS: int = 150       # For response length limit (reduced for precision)
+    TOP_P: float = 0.1          # For response diversity (reduced for precision)
     
     # Environment variable names
     FORCE_OPENAI_ENV: str = "FORCE_OPENAI_ONLY" # Environment variable to force OpenAI
@@ -64,6 +66,8 @@ class ChunkingSettings:
     USE_SEMANTIC_CHUNKING: bool = True # For AI-powered semantic chunking (default ON)
     USE_HEADING_DETECTION: bool = True # For heading detection and hierarchy (default ON)
     USE_DYNAMIC_TOKENS: bool = True # For content-type specific token limits (default ON)
+    TEXT_SPLIT_MULTI: bool = True # For multi-element text splitting (default ON)
+    SEMANTIC_CHUNKING: bool = True # For semantic chunking (default ON)
     
     # Semantic chunking parameters
     SEMANTIC_SIMILARITY_THRESHOLD: float = 0.7 # For sentence similarity threshold
@@ -82,10 +86,17 @@ class ChunkingSettings:
     ])
     
     # Dynamic token management
-    TEXT_TARGET_TOK: int = 375 # For text chunk target tokens (enhanced)
-    TEXT_MAX_TOK: int = 500 # For text chunk maximum tokens
-    FIGURE_TABLE_MAX_TOK: int = 800 # For figure/table chunk maximum tokens
-    CONTEXT_LOW_N: int = 6 # For context window size
+    TEXT_TARGET_TOK: int = 500 # For text chunk target tokens (increased from 375)
+    TEXT_MAX_TOK: int = 700 # For text chunk maximum tokens (increased from 500)
+    FIGURE_TABLE_MAX_TOK: int = 1000 # For figure/table chunk maximum tokens (increased from 800)
+    CONTEXT_LOW_N: int = 8 # For context window size (increased from 6)
+    
+    # Additional token settings for backward compatibility
+    MIN_CHUNK_TOKENS: int = 50 # For minimum chunk tokens
+    TEXT_TARGET_TOKENS: int = 375 # For text chunk target tokens (alias)
+    TEXT_MAX_TOKENS: int = 500 # For text chunk maximum tokens (alias)
+    TEXT_OVERLAP_SENTENCES: int = 2 # For text overlap sentences
+    DISTILL_RATIO: float = 0.8 # For distillation ratio
     
     # Chunking quality settings
     MIN_CHUNK_LENGTH: int = 50 # For minimum chunk length in characters
@@ -175,10 +186,10 @@ class QueryAnalysisSettings:
 @dataclass(frozen=True)
 class RerankingSettings:
     """Configuration for document reranking and scoring."""
-    MIN_SCORE_THRESHOLD_RATIO: float = 0.15 # For minimum score threshold ratio
-    MAX_DOCS_PER_SECTION: int = 2 # For maximum number of documents per section
-    MAX_DOCS_PER_FILE: int = 3 # For maximum number of documents per file
-    MAX_DOCS_PER_PAGE: int = 2 # For maximum number of documents per page
+    MIN_SCORE_THRESHOLD_RATIO: float = 0.25 # For minimum score threshold ratio (increased for precision)
+    MAX_DOCS_PER_SECTION: int = 1 # For maximum number of documents per section (reduced for precision)
+    MAX_DOCS_PER_FILE: int = 2 # For maximum number of documents per file (reduced for precision)
+    MAX_DOCS_PER_PAGE: int = 1 # For maximum number of documents per page (reduced for precision)
     
     # Scoring weights
     LEXICAL_OVERLAP_WEIGHT: float = 100.0 # For lexical overlap weight
@@ -350,9 +361,9 @@ DATA_SOURCES = {
         "Gear wear Failure-table-03.csv"
     ],
     "database": [
-        "Database figures and tables.pdf",
-        "Database figures and tables-table-*.csv",
-        "Database figures and tables-table-*.md"
+        # Removed "Database figures and tables.pdf" - 
+        # "Database figures and tables-table-*.csv",
+        # "Database figures and tables-table-*.md"
     ],
     "other": [
         # No other files currently needed

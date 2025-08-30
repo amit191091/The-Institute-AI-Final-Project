@@ -84,6 +84,8 @@ class LLM:
         if force_openai:
             primary_provider = "openai"
         
+
+        
         # Initialize based on primary provider setting
         if primary_provider == "openai":
             # Try OpenAI first

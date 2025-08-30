@@ -27,10 +27,6 @@ def build_ask_tab(docs, hybrid, llm, debug, gt_map, qa_map, on_ask_handler):
                     btn = gr.Button("🔍 Ask", variant="primary")
                     clear_btn = gr.Button("🗑️ Clear")
                 
-                with gr.Row():
-                    shutdown_btn = gr.Button("🛑 Shutdown Server", variant="stop", size="lg")
-                    exit_btn = gr.Button("❌ Exit Application", variant="stop", size="lg")
-                
                 ans = gr.Markdown()
                 metrics = gr.Textbox(label="Evaluation Metrics", lines=8, interactive=False)
                 # Inline figure preview for the current answer
@@ -67,21 +63,7 @@ def build_ask_tab(docs, hybrid, llm, debug, gt_map, qa_map, on_ask_handler):
             outputs=[q, ground_truth, dbg, ans, metrics, dbg_acc, dbg_router, dbg_filters, dbg_dense, dbg_sparse, dbg_hybrid, dbg_topdocs, dbg_compare, fig_preview]
         )
         
-        shutdown_btn.click(
-            lambda: "🔄 Server shutdown initiated...",
-            outputs=[ans]
-        )
-        
-        def exit_application():
-            """Exit the application by raising a SystemExit exception."""
-            import sys
-            print("🔄 Exiting application...")
-            sys.exit(0)
-        
-        exit_btn.click(
-            exit_application,
-            outputs=[]
-        )
+
         
         # Keyboard shortcuts
         q.submit(
@@ -104,8 +86,8 @@ def build_figures_tab(docs):
             gr.Markdown("(No extracted figures. Enable RAG_EXTRACT_IMAGES=true and rerun.)")
 
 def build_agent_tab(docs, hybrid, llm):
-    """Build the Agent tab."""
-    with gr.Tab("Agent"):
+    """Build the Q&A tab."""
+    with gr.Tab("Q&A"):
         gr.Markdown("### Agent trace (tools + observations)\nRuns retrieval via simple tools for visibility.")
         
         # Question selection section
@@ -164,7 +146,7 @@ def build_agent_tab(docs, hybrid, llm):
                             data = json.loads(line)
                             question_id = data.get('id', f'Q{line_num}')
                             question_text = data.get('question', 'No question text')
-                            questions.append(f"{line_num}. **{question_id}**: {question_text}")
+                            questions.append(f"{line_num}. {question_text}")
                         except json.JSONDecodeError:
                             continue
                 

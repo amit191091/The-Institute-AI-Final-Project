@@ -5,19 +5,22 @@ from __future__ import annotations
 # Set environment variables, before ANY imports
 import os
 
-def _setup_fast_mode():
-    """Set environment variables for fast startup - called before any heavy imports"""
-    os.environ["RAG_PDF_HI_RES"] = "false"
-    os.environ["RAG_USE_TABULA"] = "false"
-    os.environ["RAG_USE_CAMELOT"] = "false"
-    os.environ["RAG_EXTRACT_IMAGES"] = "false"
-    os.environ["RAG_SYNTH_TABLES"] = "false"
-    os.environ["RAG_USE_PDFPLUMBER"] = "false"
-    os.environ["RAG_OCR_LANG"] = "eng"
-    os.environ["RAG_LOG_LEVEL"] = "ERROR"
+def setup_settings():
+    """Set environment variables for startup - called before any heavy imports"""
+    """The settings are set to false by default for quick startup - fast startup but poor results"""
+    """The settings are set to true by default for detailed analysis - good results but affect startup time"""
+    
+    os.environ["RAG_PDF_HI_RES"] = "true" # High-res OCR insert true or false
+    os.environ["RAG_USE_TABULA"] = "true" # Tabula table extraction insert true or false
+    os.environ["RAG_USE_CAMELOT"] = "true" # Camelot table extraction insert true or false
+    os.environ["RAG_EXTRACT_IMAGES"] = "true" # Image extraction insert true or false
+    os.environ["RAG_SYNTH_TABLES"] = "true" # Table synthesis insert true or false
+    os.environ["RAG_USE_PDFPLUMBER"] = "true" # PDFPlumber table extraction insert true or false
+    os.environ["RAG_OCR_LANG"] = "eng" # OCR language insert eng for English or other language code
+    os.environ["RAG_LOG_LEVEL"] = "ERROR" # Log level insert ERROR or INFO or DEBUG
 
 # Set fast mode by default for quick startup
-_setup_fast_mode()
+setup_settings()
 
 # Now import lightweight libraries
 import typer
@@ -87,7 +90,7 @@ def build():
         raise typer.Exit(1)
     
     # Build pipeline
-    docs, hybrid, debug = build_pipeline(paths)
+    docs, hybrid, llm = build_pipeline(paths)
     typer.echo(f"✅ Pipeline built: {len(docs)} documents loaded")
 
 @app.command()
@@ -114,8 +117,9 @@ def evaluate(
         raise typer.Exit(1)
     
     # Build pipeline and run evaluation
-    docs, hybrid, debug = build_pipeline(paths)
-    run_evaluation(docs, hybrid, debug)
+    docs, hybrid, llm = build_pipeline(paths)
+    
+    run_evaluation(docs, hybrid, llm)
     
     typer.echo("✅ Evaluation completed!")
 

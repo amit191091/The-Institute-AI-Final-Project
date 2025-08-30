@@ -40,7 +40,7 @@ try:
     from PIL import Image  # type: ignore
     import pytesseract  # type: ignore
     OCR_AVAILABLE = True
-except Exception:
+except Exception as e:
     Image = None  # type: ignore
     pytesseract = None  # type: ignore
     OCR_AVAILABLE = False
@@ -88,7 +88,7 @@ def _import_unstructured():
             try:
                 from unstructured.partition.pdf import partition_pdf as _partition_pdf
                 partition_pdf = _partition_pdf
-            except Exception:
+            except Exception as e:
                 partition_pdf = None
         else:
             partition_pdf = None
@@ -104,7 +104,7 @@ def _import_unstructured():
         warnings.filterwarnings("ignore", message=".*hi_res PDF parsing failed.*")
         warnings.filterwarnings("ignore", message=".*falling back to standard parser.*")
         
-    except Exception:  # pragma: no cover - allow import even if extras missing
+    except Exception as e:  # pragma: no cover - allow import even if extras missing
         partition_pdf = None  # type: ignore
 
 def _pdf_fallback_elements(path: Path):
@@ -121,7 +121,7 @@ def _pdf_fallback_elements(path: Path):
 	for pi, page in enumerate(reader.pages, start=1):
 		try:
 			text = page.extract_text() or ""
-		except Exception:
+		except Exception as e:
 			text = ""
 		# split by blank lines into blocks
 		blocks = re.split(r"\n\s*\n", text) if text else []
@@ -157,7 +157,7 @@ def _analyze_pdf_pages_for_tables(path: Path):
 	"""
 	try:
 		import fitz  # PyMuPDF
-	except Exception:
+	except Exception as e:
 		return [], None
 	min_lines = settings.loader.LINE_COUNT_MIN
 	min_blocks = settings.loader.TEXT_BLOCKS_MIN
@@ -172,7 +172,7 @@ def _analyze_pdf_pages_for_tables(path: Path):
 			if callable(_get_text):
 				try:
 					blocks = _get_text("blocks") or []
-				except Exception:
+				except Exception as e:
 					blocks = []
 			else:
 				blocks = []
@@ -184,7 +184,7 @@ def _analyze_pdf_pages_for_tables(path: Path):
 			if callable(get_drawings):
 				try:
 					drawings = get_drawings() or []
-				except Exception:
+				except Exception as e:
 					drawings = drawings
 				if not isinstance(drawings, list):
 					drawings = []
@@ -200,7 +200,7 @@ def _analyze_pdf_pages_for_tables(path: Path):
 		else:
 			pages_str = None
 		return stats, pages_str
-	except Exception:
+	except Exception as e:
 		return [], None
 
 def _extract_text_via_ocr(image_path: Path) -> str:
@@ -242,7 +242,7 @@ def _try_extract_images(path: Path):
     """
     try:
         import fitz  # PyMuPDF
-    except Exception:
+    except Exception as e:
         get_logger().debug("PyMuPDF not available; skip image extraction")
         return []
     
@@ -301,11 +301,11 @@ def _try_extract_images(path: Path):
                                     text_dict = _res
                                 else:
                                     text_dict = {}
-                            except Exception:
+                            except Exception as e:
                                 try:
                                     _res2 = _gt()
                                     text_dict = _res2 if isinstance(_res2, dict) else {}
-                                except Exception:
+                                except Exception as e2:
                                     text_dict = {}
                         text_blocks = text_dict.get("blocks", []) if isinstance(text_dict, dict) else []
                         page_text_parts = []
@@ -323,7 +323,7 @@ def _try_extract_images(path: Path):
                         if fig_refs:
                             figure_context = " ".join(fig_refs[:2])  # Take first 2 matches
                             meta["figure_context"] = figure_context
-                    except Exception:
+                    except Exception as e:
                         pass
                     
                     # Build comprehensive text description
@@ -347,7 +347,7 @@ def _try_extract_images(path: Path):
                     try:
                         if isinstance(iw, int) and isinstance(ih, int) and (iw < 128 or ih < 128):
                             meta["is_asset"] = True
-                    except Exception:
+                    except Exception as e:
                         pass
                     
                     elements.append(
@@ -357,7 +357,7 @@ def _try_extract_images(path: Path):
                             metadata=SimpleNamespace(**meta),
                         )
                     )
-                except Exception:
+                except Exception as e:
                     continue
     except Exception as e:
         log.warning(f"PyMuPDF image extraction failed: {e}")

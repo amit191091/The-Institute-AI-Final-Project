@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Tuple
 import warnings
 try:
     import pandas as _pd  # type: ignore
-except Exception:  # pragma: no cover
+except Exception as e:  # pragma: no cover
     _pd = None  # type: ignore
 
 from langchain.schema import Document
@@ -15,7 +15,7 @@ from RAG.app.retrieve import query_analyzer, apply_filters, rerank_candidates
 from RAG.app.Agent_Components.prompts import PLANNER_SYSTEM, PLANNER_PROMPT
 try:
     from RAG.app.table_ops import markdown_to_df, filter_rows as table_filter_rows, read_kv as table_read_kv
-except Exception:
+except Exception as e:
     markdown_to_df = None  # type: ignore
     table_filter_rows = None  # type: ignore
     table_read_kv = None  # type: ignore
@@ -47,7 +47,7 @@ def tool_analyze_query(question: str) -> Dict[str, Any]:
 def tool_retrieve_candidates(question: str, hybrid) -> List[Dict[str, Any]]:
     try:
         cands = hybrid.invoke(question) or []
-    except Exception:
+    except Exception as e:
         cands = []
     return [_doc_brief(d) for d in cands[:20]]
 
@@ -61,7 +61,7 @@ def tool_retrieve_filtered(question: str, docs: List[Document], hybrid) -> Dict[
     qa = query_analyzer(question)
     try:
         cands = hybrid.invoke(qa.get("canonical") or question) or []
-    except Exception:
+    except Exception as e:
         cands = []
     filtered = apply_filters(cands, qa.get("filters") or {})
     top = rerank_candidates(qa.get("canonical") or question, filtered, top_n=8)
@@ -80,15 +80,15 @@ def tool_list_figures(docs: List[Document]) -> List[Dict[str, Any]]:
         pg = md.get("page")
         try:
             fnv = int(fn) if fn is not None and str(fn).strip().isdigit() else 10**9
-        except Exception:
+        except Exception as e:
             fnv = 10**9
         try:
             fov = int(fo) if fo is not None and str(fo).strip().isdigit() else 10**9
-        except Exception:
+        except Exception as e:
             fov = 10**9
         try:
             pgv = int(pg) if pg is not None and str(pg).strip().isdigit() else 10**9
-        except Exception:
+        except Exception as e:
             pgv = 10**9
         return (fnv, fov, pgv, str(md.get("anchor") or ""))
     figs_sorted = sorted(figs, key=_key)
@@ -123,7 +123,7 @@ def tool_audit_and_fill_figures(docs: List[Document]) -> Dict[str, Any]:
         page = md.get("page")
         try:
             page_i = int(page) if page is not None and str(page).strip().isdigit() else 10**9
-        except Exception:
+        except Exception as e:
             page_i = 10**9
         anchor = str(md.get("anchor") or "")
         figures.setdefault(file, []).append((page_i, anchor, d))
@@ -149,7 +149,7 @@ def tool_audit_and_fill_figures(docs: List[Document]) -> Dict[str, Any]:
             fn = md.get("figure_number")
             try:
                 ok_num = fn is not None and str(fn).strip().isdigit()
-            except Exception:
+            except Exception as e:
                 ok_num = False
             if not ok_num:
                 md["figure_number"] = idx
@@ -212,7 +212,7 @@ def tool_table_filter(md_path: str, constraints: Dict[str, Any]) -> Dict[str, An
         try:
             rows = df_to_rows_with_col_index(f, max_rows=10)
             count = len(f)
-        except Exception:
+        except Exception as e:
             rows = []
             count = 0
         return {"count": count, "rows": rows}
@@ -234,7 +234,7 @@ def _flatten_and_uniquify_columns(cols) -> List[str]:
             raw = [" | ".join([str(x) for x in tup]) for tup in list(cols)]
         else:
             raw = ["" if (c is None) else str(c) for c in list(cols)]
-    except Exception:
+    except Exception as e:
         raw = [str(c) for c in list(cols)]
     seen: Dict[str, int] = {}
     out: List[str] = []
@@ -262,14 +262,14 @@ def df_to_rows_with_col_index(df, max_rows: int = 10) -> List[Dict[str, Any]]:
         # Best-effort fallback without pandas helpers
         try:
             f2 = df.copy()
-        except Exception:
+        except Exception as e:
             return []
     else:
         f2 = df.copy()
     try:
         deduped_cols = _flatten_and_uniquify_columns(f2.columns)
         f2.columns = deduped_cols
-    except Exception:
+    except Exception as e:
         # If we cannot set columns, return empty result to avoid noisy warnings upstream
         return []
     # Build a stable mapping of column -> positional index
@@ -279,7 +279,7 @@ def df_to_rows_with_col_index(df, max_rows: int = 10) -> List[Dict[str, Any]]:
         warnings.simplefilter("ignore")
         try:
             base_rows: List[Dict[str, Any]] = f2.head(max_rows).to_dict("records")  # type: ignore[attr-defined]
-        except Exception:
+        except Exception as e:
             base_rows = []
     # Attach per-row mapping
     out: List[Dict[str, Any]] = []

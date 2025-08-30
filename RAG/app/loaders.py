@@ -126,10 +126,10 @@ def load_elements(path: Path):
 		return els
 	elif ext == ".pdf":
 		els = None
+		log = get_logger()
 		# Lazy import unstructured if needed
 		_import_unstructured_pdf()
 		if partition_pdf is not None:
-			log = get_logger()
 			# Effective feature toggles (unset means auto and will be attempted)
 			use_hi_res = _get_loader_setting("PDF_HI_RES", True)  # default ON
 			use_tabula = _get_loader_setting("USE_TABULA", False)  # disabled by default
@@ -259,12 +259,12 @@ def load_elements(path: Path):
 		try:
 			limit = settings.loader.TABLES_PER_PAGE
 			els = _dedupe_and_limit_tables(els, per_page_limit=max(1, limit))
-		except Exception:
+		except Exception as e:
 			pass
 		# Assign stable table numbers post-dedupe for consistent naming across runs
 		try:
 			_assign_table_numbers(els, path)
-		except Exception:
+		except Exception as e:
 			pass
 		# Optional: synthesize table-like elements from text blocks (default ON)
 		if (use_synth is None) or (use_synth is True):
@@ -273,7 +273,7 @@ def load_elements(path: Path):
 				if _synth:
 					els.extend(_synth)
 					get_logger().debug("%s: Synthesized %d table-like elements from text", path.name, len(_synth))
-			except Exception:
+			except Exception as e:
 				pass
 		# Optional: extract images as figures via PyMuPDF (default ON)
 		if (use_images is None) or (use_images is True):
@@ -289,20 +289,20 @@ def load_elements(path: Path):
 				if llamaparse_tables:
 					els.extend(llamaparse_tables)
 					get_logger().debug("%s: LlamaParse extracted %d tables", path.name, len(llamaparse_tables))
-			except Exception:
+			except Exception as e:
 				get_logger().debug("LlamaParse extraction failed; continuing")
 		# Optional: export tables to markdown/csv files and attach paths in metadata
 		export_tables = _get_loader_setting("EXPORT_TABLES", True)
 		if export_tables:
 			try:
 				_export_tables_to_files(els, path)
-			except Exception:
+			except Exception as e:
 				get_logger().debug("table export failed; continuing")
 		
 		# Optional: export page text to files for full-fidelity inspection
 		try:
 			_export_page_text_to_files(els, path)
-		except Exception:
+		except Exception as e:
 			get_logger().debug("page-text export failed; continuing")
 		
 		# Optional: dump all extracted elements (raw, untruncated) to logs/elements for auditing
@@ -310,7 +310,7 @@ def load_elements(path: Path):
 		if dump_elements:
 			try:
 				_dump_elements_jsonl(els, path)
-			except Exception:
+			except Exception as e:
 				get_logger().debug("elements dump failed; continuing")
 		
 		return els
@@ -373,8 +373,9 @@ def load_many(paths: List[Path]):
 							"text_head": (getattr(e, "text", "") or "").strip()[:200],
 						}
 						f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-		except Exception:
-			pass
+		except Exception as e:
+			# Use log safely within exception handler
+			log.debug(f"Error processing elements for {p.name}: {e}")
 		yield p, els
 
 
@@ -395,7 +396,7 @@ if __name__ == "__main__":
             for k, v in (dotenv_values(env_path) or {}).items():
                 if v is not None and k not in os.environ:
                     os.environ[k] = v
-    except Exception:
+    except Exception as e:
         pass
     log = get_logger()
     if len(sys.argv) < 2:
@@ -418,5 +419,5 @@ if __name__ == "__main__":
             print(f"  - image via {e.metadata.get('extractor')} p={e.metadata.get('page_number')} -> {e.metadata.get('image_path')}")
     try:
         log.info("[smoke] %s: tables=%d images=%d", p.name, nt, ni)
-    except Exception:
+    except Exception as e:
         pass

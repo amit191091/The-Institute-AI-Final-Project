@@ -43,7 +43,7 @@ try:
     from RAG.app.pipeline_modules.graph import build_graph, render_graph_html  # type: ignore
     from RAG.app.pipeline_modules.graphdb import build_graph_db, run_cypher  # type: ignore
     from RAG.app.pipeline_modules.graphdb_import_normalized import import_normalized_graph  # type: ignore
-except Exception:  # pragma: no cover
+except Exception as e:  # pragma: no cover
     def build_graph(docs):
         return None
     def render_graph_html(G, out_path: str):
@@ -61,7 +61,7 @@ try:
     from RAG.app.pipeline_modules.llamaindex_export import export_llamaindex_for  # type: ignore
     from RAG.app.pipeline_modules.llamaindex_compare import build_alt_indexes  # type: ignore
     from RAG.app.Evaluation_Analysis.deepeval_integration import run_eval as run_eval_deepeval  # type: ignore
-except Exception:  # pragma: no cover
+except Exception as e:  # pragma: no cover
     def extract_tables_clean(pdf_path):
         return []
     def export_llamaindex_for(paths, out_root=None):
@@ -84,7 +84,6 @@ def run_evaluation(docs, hybrid, llm: LLM):
         log.warning("Evaluation requested but QA file not found.")
         return
     # RAGAS now uses config-based provider selection
-    pass
     qa_rows = load_json_or_jsonl(qa_path)
     gt_rows = load_json_or_jsonl(gt_path) if gt_path else []
     gt_map = normalize_ground_truth(gt_rows)
@@ -99,13 +98,14 @@ def run_evaluation(docs, hybrid, llm: LLM):
         try:
             ans, ctx_docs = answer_with_contexts(docs, hybrid, llm, q)
         except Exception as e:
+            print(f"Error processing question {i}: {e}")
             continue
-        ctxs = [getattr(d, "page_content", "") for d in (ctx_docs or []) if getattr(d, "page_content", None)]
+        ctxs = [getattr(d, "page_content", "") for d in (ctx_docs or []) if getattr(d, "page_content") or ""]
         if not ctxs:
             ctxs = [getattr(docs[0], "page_content", "")] if docs else [""]
         norm_q = str(q).lower().strip()
         norm_q = " ".join(norm_q.split())
-        norm_q = norm_q.strip(".,:;!?-Γאפ\u2013\u2014\"'()[]{}")
+        norm_q = norm_q.strip(".,:;!?-Γ\u2013\u2014\"'()[]{}")
         gts = gt_map.get(norm_q, [])
         if not gts and gt_map:
             keys = list(gt_map.keys())
@@ -132,10 +132,9 @@ def run_evaluation(docs, hybrid, llm: LLM):
             "ground_truths": gts,
             "reference": ref,
         })
-        try:
+        from contextlib import suppress
+        with suppress(Exception):
             log.info("EVAL Q[%d]: %s", i, q)
-        except Exception:
-            pass
     if not rows_out:
         print("No evaluation rows to process.")
         return
@@ -153,7 +152,7 @@ def run_evaluation(docs, hybrid, llm: LLM):
         return
     
     # Set up output directory
-    out_dir = settings.LOGS_DIR
+    out_dir = settings.paths.LOGS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     
     # DeepEval integration
@@ -173,13 +172,11 @@ def run_evaluation(docs, hybrid, llm: LLM):
         log.warning(f"DeepEval run failed: {e}")
     
     def _nan_to_none(x):
-        if isinstance(x, float) and math.isnan(x):
-            return None
-        if isinstance(x, list):
-            return [_nan_to_none(v) for v in x]
-        if isinstance(x, dict):
-            return {k: _nan_to_none(v) for k, v in x.items()}
-        return x
+        return None if isinstance(x, float) and math.isnan(x) else (
+            [_nan_to_none(v) for v in x] if isinstance(x, list) else (
+                {k: _nan_to_none(v) for k, v in x.items()} if isinstance(x, dict) else x
+            )
+        )
     with open(out_dir / "eval_ragas_summary.json", "w", encoding="utf-8") as f:
         json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2)
     with open(out_dir / "eval_ragas_per_question.jsonl", "w", encoding="utf-8") as f:
@@ -187,7 +184,8 @@ def run_evaluation(docs, hybrid, llm: LLM):
             f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False) + "\n")
     print("RAGAS summary:\n" + pretty_metrics(summary))
     print("\nPer-question results:")
-    try:
+    from contextlib import suppress
+    with suppress(Exception):
         for rec in per_q:
             q = rec.get("question", "")
             ans = rec.get("answer", "")
@@ -195,8 +193,6 @@ def run_evaluation(docs, hybrid, llm: LLM):
             print("- Q:", q)
             print("  A:", (ans or "")[:400])
             print("  metrics:", json.dumps(mets, ensure_ascii=False))
-    except Exception:
-        pass
 
 
 def run() -> None:
@@ -243,7 +239,7 @@ def run() -> None:
         settings.paths.LOGS_DIR.mkdir(parents=True, exist_ok=True)
         graph_html = str(settings.paths.LOGS_DIR / "graph.html")
         render_graph_html(G, graph_html)
-    except Exception:
+    except Exception as e:
         graph_html = None
     
     # Graph database integration
@@ -276,10 +272,7 @@ def run() -> None:
         enable_llx = os.getenv("RAG_ENABLE_LLAMAINDEX", "0").lower() in ("1", "true", "yes")
         if enable_llx:
             # Get document paths from service
-            paths = getattr(service, 'input_paths', [])
-            if not paths:
-                # Fallback: try to discover paths
-                paths = discover_input_paths()
+            paths = getattr(service, 'input_paths', []) or discover_input_paths()
             if paths:
                 n = export_llamaindex_for(paths)
                 if n:
@@ -291,9 +284,7 @@ def run() -> None:
     try:
         if os.getenv("RAG_BUILD_ALT_INDEXES", "0").lower() in ("1", "true", "yes"):
             # Get document paths and embeddings
-            paths = getattr(service, 'input_paths', [])
-            if not paths:
-                paths = discover_input_paths()
+            paths = getattr(service, 'input_paths', []) or discover_input_paths()
             if paths:
                 embeddings = get_embeddings()
                 alt = build_alt_indexes(paths, embeddings)
@@ -304,7 +295,8 @@ def run() -> None:
     
     llm = LLM()
     # Optional: evaluation mode
-    if os.getenv("RAG_EVAL", "").lower() in ("1", "true", "yes"):
+    rag_eval_value = os.getenv("RAG_EVAL", "")
+    if rag_eval_value.lower() in ("1", "true", "yes"):
         run_evaluation(docs, hybrid, llm)
         if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
             return
@@ -318,48 +310,31 @@ def run() -> None:
         port = int(os.getenv("GRADIO_PORT", "7860"))
         server_name = os.getenv("GRADIO_SERVER_NAME", "127.0.0.1")
         
-        # Auto-open browser when UI is ready
-        import webbrowser
-        import threading
-        import time
-        
-        def open_browser():
-            """Open browser after a short delay to ensure server is ready."""
-            time.sleep(2)  # Wait 2 seconds for server to start
-            url = f"http://{server_name}:{port}"
-            try:
-                webbrowser.open(url)
-                print(f"🌐 Browser opened automatically: {url}")
-            except Exception as e:
-                print(f"⚠️  Could not open browser automatically: {e}")
-                print(f"📱 Please open manually: {url}")
-        
-        # Start browser opening in background thread
-        browser_thread = threading.Thread(target=open_browser, daemon=True)
-        browser_thread.start()
-        
         try:
             ui.launch(
                 share=share, 
                 server_name=server_name, 
                 server_port=port, 
                 show_error=True, 
-                inbrowser=False,
-                quiet=False  # Show server status
+                inbrowser=True
             )
         except KeyboardInterrupt:
             print("\n🔄 Keyboard interruption in main thread... closing server.")
-            try:
+            from contextlib import suppress
+            with suppress(Exception):
                 ui.close()
-            except:
-                pass
+            print("✅ Server closed gracefully.")
+        except SystemExit:
+            print("\n🔄 System exit requested... closing server.")
+            from contextlib import suppress
+            with suppress(Exception):
+                ui.close()
             print("✅ Server closed gracefully.")
         except Exception as e:
             print(f"Server error: {e}")
-            try:
+            from contextlib import suppress
+            with suppress(Exception):
                 ui.close()
-            except:
-                pass
     except Exception as e:
         print(f"UI failed to launch: {e}")
-        print(ask(docs, hybrid, llm, "Summarize the failure modes described."))
+        print("Please check the error above and try again.")

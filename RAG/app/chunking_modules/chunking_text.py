@@ -38,7 +38,7 @@ def process_text_chunk(el, md, page, section_type, anchor, doc_id, page_ord, idx
                 anchor = f"p{int(page)}-t{page_ord[page]}"
             else:
                 anchor = f"t{idx}"
-        except Exception:
+        except Exception as e:
             anchor = f"t{idx}"
     
     # Build IDs and metadata hygiene fields
@@ -51,7 +51,7 @@ def process_text_chunk(el, md, page, section_type, anchor, doc_id, page_ord, idx
     order_val = None
     try:
         order_val = page_ord.get(int(page)) if page is not None else None
-    except Exception:
+    except Exception as e:
         order_val = None
     
     return {

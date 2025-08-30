@@ -55,7 +55,7 @@ class DocumentService:
             try:
                 if d.exists():
                     shutil.rmtree(d)
-            except Exception:
+            except Exception as e:
                 pass
                 
         # Logs: queries.jsonl and logs/elements dumps
@@ -67,7 +67,7 @@ class DocumentService:
             elements_log = settings.paths.LOGS_DIR / "elements"
             if elements_log.exists():
                 shutil.rmtree(elements_log)
-        except Exception:
+        except Exception as e:
             pass
 
     def load_documents(self, use_normalized: bool = False) -> List[Document]:

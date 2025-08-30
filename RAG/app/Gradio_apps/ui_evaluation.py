@@ -10,9 +10,9 @@ from RAG.app.logger import get_logger
 
 # Enhanced evaluation imports
 try:
-    from RAG.app.auto_evaluator import AutoEvaluator
-    from RAG.app.enhanced_question_analyzer import EnhancedQuestionAnalyzer
-    from RAG.app.evaluation_wrapper import (
+    from RAG.app.Evaluation_Analysis.auto_evaluator import AutoEvaluator
+    from RAG.app.Evaluation_Analysis.enhanced_question_analyzer import EnhancedQuestionAnalyzer
+    from RAG.app.Evaluation_Analysis.evaluation_wrapper import (
         EVAL_AVAILABLE, 
         test_google_api, 
         test_ragas, 
@@ -34,7 +34,7 @@ def on_test_ragas():
 		return "Enhanced evaluation modules not available"
 	return test_ragas()
 
-def on_generate_ground_truth(num_questions: int):
+def on_generate_ground_truth(docs, hybrid, llm, num_questions: int):
 	if not ENHANCED_EVAL_AVAILABLE:
 		return "Enhanced evaluation modules not available"
 	
@@ -67,7 +67,7 @@ def on_generate_ground_truth(num_questions: int):
 	pipeline = PipelineWrapper(docs, hybrid, llm)
 	return generate_ground_truth(pipeline, num_questions)
 
-def on_evaluate_rag():
+def on_evaluate_rag(docs, hybrid, llm):
 	if not ENHANCED_EVAL_AVAILABLE:
 		return "Enhanced evaluation modules not available"
 	

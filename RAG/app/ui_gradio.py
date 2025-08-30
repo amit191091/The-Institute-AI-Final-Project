@@ -24,8 +24,8 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		build_inspect_tab, create_graph_ui_tab, build_evaluation_tab, build_db_explorer_tab
 	)
 	
-	with gr.Blocks(title="RAG System", theme=gr.themes.Soft()) as demo:
-		# Header with title and exit button
+	with gr.Blocks(title="RAG System") as demo:
+		# Header with title
 		with gr.Row():
 			gr.Markdown("# 🤖 RAG System - Gear Failure Analysis")
 			exit_btn = gr.Button("❌ Exit", variant="stop", size="sm")
@@ -39,10 +39,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				# Use Gradio's built-in shutdown mechanism
 				import gradio as gr
 				gr.close_all()
-				# Also try to stop the server gracefully
-				import os
-				import signal
-				os.kill(os.getpid(), signal.SIGTERM)
+				print("✅ RAG System shutdown complete.")
 			except Exception as e:
 				print(f"Exit error: {e}")
 				# Fallback to sys.exit

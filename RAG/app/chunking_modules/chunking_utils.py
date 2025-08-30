@@ -26,7 +26,7 @@ def build_caption_map(elements):
                     try:
                         num = int(m.group(2))
                         caption_map[_page].append((_idx, num, _cap))
-                    except Exception:
+                    except Exception as e:
                         pass
     
     return caption_map
@@ -47,19 +47,19 @@ def derive_anchor(el, md, page, table_number, table_md_path, table_csv_path):
         try:
             if table_number is not None and page is not None:
                 anchor = f"table-{int(table_number):02d}"
-        except Exception:
+        except Exception as e:
             pass
     
     if anchor is None and table_md_path:
         try:
             anchor = os.path.splitext(os.path.basename(str(table_md_path)))[0]
-        except Exception:
+        except Exception as e:
             pass
     
     if anchor is None and table_csv_path:
         try:
             anchor = os.path.splitext(os.path.basename(str(table_csv_path)))[0]
-        except Exception:
+        except Exception as e:
             pass
     
     return anchor
@@ -69,7 +69,7 @@ def derive_doc_id(file_path):
     """Derive doc_id once per file."""
     try:
         doc_id = slugify(str(os.path.basename(file_path)))
-    except Exception:
+    except Exception as e:
         doc_id = slugify(str(file_path))
     return doc_id
 
@@ -97,7 +97,7 @@ def associate_figures_with_captions(chunks):
                     lines = []
                     try:
                         lines = (text_content or "").splitlines()
-                    except Exception:
+                    except Exception as e:
                         lines = []
                     if any(re.search(cap_pat, ln, re.I) for ln in (lines or [])) or re.search(cap_pat, text_preview, re.I):
                         cap_candidate = nx
@@ -110,7 +110,7 @@ def associate_figures_with_captions(chunks):
                         curr_label = ch.get("figure_label") or ""
                         if assoc_text and (len(assoc_text) > len(curr_label)) and assoc_text.lower().startswith("figure "):
                             ch["figure_label"] = assoc_text
-                    except Exception:
+                    except Exception as e:
                         pass
 
             # Pass 2: if no caption chunk found, fallback to earliest descriptive mention on the same page
@@ -138,7 +138,7 @@ def associate_figures_with_captions(chunks):
                             m = re.search(r"p(\d+)-t(\d+)", anch)
                             if m:
                                 return int(m.group(2))
-                        except Exception:
+                        except Exception as e:
                             pass
                         return 10**9
                     cand = sorted(candidates, key=_order_key)[:1]
@@ -157,12 +157,14 @@ def associate_figures_with_captions(chunks):
                     label = ch.get("figure_label") or ""
                     if not prev or prev.strip().lower() == (label or "").strip().lower():
                         ch["preview"] = assoc_text
-                except Exception:
+                except Exception as e:
                     pass
                 # Keep the original figure_label from the image caption as-is
                 # Don't override it with the associated text
-    except Exception:
+    except Exception as e:
         pass
+    
+    return chunks
 
 
 def associate_tables_with_captions(chunks):
@@ -191,8 +193,10 @@ def associate_tables_with_captions(chunks):
                 ch["table_associated_text_preview"] = assoc_text
                 ch["table_associated_anchor"] = assoc_anchor
                 # table_label already carries full caption text from loaders
-    except Exception:
+    except Exception as e:
         pass
+    
+    return chunks
 
 
 def add_keywords_to_chunks(chunks):
@@ -212,5 +216,5 @@ def _md_get(md: Any, key: str, default: Any = None) -> Any:
             return md.get(key, default)
         # attr-like fallback
         return getattr(md, key, default)
-    except Exception:
+    except Exception as e:
         return default

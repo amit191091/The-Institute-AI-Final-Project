@@ -26,9 +26,9 @@ try:
     try:
         # Some versions expose an enum for result types
         from llama_parse import ResultType  # type: ignore
-    except Exception:
+    except Exception as e:
         ResultType = None  # type: ignore
-except Exception:
+except Exception as e:
     LlamaParse = None  # type: ignore
     ResultType = None  # type: ignore
 
@@ -48,7 +48,7 @@ def _try_llamaparse_tables(pdf_path: Path) -> List[Table]:
         # Be explicit so it's easy to fix.
         try:
             get_logger().warning("LlamaParse skipped: missing LLAMA_CLOUD_API_KEY")
-        except Exception:
+        except Exception as e:
             pass
         return []
 
@@ -128,7 +128,7 @@ def _try_llamaparse_tables(pdf_path: Path) -> List[Table]:
             if len(rows) >= 3:
                 # Try to include a nearby title above the table
                 title_line, parsed_num = _extract_title(i)
-                full_rows = ([] if not title_line else [title_line, ""]) + rows
+                full_rows = ([title_line, ""] if title_line else []) + rows
                 md_tbl = "\n".join(full_rows).strip()
                 key = _header_key(rows[0])
                 if key not in seen_header_keys:
@@ -157,6 +157,6 @@ def _try_llamaparse_tables(pdf_path: Path) -> List[Table]:
     except Exception as e:
         try:
             log.warning(f"LlamaParse extraction failed: {e}")
-        except Exception:
+        except Exception as e2:
             pass
     return elements

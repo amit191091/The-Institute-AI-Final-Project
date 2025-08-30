@@ -32,13 +32,13 @@ def _sanitize_metadata(md: Dict[str, Any] | None) -> Dict[str, Any]:
 				else:
 					import json as _json
 					out[k] = _json.dumps(v, ensure_ascii=False)
-			except Exception:
+			except Exception as e:
 				out[k] = str(v)
 		elif isinstance(v, dict):
 			try:
 				import json as _json
 				out[k] = _json.dumps(v, ensure_ascii=False)
-			except Exception:
+			except Exception as e:
 				out[k] = str(v)
 		else:
 			out[k] = str(v)
@@ -85,7 +85,7 @@ def build_dense_index(docs: List[Document], embedding_fn):
 			vs = Chroma.from_documents(documents=sdocs, embedding=embedding_fn, persist_directory=persist_dir, collection_name=collection) if collection else Chroma.from_documents(documents=sdocs, embedding=embedding_fn, persist_directory=persist_dir)
 			try:
 				vs.persist()
-			except Exception:
+			except Exception as e:
 				pass
 			return vs
 		return Chroma.from_documents(documents=sdocs, embedding=embedding_fn)
@@ -106,23 +106,23 @@ def build_dense_index(docs: List[Document], embedding_fn):
 			# fallback chain
 			try:
 				return _try_docarray()
-			except Exception:
+			except Exception as e:
 				return _try_chroma()
 	if backend == "docarray":
 		try:
 			return _try_docarray()
-		except Exception:
+		except Exception as e:
 			try:
 				return _try_faiss()
-			except Exception:
+			except Exception as e2:
 				return _try_chroma()
 	# default chroma with graceful fallback
 	try:
 		return _try_chroma()
-	except Exception:
+	except Exception as e:
 		try:
 			return _try_docarray()
-		except Exception:
+		except Exception as e2:
 			return _try_faiss()
 
 
@@ -140,7 +140,7 @@ def dump_chroma_snapshot(vectorstore, out_path: Path) -> None:
 		# Try public API first
 		try:
 			data = vectorstore.get(include=include)  # type: ignore[attr-defined]
-		except Exception:
+		except Exception as e:
 			pass
 		# Fallback to underlying collection
 		if data is None:
@@ -148,7 +148,7 @@ def dump_chroma_snapshot(vectorstore, out_path: Path) -> None:
 			if coll is not None:
 				try:
 					data = coll.get(include=include)  # type: ignore[attr-defined]
-				except Exception:
+				except Exception as e:
 					pass
 		if not data:
 			return
@@ -174,11 +174,11 @@ def dump_chroma_snapshot(vectorstore, out_path: Path) -> None:
 				if emb is not None:
 					try:
 						rec["embedding_dim"] = len(emb)
-					except Exception:
+					except Exception as e:
 						rec["embedding_dim"] = None
 				import json as _json
 				f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
-	except Exception:
+	except Exception as e:
 		return
 
 
@@ -267,7 +267,7 @@ def expand_table_kv_docs(docs: List[Document]) -> List[Document]:
 					"source_section": "Table",
 				})
 				out.append(Document(page_content=kv_text, metadata=kv_meta))
-		except Exception:
+		except Exception as e:
 			continue
 	return out
 

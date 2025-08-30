@@ -53,7 +53,7 @@ def run(question: str, docs: List[Document], hybrid, llm_callable, do_answer: bo
         cands = []
         try:
             cands = hybrid.invoke(question) or []
-        except Exception:
+        except Exception as e:
             cands = []
         trace["steps"].append({"action": "retrieve_candidates", "observation_count": len(cands)})
         # Filter + rerank
@@ -109,7 +109,7 @@ def run(question: str, docs: List[Document], hybrid, llm_callable, do_answer: bo
                                 t = (d.page_content or "").lower()
                                 if any(term in t for term in imaging_terms):
                                     addl.append(d)
-                            except Exception:
+                            except Exception as e:
                                 continue
                         if addl:
                             seen = set(id(x) for x in top_docs)
@@ -122,9 +122,9 @@ def run(question: str, docs: List[Document], hybrid, llm_callable, do_answer: bo
                                 merged.append(d)
                             # modestly expand window to keep both tables and imaging
                             top_docs = merged[: max(top_n, 16)]
-                except Exception:
+                except Exception as e:
                     pass
-            except Exception:
+            except Exception as e:
                 top_docs = (cands or [])[:8]
             trace["top_docs"] = [{
                 "file": (d.metadata or {}).get("file_name"),
@@ -133,7 +133,7 @@ def run(question: str, docs: List[Document], hybrid, llm_callable, do_answer: bo
                 "anchor": (d.metadata or {}).get("anchor"),
                 "score": (d.metadata or {}).get("_score"),
             } for d in top_docs]
-        except Exception:
+        except Exception as e:
             pass
         # Opportunistic deterministic table read when routed to table
         try:
@@ -145,7 +145,7 @@ def run(question: str, docs: List[Document], hybrid, llm_callable, do_answer: bo
                         p = (d.metadata or {}).get("table_md_path")
                         if p:
                             md_paths.append(p)
-                    except Exception:
+                    except Exception as e:
                         pass
                 md_paths = list(dict.fromkeys(md_paths))[:3]
                 # Heuristic keys from the question
@@ -171,10 +171,10 @@ def run(question: str, docs: List[Document], hybrid, llm_callable, do_answer: bo
                         constraints = {"contains": [w for w in ql.split() if len(w) > 2][:3]}
                         filt = tool_table_filter(md_paths[0], constraints)
                         table_obs["filter_example"] = {"path": md_paths[0], "constraints": constraints, "result": filt}
-                except Exception:
+                except Exception as e:
                     pass
                 trace["steps"].append({"action": "table_det_read", "observation": table_obs})
-        except Exception:
+        except Exception as e:
             pass
 
         # Optional answer using existing agents
@@ -182,7 +182,7 @@ def run(question: str, docs: List[Document], hybrid, llm_callable, do_answer: bo
             # First: try deterministic fact miner over concatenated top_docs
             try:
                 mined, mined_meta = mine_answer_from_context(question, top_docs)
-            except Exception:
+            except Exception as e:
                 mined, mined_meta = (None, {})
             if mined:
                 ans = mined
@@ -198,7 +198,7 @@ def run(question: str, docs: List[Document], hybrid, llm_callable, do_answer: bo
             try:
                 if ans:
                     ans = canonicalize_answer(question, ans)
-            except Exception:
+            except Exception as e:
                 pass
             trace["answer"] = ans
         return trace

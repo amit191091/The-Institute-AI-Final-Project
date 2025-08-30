@@ -186,5 +186,5 @@ class RAGOrchestrator:
             return status
             
         except Exception as e:
-            self.log.error(f"Error getting system status: {str(e)}")
+            logger.error(f"Error getting system status: {str(e)}")
             return {"error": str(e)}

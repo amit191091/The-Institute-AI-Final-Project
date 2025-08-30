@@ -38,6 +38,8 @@ def run_agent_with_tools(question: str, docs, hybrid, llm=None):
         
         # Actually generate an answer using the LLM
         ans = ""
+        top_docs = []  # Initialize top_docs for evaluation
+        
         if tool_list_figures and re.search(r"\b(list|all|show)\b.*\bfigures\b", question, re.I):
             figs = tool_list_figures(docs)
             steps.append({"action": "list_figures", "observation_count": len(figs)})
@@ -45,7 +47,19 @@ def run_agent_with_tools(question: str, docs, hybrid, llm=None):
         else:
             # Generate answer using the LLM with retrieved documents
             if llm is not None:
-                ans = answer_needle(llm, docs, question)
+                # Get the filtered and ranked documents for better answer generation
+                from RAG.app.retrieve import apply_filters, query_analyzer, rerank_candidates
+                qa = query_analyzer(question)
+                cands = hybrid.invoke(qa.get("canonical") or question) or []
+                filtered = apply_filters(cands, qa.get("filters") or {})
+                top_docs = rerank_candidates(qa.get("canonical") or question, filtered, top_n=8)
+                
+                # Use the filtered top_docs instead of all docs
+                if top_docs:
+                    ans = answer_needle(llm, top_docs, question)
+                else:
+                    # Fallback to all docs if no filtered results
+                    ans = answer_needle(llm, docs, question)
             else:
                 ans = "LLM not available for answer generation"
         
@@ -77,7 +91,9 @@ def run_agent_with_tools(question: str, docs, hybrid, llm=None):
             if gts:
                 from RAG.app.Evaluation_Analysis.evaluation_utils import run_eval, pretty_metrics
                 # Fix dataset structure for proper RAGAS evaluation
-                context_texts = [d.page_content for d in docs]
+                # Use the actual documents that were used for answer generation
+                context_docs = top_docs if top_docs else docs
+                context_texts = [d.page_content for d in context_docs]
                 dataset = {
                     "question": [question],
                     "answer": [ans],

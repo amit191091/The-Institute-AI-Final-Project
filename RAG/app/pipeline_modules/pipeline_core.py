@@ -60,16 +60,16 @@ def build_pipeline(paths: List[Path]) -> Tuple[List, Any, Dict[str, Any]]:
     # vectorization
     # Optional: prefer normalized chunks.jsonl if feature flag enabled
     use_normalized = os.getenv("RAG_USE_NORMALIZED", "0").lower() in ("1", "true", "yes")
-    if use_normalized and (settings.LOGS_DIR / "normalized" / "chunks.jsonl").exists():
-        docs = load_normalized_docs(settings.LOGS_DIR / "normalized" / "chunks.jsonl")
+    if use_normalized and (settings.paths.LOGS_DIR / "normalized" / "chunks.jsonl").exists():
+        docs = load_normalized_docs(settings.paths.LOGS_DIR / "normalized" / "chunks.jsonl")
         log.info("Using normalized docs for indexing: %d", len(docs))
     else:
         docs = to_documents(records)
     
-    # Write a quick DB snapshot for debugging
+        # Write a quick DB snapshot for debugging
     try:
-        settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        snap_path = settings.LOGS_DIR / "db_snapshot.jsonl"
+        settings.paths.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        snap_path = settings.paths.LOGS_DIR / "db_snapshot.jsonl"
         with open(snap_path, "w", encoding="utf-8") as f:
             for d in docs:
                 md = d.metadata or {}
@@ -161,7 +161,10 @@ def build_pipeline(paths: List[Path]) -> Tuple[List, Any, Dict[str, Any]]:
     except Exception as e:
         log.warning(f"Failed to dump Chroma snapshot: {e}")
     
-    return docs, hybrid, {"graph": G}
+    # Create single LLM instance for the entire pipeline
+    llm = LLM()
+    
+    return docs, hybrid, llm
 
 
 # run_pipeline function removed - use RAGService.run_pipeline() instead

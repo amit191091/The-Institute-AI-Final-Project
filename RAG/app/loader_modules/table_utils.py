@@ -157,7 +157,7 @@ def _export_page_text_to_files(elements, pdf_path: Path) -> None:
 			fp = out_dir / f"p{int(page)}.txt"
 			try:
 				fp.write_text("\n\n".join(page_texts[page]), encoding="utf-8")
-			except Exception:
+			except Exception as e:
 				# Best-effort; continue
 				continue
 			try:
@@ -168,14 +168,14 @@ def _export_page_text_to_files(elements, pdf_path: Path) -> None:
 					"words": len(txt.split()),
 					"file": fp.as_posix(),
 				})
-			except Exception:
+			except Exception as e:
 				index.append({"page": int(page), "file": fp.as_posix()})
 		# Write index.json
 		try:
 			(out_dir / "index.json").write_text(_json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
-		except Exception:
+		except Exception as e:
 			pass
-	except Exception:
+	except Exception as e:
 		# Non-fatal
 		pass
 
@@ -215,14 +215,14 @@ def _dump_elements_jsonl(elements, pdf_path: Path) -> None:
 				}
 				try:
 					f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
-				except Exception:
+				except Exception as e:
 					# Attempt a minimal fallback if JSON serialization barfs
 					try:
 						rec.pop("text", None)
 						f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
-					except Exception:
+					except Exception as e2:
 						pass
-	except Exception:
+	except Exception as e:
 		# Non-fatal
 		pass
 
@@ -246,7 +246,7 @@ def _export_tables_to_files(elements: List[Element], path: Path) -> None:
         from RAG.app.config import settings
         out_dir = settings.paths.DATA_DIR / "elements"
         out_dir.mkdir(parents=True, exist_ok=True)
-    except Exception:
+    except Exception as e:
         return
     # Determine document-order tables
     tbl_indices = [i for i, e in enumerate(elements) if str(getattr(e, "category", "")).lower() == "table"]
@@ -261,7 +261,7 @@ def _export_tables_to_files(elements: List[Element], path: Path) -> None:
         # Write Markdown as-is
         try:
             md_path.write_text(text, encoding="utf-8")
-        except Exception:
+        except Exception as e:
             continue
         # Best-effort CSV from markdown row lines
         try:
@@ -280,7 +280,7 @@ def _export_tables_to_files(elements: List[Element], path: Path) -> None:
                 )
             if csv_rows:
                 csv_path.write_text("\n".join(csv_rows), encoding="utf-8")
-        except Exception:
+        except Exception as e:
             # ignore CSV failures; MD is still useful
             pass
         # Attach metadata
@@ -299,9 +299,9 @@ def _export_tables_to_files(elements: List[Element], path: Path) -> None:
                     setattr(meta, "table_md_path", md_path.as_posix())
                     if csv_path.exists():
                         setattr(meta, "table_csv_path", csv_path.as_posix())
-                except Exception:
+                except Exception as e:
                     pass
-        except Exception:
+        except Exception as e:
             pass
 
 def _assign_table_numbers(elements: list, path: Path) -> None:
@@ -325,10 +325,10 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 			if callable(_get_text):
 				try:
 					text = _get_text()
-				except Exception:
+				except Exception as e:
 					try:
 						text = _get_text("text")
-					except Exception:
+					except Exception as e2:
 						text = ""
 			import re as _re
 			# Ensure string for typing and regex compatibility
@@ -339,11 +339,11 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 					num = int(m.group(1))
 					cap = (m.group(2) or "").strip() or None
 					pairs.append((num, cap))
-				except Exception:
+				except Exception as e:
 					continue
 			if pairs:
 				page_tables[pno + 1] = pairs
-	except Exception:
+	except Exception as e:
 		page_tables = {}
 	# Group tables by page
 	by_page: dict[int, list[object]] = {}
@@ -399,7 +399,7 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 					setattr(md, "table_label", label)
 					setattr(md, "table_caption", cap)
 					setattr(md, "table_anchor", anchor)
-				except Exception:
+				except Exception as e:
 					pass
 			else:
 				# fallback sequential
@@ -416,7 +416,7 @@ def _assign_table_numbers(elements: list, path: Path) -> None:
 					setattr(md, "table_label", label)
 					setattr(md, "table_caption", None)
 					setattr(md, "table_anchor", anchor)
-				except Exception:
+				except Exception as e:
 					pass
 
 def _estimate_rows_cols_from_text(text: str) -> tuple[int, int]:
@@ -439,7 +439,7 @@ def _estimate_rows_cols_from_text(text: str) -> tuple[int, int]:
 		for ln in lines[:5]:
 			wcols = max(wcols, len([m for m in _re.finditer(r"\S\s{2,}\S", ln)]))
 		return len(lines), max(1, wcols)
-	except Exception:
+	except Exception as e:
 		return 0, 0
 
 def _score_table_candidate(text: str, extractor: str | None, page: int | None) -> int:
@@ -507,6 +507,6 @@ def _dedupe_and_limit_tables(elements: list, per_page_limit: int = 3) -> list:
 	if pruned > 0:
 		try:
 			log.debug("Table dedupe/limit: %d -> %d (pruned %d)", len(tables), len(final_tables), pruned)
-		except Exception:
+		except Exception as e:
 			pass
 	return non_tables + final_tables

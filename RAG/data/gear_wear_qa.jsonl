@@ -1,0 +1,41 @@
+{"id": "gwf-v2-001", "question": "On what date was the first onset of wear detected by visual inspection?", "answer": "April 9, 2023"}
+{"id": "gwf-v2-002", "question": "On what date did the system reach the failure stage?", "answer": "June 15, 2023"}
+{"id": "gwf-v2-003", "question": "Between which dates did the severe wear stage occur?", "answer": "From May 14 to June 11"}
+{"id": "gwf-v2-004", "question": "When did moderate wear begin?", "answer": "April 23, 2023"}
+{"id": "gwf-v2-005", "question": "Until what date did the healthy baseline extend with no abnormal indications?", "answer": "Until April 8, 2023"}
+{"id": "gwf-v2-006", "question": "What is the model of the marine reduction gearbox investigated?", "answer": "MG-5025A"}
+{"id": "gwf-v2-007", "question": "Which vessel's propulsion train was monitored?", "answer": "INS Haifa"}
+{"id": "gwf-v2-008", "question": "What two steady speeds were used for data acquisition (in RPS)?", "answer": "45 RPS and 15 RPS"}
+{"id": "gwf-v2-009", "question": "What was the sampling rate per record?", "answer": "50 kHz"}
+{"id": "gwf-v2-010", "question": "What was the duration of each time record?", "answer": "60 seconds"}
+{"id": "gwf-v2-011", "question": "Which lubricant was used in the gearbox?", "answer": "2640 semi-synthetic (15W/40) oil"}
+{"id": "gwf-v2-012", "question": "What gear type is used in the transmission?", "answer": "Spur gears"}
+{"id": "gwf-v2-013", "question": "What is the gear module value?", "answer": "3 mm"}
+{"id": "gwf-v2-014", "question": "What is the transmission ratio (driving/driven)?", "answer": "18/35"}
+{"id": "gwf-v2-015", "question": "How many sequential wear cases were tracked?", "answer": "35 cases"}
+{"id": "gwf-v2-016", "question": "What was the final wear depth measured at Case W35?", "answer": "932 μm"}
+{"id": "gwf-v2-017", "question": "What was the wear depth at Case W1?", "answer": "40 μm"}
+{"id": "gwf-v2-018", "question": "What was the wear depth at Case W13?", "answer": "344 μm"}
+{"id": "gwf-v2-019", "question": "What was the wear depth at Case W20?", "answer": "488 μm"}
+{"id": "gwf-v2-020", "question": "What was the wear depth at Case W27?", "answer": "684 μm"}
+{"id": "gwf-v2-021", "question": "What was the wear depth at Case W34?", "answer": "890 μm"}
+{"id": "gwf-v2-022", "question": "What was the baseline wear depth (Healthy)?", "answer": "0 μm"}
+{"id": "gwf-v2-023", "question": "What brand of accelerometers was used?", "answer": "Dytran 3053B"}
+{"id": "gwf-v2-024", "question": "What was the accelerometer sensitivity (mV/g)?", "answer": "1783 mV/g (Starboard), 1787 mV/g (Port)"}
+{"id": "gwf-v2-025", "question": "What brand of tachometer was used?", "answer": "Honeywell 3010AN, 30 teeth"}
+{"id": "gwf-v2-026", "question": "On what date was the new data-acquisition chain installed?", "answer": "February 13, 2023"}
+{"id": "gwf-v2-027", "question": "What did the baseline RMS vibration levels indicate?", "answer": "Stable alignment, no assembly errors, no abnormal gear contact"}
+{"id": "gwf-v2-028", "question": "What was the earliest diagnostic indicator of mild wear?", "answer": "Tooth photographs showing profile deviations"}
+{"id": "gwf-v2-029", "question": "What RMS trend was observed by April 23?", "answer": "RMS values consistently above the baseline"}
+{"id": "gwf-v2-030", "question": "What visual evidence defined the severe wear stage?", "answer": "Sharp-edged scars, scuffing, tearing, deep scarring, pitting"}
+{"id": "gwf-v2-031", "question": "What visual evidence confirmed failure on June 15?", "answer": "Deep gouges, fragmented edges, spalling, fractured surfaces"}
+{"id": "gwf-v2-032", "question": "What physical meaning is associated with failure?", "answer": "Gear pair can no longer transfer energy; failed state"}
+{"id": "gwf-v2-033", "question": "What was the purpose of photographic inspections?", "answer": "To detect earliest wear onset and corroborate wear evolution"}
+{"id": "gwf-v2-034", "question": "What was recommended regarding RMS monitoring thresholds?", "answer": "Update thresholds with lower alarm levels"}
+{"id": "gwf-v2-035", "question": "What diagnostic markers in the frequency domain were emphasized?", "answer": "Sidebands around the gear meshing frequency"}
+{"id": "gwf-v2-036", "question": "What predictive maintenance approach was recommended?", "answer": "Link image-based wear depth to vibration features to estimate RUL"}
+{"id": "gwf-v2-037", "question": "What intervention threshold was suggested for mild wear?", "answer": "Record and monitor closely"}
+{"id": "gwf-v2-038", "question": "What intervention threshold was suggested for moderate wear?", "answer": "Schedule planned replacement or refurbishment"}
+{"id": "gwf-v2-039", "question": "What intervention threshold was suggested for severe wear?", "answer": "Immediate intervention required to prevent failure"}
+{"id": "gwf-v2-040", "question": "What tool was recommended to improve analysis of image data?", "answer": "AI-driven feature extraction (crack detection, pitting quantification)"}
+{"id": "gwf-v2-041", "question": "What was the overall recommendation of the report?", "answer": "Adopt dual-path monitoring: visual inspection + vibration analysis"}

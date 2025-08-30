@@ -213,7 +213,7 @@ def run_eval_detailed(dataset):
     try:
         if Dataset is not None and not hasattr(dataset, "select"):
             ds = Dataset.from_dict(dataset)  # type: ignore[arg-type]
-    except Exception:
+    except Exception as e:
         ds = dataset
     # Choose metrics dynamically based on columns/presence
     has_ref = False
@@ -221,12 +221,12 @@ def run_eval_detailed(dataset):
     try:
         refs = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
         has_ref = any(bool(r) for r in (refs or []))
-    except Exception:
+    except Exception as e:
         has_ref = False
     try:
         gts = dataset.get("ground_truths") if isinstance(dataset, dict) else dataset["ground_truths"]
         has_gt = any(isinstance(x, list) and len(x) > 0 for x in (gts or []))
-    except Exception:
+    except Exception as e:
         has_gt = False
     metrics: list = [m for m in (faithfulness, answer_relevancy) if m is not None]
     if has_ref and context_precision is not None:
@@ -242,7 +242,7 @@ def run_eval_detailed(dataset):
     try:
         if RunConfig is not None:
             run_config = RunConfig()  # type: ignore[call-arg]
-    except Exception:
+    except Exception as e:
         run_config = None
     try:
         if run_config is not None:
@@ -256,7 +256,7 @@ def run_eval_detailed(dataset):
                 result = evaluate(ds, metrics=metrics, llm=llm, embeddings=emb, run_config=run_config)  # type: ignore
             else:
                 result = evaluate(ds, metrics=metrics, llm=llm, embeddings=emb)  # type: ignore
-        except Exception:
+        except Exception as e:
             result = evaluate(ds, metrics=metrics)  # type: ignore
     # Per-question extraction aligned with original inputs
     per_q = []
@@ -268,7 +268,7 @@ def run_eval_detailed(dataset):
                 return ds.get(key, [])
             try:
                 return ds[key]  # datasets style
-            except Exception:
+            except Exception as e:
                 return []
         q_list = list(_get_col("question"))
         a_list = list(_get_col("answer"))
@@ -296,7 +296,7 @@ def run_eval_detailed(dataset):
                 try:
                     fm = compute_factual_metrics(rec.get("answer") or "", rec.get("reference") or "")
                     rec.update(fm)
-                except Exception:
+                except Exception as e:
                     pass
                 # Add overlap metrics per-question
                 try:
@@ -305,7 +305,7 @@ def run_eval_detailed(dataset):
                     ctxs = _get_col("contexts")[i] if i < len(_get_col("contexts")) else []
                     p, r, f1v = overlap_prf1(ref, list(ctxs or []))
                     rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
-                except Exception:
+                except Exception as e:
                     pass
                 # mark table QA correctness
                 rec["table_like"] = _is_table_like_question(rec.get("question"))

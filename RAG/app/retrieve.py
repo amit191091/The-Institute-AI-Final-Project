@@ -21,13 +21,13 @@ from RAG.app.retrieve_modules.retrieve_fallbacks import (
 # Optional Cross-Encoder reranker
 try:
     from RAG.app.retrieve_modules.reranker_ce import rerank as ce_rerank  # type: ignore
-except Exception:  # pragma: no cover
+except Exception as e:  # pragma: no cover
     ce_rerank = None  # type: ignore
 
 # Optional LLM router
 try:
     from RAG.app.retrieve_modules.query_intent import get_intent  # optional LLM router
-except Exception:
+except Exception as e:
     get_intent = None  # type: ignore
 
 
@@ -38,6 +38,15 @@ def _score_document(doc: Document, q: str, analysis: Dict[str, Any]) -> float:
     q_lower = q.lower()
     
     score = 0.0
+    
+    # PRIORITY: Main PDF report gets highest priority
+    file_name = metadata.get("file_name", "").lower()
+    if "gear wear failure.pdf" in file_name:
+        score += 1000.0  # Highest priority for main report
+    elif "database figures and tables.pdf" in file_name:
+        score += 500.0   # Secondary priority for database
+    else:
+        score += 0.0     # Other sources get no priority bonus
     
     # Base score from lexical overlap
     score += lexical_overlap(q, content) * 100.0
@@ -171,18 +180,26 @@ def rerank_candidates(q: str, candidates: List[Document], top_n: int = 8) -> Lis
     if not candidates:
         return []
     
+    # PRIORITY: First, try to find answers in main PDF report
+    main_pdf_candidates = [doc for doc in candidates if "gear wear failure.pdf" in (doc.metadata.get("file_name", "") or "").lower()]
+    
+    # If we have main PDF candidates, prioritize them
+    if main_pdf_candidates:
+        candidates = main_pdf_candidates + [doc for doc in candidates if doc not in main_pdf_candidates]
+    
     # If CE reranker is enabled and available, prefer it
     try:
         if os.getenv("RAG_USE_CE_RERANKER", "0").lower() in ("1", "true", "yes") and ce_rerank is not None:
             return ce_rerank(q, candidates, top_n=top_n)
-    except Exception:
+    except Exception as e:
         pass
     
-    # Apply fallback enhancements
-    candidates = _add_wear_depth_fallback(q, candidates)
-    candidates = _add_speed_fallback(q, candidates)
-    candidates = _add_accelerometer_fallback(q, candidates)
-    candidates = _add_threshold_fallback(q, candidates)
+    # Apply fallback enhancements (but only if no main PDF results)
+    if not main_pdf_candidates:
+        candidates = _add_wear_depth_fallback(q, candidates)
+        candidates = _add_speed_fallback(q, candidates)
+        candidates = _add_accelerometer_fallback(q, candidates)
+        candidates = _add_threshold_fallback(q, candidates)
     
     # Analyze query
     analysis = query_analyzer(q)

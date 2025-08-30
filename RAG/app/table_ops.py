@@ -19,7 +19,7 @@ import re
 
 try:
     import pandas as pd  # type: ignore
-except Exception:  # pragma: no cover
+except Exception as e:  # pragma: no cover
     pd = None  # type: ignore
 
 # Avoid importing external types for annotations to keep this module lightweight.
@@ -109,7 +109,7 @@ def filter_rows(df, constraints: Dict[str, Any]):
             m3 = df.apply(_row_regex, axis=1)
             mask = m3 if mask is None else (mask & m3)
         return df[mask] if mask is not None else df
-    except Exception:
+    except Exception as e:
         return df
 
 @trace_func
@@ -140,7 +140,7 @@ def read_kv(df, keys: Iterable[str]) -> List[str]:
         try:
             vals = [str(v).strip() for v in df[c].tolist() if str(v).strip()]
             out.extend(vals)
-        except Exception:
+        except Exception as e:
             pass
     # Scan all cells for patterns if keys suggest instrumentation
     if any("sensitivity" in k for k in kl) or any("mV/g" in k for k in kl):
@@ -150,7 +150,7 @@ def read_kv(df, keys: Iterable[str]) -> List[str]:
                     s = str(v)
                     if sens_pat.search(s):
                         out.append(s.strip())
-        except Exception:
+        except Exception as e:
             pass
     if any("sample" in k and "rate" in k for k in kl) or any(x in kl for x in ("sampling rate", "rate", "hz", "khz", "ks/sec")):
         try:
@@ -159,7 +159,7 @@ def read_kv(df, keys: Iterable[str]) -> List[str]:
                     s = str(v)
                     if rate_pat.search(s):
                         out.append(s.strip())
-        except Exception:
+        except Exception as e:
             pass
     # Final cleanup: uniquify, keep concise
     out_u = []
@@ -195,11 +195,11 @@ def _is_kv_like(df) -> bool:
             if len(cols) == 2:
                 try:
                     avg_len = float(pd.Series([len(str(x)) for x in df.iloc[:, 0]]).mean()) if pd is not None else 15.0
-                except Exception:
+                except Exception as e:
                     avg_len = 15.0
                 keyish = avg_len <= 30
         return bool(keyish or valish)
-    except Exception:
+    except Exception as e:
         return False
 
 @trace_func
@@ -232,7 +232,7 @@ def _best_column_match(df, q_tokens: List[str]) -> Optional[int]:
             if score > best_s:
                 best_s, best_i = score, i
         return best_i
-    except Exception:
+    except Exception as e:
         return None
 
 @trace_func
@@ -255,7 +255,7 @@ def _extract_tables_from_doc_text(text: str):
             lines = [ln for ln in md_part.splitlines() if "|" in ln]
             if lines:
                 out.append("\n".join(lines))
-    except Exception:
+    except Exception as e:
         return []
     return out
 
@@ -291,7 +291,7 @@ def _markdown_block_to_df(md_block: str):
         ncol = len(header)
         norm_rows = [r + [""] * (ncol - len(r)) if len(r) < ncol else r[:ncol] for r in rows]
         return pd.DataFrame(norm_rows, columns=header)
-    except Exception:
+    except Exception as e:
         return None
 
 
@@ -320,7 +320,7 @@ def build_tables_from_docs(docs: List[Any]) -> List[Tuple[Any, Any]]:
                     df = _markdown_block_to_df(blk)
                     if df is not None and not df.empty:
                         out.append((df, d))
-        except Exception:
+        except Exception as e:
             continue
     return out
 
@@ -375,7 +375,7 @@ def natural_table_lookup(question: str, docs: List[Any]) -> Tuple[Optional[str],
                     val = str(df.iloc[best_idx, val_col]).strip()
                     if val:
                         return val, src
-        except Exception:
+        except Exception as e:
             continue
 
     # Pass 2: matrix-style tables
@@ -412,7 +412,7 @@ def natural_table_lookup(question: str, docs: List[Any]) -> Tuple[Optional[str],
                     num_counts = [sum(bool(re.search(r"\d", str(x))) for x in df.iloc[:, i]) for i in range(len(df.columns))]
                     if num_counts:
                         col_idx = int(max(range(len(num_counts)), key=lambda i: num_counts[i]))
-                except Exception:
+                except Exception as e:
                     col_idx = 0
             best_i, best_s = None, 0.0
             for i, row in df.iterrows():
@@ -424,7 +424,7 @@ def natural_table_lookup(question: str, docs: List[Any]) -> Tuple[Optional[str],
                 val = str(df.iloc[best_i, col_idx]).strip()
                 if val:
                     return val, src
-        except Exception:
+        except Exception as e:
             continue
 
     return None, None

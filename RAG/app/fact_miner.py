@@ -103,5 +103,5 @@ def canonicalize_answer(question: str, answer: str) -> str:
         
         return canonicalized
         
-    except Exception:
+    except Exception as e:
         return answer

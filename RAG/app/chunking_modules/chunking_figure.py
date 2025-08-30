@@ -13,7 +13,7 @@ def process_figure_chunk(el, md, page, section_type, anchor, doc_id, page_ord, i
     # Increment document-level figure order
     try:
         figure_seq_counter += 1
-    except Exception:
+    except Exception as e:
         figure_seq_counter = figure_seq_counter + 1
     
     raw_text = (getattr(el, "text", "") or "").strip()
@@ -26,7 +26,7 @@ def process_figure_chunk(el, md, page, section_type, anchor, doc_id, page_ord, i
         mfn = re.search(r"\b(fig(?:\.|ure)?)\s*(\d{1,3})\b", caption, re.I)
         if mfn:
             fig_num = int(mfn.group(2))
-    except Exception:
+    except Exception as e:
         fig_num = None
     
     # Align figure to the nearest caption BELOW it on the same page (by element index), if available
@@ -53,7 +53,7 @@ def process_figure_chunk(el, md, page, section_type, anchor, doc_id, page_ord, i
                         fig_num = cnum
                     used.add(cidx)
                     aligned_via = "same_page_any"
-    except Exception:
+    except Exception as e:
         aligned_via = None
     
     # Build a clean summary derived from caption (or metadata), but drop any leading "Figure X:" label
@@ -65,7 +65,7 @@ def process_figure_chunk(el, md, page, section_type, anchor, doc_id, page_ord, i
             # Remove any inline image-file hints
             _tmp = re.sub(r"(?mi)^\s*image\s*file\s*:\s*.*$", "", _tmp)
             figure_summary = _tmp.strip() or None
-    except Exception:
+    except Exception as e:
         pass
     
     if not figure_summary:
@@ -73,7 +73,7 @@ def process_figure_chunk(el, md, page, section_type, anchor, doc_id, page_ord, i
         try:
             cap_for_sum = re.sub(r"(?mi)^\s*image\s*file\s*:\s*.*$", "", caption)
             figure_summary = simple_summarize(cap_for_sum, ratio=0.5)
-        except Exception:
+        except Exception as e:
             figure_summary = simple_summarize(caption, ratio=0.5)
     
     # Prepare a clean, normalized caption reflecting the final number; keep original for traceability
@@ -86,7 +86,7 @@ def process_figure_chunk(el, md, page, section_type, anchor, doc_id, page_ord, i
         cap_clean = re.sub(r"(?mi)^\s*image\s*file\s*:\s*.*$", "", cap_clean)
         # Collapse multiple blank lines and trim
         cap_clean = "\n".join([ln for ln in (cap_clean.splitlines()) if ln.strip()]).strip()
-    except Exception:
+    except Exception as e:
         cap_clean = caption_original
     
     # We'll compute the final figure number below; temporarily store cleaned caption
@@ -99,7 +99,7 @@ def process_figure_chunk(el, md, page, section_type, anchor, doc_id, page_ord, i
             m = re.search(r"Image file: (.+)$", caption)
             if m:
                 img_path = m.group(1).strip()
-        except Exception:
+        except Exception as e:
             pass
     
     # Finalize figure number: prefer caption number; if missing, infer from sequence.
@@ -128,9 +128,9 @@ def process_figure_chunk(el, md, page, section_type, anchor, doc_id, page_ord, i
                 figure_summary_short = f"Figure {int(figure_number_final)}: {cap_for_summary}"
             else:
                 figure_summary_short = caption_norm  # Use full for shorter captions
-        except Exception:
+        except Exception as e:
             figure_summary_short = caption_norm
-    except Exception:
+    except Exception as e:
         caption_norm = caption
         figure_label_full = caption_norm
         figure_summary_short = caption_norm
@@ -138,15 +138,15 @@ def process_figure_chunk(el, md, page, section_type, anchor, doc_id, page_ord, i
     # Derive clean anchor: "figure-N" as requested
     try:
         custom_anchor = f"figure-{int(figure_number_final)}"
-    except Exception:
+    except Exception as e:
         # Fallback to simple numbering
         custom_anchor = f"figure-{figure_number_final}"
 
     # Build content with normalized caption shown to the LLM; compute token budget after composing
     content = f"[FIGURE]\nCAPTION:\n{figure_summary_short}\nSUMMARY:\n{figure_summary}"
     tok = len(content.split())  # Simple token approximation
-    if tok > settings.CHUNK_TOK_MAX:
-        content = truncate_to_tokens(content, settings.CHUNK_TOK_MAX)
+    if tok > settings.chunking.CHUNK_TOK_MAX:
+        content = truncate_to_tokens(content, settings.chunking.CHUNK_TOK_MAX)
     if trace:
         log.debug("CHUNK-OUT[%d]: section=Figure tokens=%d img=%s anchor=%s", idx, tok, img_path, anchor)
     
@@ -159,7 +159,7 @@ def process_figure_chunk(el, md, page, section_type, anchor, doc_id, page_ord, i
     order_val = None
     try:
         order_val = page_ord.get(int(page)) if page is not None else None
-    except Exception:
+    except Exception as e:
         order_val = None
     
     # Store finalized figure chunk

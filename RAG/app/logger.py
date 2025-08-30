@@ -41,7 +41,7 @@ def trace_func(func):
         try:
             if str(os.getenv("RAG_TRACE_FUNCS", "0")).lower() in ("1", "true", "yes", "on"):
                 get_logger().info(f"im here, this is {func.__name__}")
-        except Exception:
+        except Exception as e:
             pass
         return func(*args, **kwargs)
     return _wrapper
@@ -52,5 +52,5 @@ def trace_here(name: str) -> None:
     try:
         if str(os.getenv("RAG_TRACE_FUNCS", "0")).lower() in ("1", "true", "yes", "on"):
             get_logger().info(f"im here, this is {name}")
-    except Exception:
+    except Exception as e:
         pass

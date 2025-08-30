@@ -19,7 +19,7 @@ def sha1_short(text: str, n: int = 12) -> str:
 	try:
 		h = hashlib.sha1(text.encode("utf-8", errors="ignore")).hexdigest()
 		return h[: max(1, n)]
-	except Exception:
+	except Exception as e:
 		return "0" * n
 
 

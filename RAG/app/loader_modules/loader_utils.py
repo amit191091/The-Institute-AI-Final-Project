@@ -65,7 +65,7 @@ def _import_unstructured():
         partition_docx = _partition_docx
         partition_text = _partition_text
         
-    except Exception:  # pragma: no cover - allow import even if extras missing
+    except Exception as e:  # pragma: no cover - allow import even if extras missing
         partition_docx = partition_text = None  # type: ignore
 
 # --- feature flag helpers ----------------------------------------------------

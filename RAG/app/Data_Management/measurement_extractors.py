@@ -67,7 +67,7 @@ def detect_measurements_sensors_speed(text: str) -> Tuple[List[str], List[str], 
             v = int(sp)
             if v in (15, 45) and v not in speeds:
                 speeds.append(v)
-        except Exception:
+        except Exception as e:
             pass
     speeds.sort()
     # Deduplicate

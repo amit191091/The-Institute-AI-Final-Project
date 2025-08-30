@@ -98,7 +98,7 @@ def _detect_heading_in_text(raw: str, md: Any = None) -> Optional[Tuple[str, int
             first_line = (raw or "").strip().splitlines()[0] if raw else None
             if first_line:
                 return (first_line.strip(), _heading_level(first_line))
-    except Exception:
+    except Exception as e:
         pass
     # Check first ~10 non-empty lines for a heading candidate
     lines = [l.strip() for l in (raw or "").splitlines()]

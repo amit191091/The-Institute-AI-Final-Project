@@ -24,9 +24,9 @@ def main():
                 for k, v in (dotenv_values(env_path) or {}).items():
                     if v is not None:
                         os.environ[k] = v
-        except Exception:
+        except Exception as e:
             pass
-    except Exception:
+    except Exception as e:
         pass
     # Prefer Google if available; otherwise drop invalid OpenAI key to force FakeEmbeddings fallback
     if not os.getenv("GOOGLE_API_KEY"):

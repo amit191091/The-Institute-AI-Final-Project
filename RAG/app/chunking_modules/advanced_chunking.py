@@ -26,7 +26,7 @@ try:
     TEXT_MAX_TOK = _get_chunking_int_setting("TEXT_MAX_TOK", 500)
     FIGURE_TABLE_MAX_TOK = _get_chunking_int_setting("FIGURE_TABLE_MAX_TOK", 800)
     SEMANTIC = _get_chunking_setting("USE_SEMANTIC_CHUNKING", True)
-except Exception:
+except Exception as e:
     # Fallback to safe defaults
     MAX_TOK = 500
     TEXT_TARGET_TOK, TEXT_MAX_TOK = 375, 500
@@ -78,7 +78,7 @@ def _analyze_table_markdown(md_text: str) -> str:
             return ""
         lines_out = ["ANALYSIS:"] + [f"- {n}: min={vmin:g}, max={vmax:g}" for (n, vmin, vmax) in stats[:4]]
         return "\n".join(lines_out)
-    except Exception:
+    except Exception as e:
         return ""
 
 
@@ -89,7 +89,7 @@ def _create_chunk_dict(content: str, anchor_local: str, doc_id: str, page: Optio
     chunk_id = f"{doc_id}#p{page}:{section_type or 'Text'}/{anchor_local}"
     try:
         order_val = page_ord.get(int(page)) if page is not None else None
-    except Exception:
+    except Exception as e:
         order_val = None
     _sec = _current_section_context(section_stack)
     return {
@@ -153,5 +153,5 @@ def _semantic_groups(ss: List[str]) -> List[List[str]]:
         if cur:
             groups.append(cur)
         return groups
-    except Exception:
+    except Exception as e:
         return []

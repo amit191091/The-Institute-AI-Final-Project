@@ -37,7 +37,7 @@ def retrieve_candidates(hybrid_retriever, question: str, qa: Dict[str, Any]) -> 
     except Exception:
         candidates = hybrid_retriever.invoke(q_exec)
         
-    candidates = candidates[:settings.K_TOP_K]  # rerank TOP K
+    candidates = candidates[:settings.embedding.K_TOP_K]  # rerank TOP K
     return candidates
 
 
@@ -60,7 +60,7 @@ def filter_candidates(candidates: List, qa: Dict[str, Any], docs: List) -> List:
 def rerank_documents(question: str, filtered_docs: List) -> List:
     """Rerank filtered documents for relevance."""
     q_exec = question  # Use original question for reranking
-    return rerank_candidates(q_exec, filtered_docs, top_n=settings.CONTEXT_TOP_N)
+    return rerank_candidates(q_exec, filtered_docs, top_n=settings.embedding.CONTEXT_TOP_N)
 
 
 def calculate_document_score(doc, question: str, qa: Dict[str, Any]) -> float:
@@ -97,7 +97,7 @@ def log_query_results(question: str, route: str, rtrace: Dict, qa: Dict[str, Any
                      top_docs: List, answer: str) -> None:
     """Log query results for analysis."""
     try:
-        log_dir = settings.LOGS_DIR
+        log_dir = settings.paths.LOGS_DIR
         log_dir.mkdir(parents=True, exist_ok=True)
         
         entry = {
@@ -136,7 +136,7 @@ def answer_question(docs: List, hybrid_retriever, llm, question: str,
         candidates = hybrid_retriever.invoke(q_exec)
     except Exception:
         candidates = hybrid_retriever.invoke(q_exec)
-    candidates = candidates[: settings.K_TOP_K]  # rerank TOP K
+    candidates = candidates[: settings.embedding.K_TOP_K]  # rerank TOP K
     filtered = apply_filters(candidates, qa["filters"])  # metadata filters
     try:
         sec = qa["filters"].get("section")
@@ -181,7 +181,7 @@ def answer_question(docs: List, hybrid_retriever, llm, question: str,
     else:
         ans = answer_needle(llm, top_docs, question)
     try:
-        log_dir = settings.LOGS_DIR
+        log_dir = settings.paths.LOGS_DIR
         log_dir.mkdir(parents=True, exist_ok=True)
         entry = {
             "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -218,7 +218,7 @@ def answer_with_contexts(docs: List, hybrid_retriever, llm, question: str) -> tu
         candidates = hybrid_retriever.invoke(q_exec)
     except Exception:
         candidates = hybrid_retriever.invoke(q_exec)
-    candidates = candidates[: settings.K_TOP_K]
+    candidates = candidates[: settings.embedding.K_TOP_K]
     
     # Apply enhanced filtering based on question type
     filtered = candidates
@@ -252,11 +252,11 @@ def answer_with_contexts(docs: List, hybrid_retriever, llm, question: str) -> tu
     if not filtered:
         filtered = candidates
     
-    top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
+    top_docs = rerank_candidates(q_exec, filtered, top_n=settings.embedding.CONTEXT_TOP_N)
     if not top_docs:
-        top_docs = candidates[: settings.CONTEXT_TOP_N] if candidates else []
+        top_docs = candidates[: settings.embedding.CONTEXT_TOP_N] if candidates else []
     if not top_docs:
-        top_docs = docs[: settings.CONTEXT_TOP_N]
+        top_docs = docs[: settings.embedding.CONTEXT_TOP_N]
     # Use LLM router with fallback to heuristic
     route = route_llm(question)
     if route == "DEFAULT":

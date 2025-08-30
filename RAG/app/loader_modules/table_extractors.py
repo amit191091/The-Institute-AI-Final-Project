@@ -42,7 +42,7 @@ def _try_tabula_tables(path: Path):
 	try:
 		# Import the function explicitly to satisfy static analysis across tabula-py versions
 		from tabula import read_pdf as tabula_read_pdf  # type: ignore
-	except Exception:
+	except Exception as e:
 		get_logger().debug("Tabula not available; skip table extraction")
 		return []
 	try:
@@ -61,7 +61,7 @@ def _try_tabula_tables(path: Path):
 			# Prefer markdown; fallback to CSV
 			try:
 				md_text = df.to_markdown(index=False)  # type: ignore[attr-defined]
-			except Exception:
+			except Exception as e:
 				# pandas DataFrame supports to_csv; add ignore for static checkers
 				md_text = df.to_csv(index=False)  # type: ignore[call-arg]
 			# Generate a semantic table summary to aid chunking
@@ -75,7 +75,7 @@ def _try_tabula_tables(path: Path):
 					metadata=SimpleNamespace(page_number=None, id=f"tabula-{path.name}-{idx}", extractor="tabula", table_summary=summary),
 				)
 			)
-		except Exception:
+		except Exception as e:
 			continue
 	return elements
 
@@ -85,7 +85,7 @@ def _try_pdfplumber_tables(path: Path):
 	"""
 	try:
 		import pdfplumber  # type: ignore
-	except Exception:
+	except Exception as e:
 		get_logger().debug("pdfplumber not available; skip table extraction")
 		return []
 	elements = []
@@ -116,7 +116,7 @@ def _try_pdfplumber_tables(path: Path):
 								metadata=SimpleNamespace(page_number=pno, id=f"pdfplumber-{path.name}-{idx}", extractor="pdfplumber", table_summary=summary),
 							)
 						)
-					except Exception:
+					except Exception as e:
 						continue
 	except Exception as e:
 		get_logger().debug("pdfplumber failed (%s)", e.__class__.__name__)
@@ -128,7 +128,7 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 	"""
 	try:
 		import camelot  # type: ignore
-	except Exception:
+	except Exception as e:
 		get_logger().debug("Camelot not available; skip table extraction")
 		return []
 	log = get_logger()
@@ -164,7 +164,7 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 			try:
 				# t is DataFrame when accessed as tables[i].df; iterate tables properly
 				pass
-			except Exception:
+			except Exception as e:
 				pass
 		# Camelot returns a TableList; iterate explicitly
 		for ti, tbl in enumerate(tables, start=1):
@@ -182,7 +182,7 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 					rep = getattr(tbl, "parsing_report", None)
 					if isinstance(rep, dict):
 						acc = float(rep.get("accuracy", 0))
-				except Exception:
+				except Exception as e:
 					acc = None
 				if acc is not None and acc < min_acc:
 					continue
@@ -211,11 +211,11 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 							continue
 					if _total_cells > 0 and (numeric_ratio := (_numeric_cells / _total_cells)) < min_numeric_ratio:
 						continue
-				except Exception:
+				except Exception as e:
 					pass
 				try:
 					md_text = df.to_markdown(index=False)  # type: ignore[attr-defined]
-				except Exception:
+				except Exception as e:
 					md_text = df.to_csv(index=False)
 				from RAG.app.loader_modules.table_utils import _generate_table_summary
 				summary = _generate_table_summary(md_text)
@@ -227,7 +227,7 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 						metadata=SimpleNamespace(page_number=None, id=f"camelot-{flavor}-{path.name}-{idx}", extractor=f"camelot-{flavor}", table_summary=summary, camelot_accuracy=acc),
 					)
 				)
-			except Exception:
+			except Exception as e:
 				continue
 	return elements
 
@@ -238,7 +238,7 @@ def _synthesize_tables_from_text(els, path: Path):
 	"""
 	try:
 		import re as _re
-	except Exception:
+	except Exception as e:
 		return []
 	out = []
 	count = 0

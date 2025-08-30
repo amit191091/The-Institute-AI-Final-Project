@@ -31,8 +31,8 @@ def process_table_chunk(el, md, page, section_type, anchor, doc_id, page_ord, id
     label_hdr = f"LABEL: {table_label}\n" if (table_label and str(table_label).strip()) else ""
     content = f"[TABLE]\n{label_hdr}SUMMARY:\n{distilled}\nMARKDOWN:\n{md_content or as_text}\nRAW:\n{as_text}"
     tok = len(content.split())  # Simple token approximation
-    if tok > settings.CHUNK_TOK_MAX:
-        content = truncate_to_tokens(content, settings.CHUNK_TOK_MAX)
+    if tok > settings.chunking.CHUNK_TOK_MAX:
+        content = truncate_to_tokens(content, settings.chunking.CHUNK_TOK_MAX)
     if trace:
         log.debug("CHUNK-OUT[%d]: section=Table tokens=%d anchor=%s", idx, tok, anchor)
     
@@ -46,7 +46,7 @@ def process_table_chunk(el, md, page, section_type, anchor, doc_id, page_ord, id
                 anchor = f"p{int(page)}-tbl{ordinal}"
             elif table_number is not None:
                 anchor = f"table-{int(table_number):02d}"
-        except Exception:
+        except Exception as e:
             anchor = f"tbl{idx}"
     
     # Build deterministic IDs and metadata
@@ -58,7 +58,7 @@ def process_table_chunk(el, md, page, section_type, anchor, doc_id, page_ord, id
     order_val = None
     try:
         order_val = page_ord.get(int(page)) if page is not None else None
-    except Exception:
+    except Exception as e:
         order_val = None
     
     return {
