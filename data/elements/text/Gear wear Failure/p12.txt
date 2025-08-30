@@ -1,0 +1,8 @@
+12 | P a g e  
+ 
+ 
+ 
+Figure 1: Face view of the drive gear tooth at all health status. 
+ 
+Figure 2: RMS level against wear depth at 15 [RPS] (above) and at 45 [RPS] (below). Healthy records are 
+noted as zero wear depth.

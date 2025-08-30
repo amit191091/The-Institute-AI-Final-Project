@@ -1,0 +1,41 @@
+6 | P a g e  
+ 
+ 
+teeth displayed clear spalling and breakaway of previously worn regions, indicating that the 
+accumulated damage had exceeded the load-bearing capacity of the contact surfaces. 
+The vibration evidence captured during this run reflects this breakdown. At both 15 and 45 
+RPS, RMS levels showed unstable reductions compared to the peak values observed earlier 
+in June. This apparent drop in energy does not signify recovery but rather a loss of dynamic 
+stiffness and engagement efficiency due to surface collapse. Once significant material is 
+removed, the gear pair no longer transmits load in a uniform manner. Instead, contact is 
+intermittent and incomplete, producing lower average vibration energy despite the 
+destructive nature of the event. 
+Spectra from June 15 confirm this interpretation: while broadband noise and irregular 
+sidebands remain, their energy distribution is fragmented, with missing components that 
+were previously stable indicators of mesh dynamics. This reduction in measured energy is 
+therefore a diagnostic marker of failure, not of improvement. It reflects the fact that the gear 
+system has lost its ability to sustain consistent mesh forces — much of the excitation 
+previously producing vibration has been dissipated by material loss, plastic deformation, 
+and partial disengagement. Microscope evidence of fractured surfaces and spalled zones 
+fully corroborates this interpretation. 
+Accordingly, June 15 marks the transition from Severe Wear to Failure: 
+1. Photographic evidence: complete breakdown of flank geometry, spalling, deep 
+gouging, fractured material. 
+2. Vibration evidence: unstable RMS values and reduced spectral energy due to loss of 
+engagement. 
+3. Physical meaning: the gear pair can no longer transfer energy effectively; the system 
+has entered a failed state. 
+Investigation Findings 
+The investigation was based on continuous monitoring of the gear system using the newly 
+installed data acquisition unit. The unit enabled parallel analysis of both the time and 
+spectral domains, combined with systematic inspection of gear teeth profiles through high-
+resolution images. This dual approach—signal monitoring and visual assessment—allowed 
+for a comprehensive understanding of the wear progression. The findings are described 
+chronologically, starting with the healthy baseline and continuing through mild, moderate, 
+severe wear, and finally the failure stage. 
+Baseline Condition 
+From February 13 to April 8, the system was operating under normal conditions, and the 
+initial dataset established the baseline profile for both vibration signals and spectral 
+distribution. In the time domain, the signal presented a uniform oscillatory pattern without 
+irregular fluctuations. Spectral analysis confirmed the absence of abnormal peaks, with 
+energy concentrated at the expected harmonic frequencies. The calculated RMS values were

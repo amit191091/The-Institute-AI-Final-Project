@@ -1,0 +1,39 @@
+1 | P a g e  
+ 
+ 
+Incident Technical Report: Gear Wear Progression in Starboard Gear Train 
+MG-5025A of Naval Vessel INS Haifa 
+Executive Summary 
+This report documents a progressive tooth-wear event that developed in the MG-5025A 
+marine reduction gearbox installed in the propulsion train of INS Haifa. Baseline “Healthy” 
+recordings were collected in February 2023 (with no abnormal indications through 8 April 
+2023). The first onset of wear was detected on 9 April 2023 and was tracked across 35 
+sequential wear cases through 15 June 2023, when elevated noise and vibration culminated 
+in a functional failure that necessitated shutdown. 
+Monitoring used accelerometers placed on gearbox housings adjacent to the input and 
+output shafts, sampling at 50 kHz for 60-second windows per record. Recording intervals 
+followed the actual time stamps in the site Database log; per session, it was indicated 
+whether records were close (≈1 minute apart), spaced by minutes, or collected in 
+morning/afternoon/evening clusters. 
+Across April–June, crews consistently reported louder gear noise under steady speed and a 
+gradual rise in overall vibration level. Time-domain RMS, trended upward in step with the 
+Wear Case 1 → 35 progression, the wear depth are labeled in Table 1 . The final day (15 
+June) showed a marked jump in amplitude and transient impulsive responses consistent 
+with severe war liberation on a loaded flank, followed by immediate operational 
+withdrawal. 
+Vibration signal processing and Image processing were performed for analysis. The gearbox 
+transmission lubrication in service was 2640 semi-synthetic, 15W/40 viscosity. All signals 
+were record at speed 45 RPS and 15 RPS. 
+System Description 
+Vessel and Transmission: INS Haifa employs a conventional marine propulsion train. The 
+subject gearbox is an MG-5025A naval reduction gear, configured as part of the ship’s main 
+gear transmission. The investigated component is the primary reduction gear pair (driving 
+gear and driven gear). 
+Lubrication: Sump and spray lubrication with 2640 semi-synthetic (15W/40) oil 
+maintained to standard naval cleanliness targets. No bulk oil temperature logging was 
+available for this investigation period. 
+Operating Conditions: Data were acquired at two steady speeds: 45 RPS (Full speed) and 
+15 RPS (Minimum). 
+Instrumentation & Acquisition: Two industrial accelerometers mounted on the gearbox 
+casing near input and output shafts. The accelerometers direction measurements were at 
+the gravity direction. 60-second time records, 50 kHz sampling rate.

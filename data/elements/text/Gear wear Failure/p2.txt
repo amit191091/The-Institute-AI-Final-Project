@@ -1,0 +1,41 @@
+2 | P a g e  
+ 
+ 
+Imaging: Following each measurement day, tooth-flank photographs were taken from the 
+driven gear, using a camera integrated with the inspection microscope available in the lab 
+(images archived in the shipyard file and referenced internally to the daily session). Images 
+served as qualitative corroboration of wear evolution (Healthy teeth → micro-wear → 
+macro-wear). They are appeared in Figure 1. 
+Failure Progression 
+On February 13, a new data-acquisition chain was installed, commissioned, and verified on 
+the MG-5025A gearbox aboard INS Haifa. The commissioning included channel polarity 
+checks, sensor seating verification, and a short functional run at both operating regimes. The 
+monitoring protocol established for all subsequent records was: 60-second time records, 50 
+kHz sampling rate, and timestamping according to the DATABASE log; intervals between 
+records on this date ranged from 1–10 minutes during commissioning bursts (e.g., 13:32→
+13:33→13:34→13:35, then 13:49→13:50→13:53…) and later ~8–15 minutes during 
+steadier operation blocks. Photographic documentation of the gear teeth was also initiated 
+on this date using a high-magnification digital microscope camera for surface tracking. 
+In Time Domain Analysis, the RMS vibration levels at 45 RPS (and in later same-day checks 
+at 15 RPS) were consistently low and steady, exhibiting the hallmark of a healthy drivetrain: 
+no bursts, no intermittent spikes, and no slow drift. This low-variance RMS trace indicates: 
+1. Stable shaft alignment and no assembly errors. 
+2. No abnormal gear contact, or unbalance speed (speed fluctuations). 
+In Spectral Domain Analysis, the companion spectrograms and FFT snapshots captured 
+during operation showed a narrow-band signature dominated by the gear transmission and 
+shafts. Peaks were sharp and of low amplitude, with minimal broadband energy and no 
+sidebands around the Gear Mesh Frequencies (and their harmonics) — patterns that would 
+normally indicate early abnormal anomalies associated with unstable meshing. High-
+frequency content (above the mesh and its first few harmonics) was quiescent, consistent 
+with an undamaged surface topology. 
+The combination of low, stable RMS and a clean, narrow-band spectrum establishes a robust 
+reference for the campaign that follows. With the new data-acquisition now calibrated and 
+in service, any subsequent departures from this February 13 signature — be they gradual 
+RMS lift, incipient sidebands, or broadband rise — are attributable to evolving contact 
+conditions rather than instrumentation artifacts. This baseline therefore ensures later 
+interpretation of fault progression observed across the dated sequences in the DATABASE. 
+There were approximately 500 records for the baseline, evenly split between the two 
+speeds. 
+Mild Wear 
+The earliest sign that the system had departed from the baseline came from the microscope 
+tooth photographs taken on April 9. When compared directly with the healthy reference

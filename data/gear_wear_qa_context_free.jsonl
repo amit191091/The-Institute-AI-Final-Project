@@ -1,0 +1,46 @@
+{"id": "gwf-v2-001", "question": "On what date was the first onset of wear detected by visual inspection?"}
+{"id": "gwf-v2-002", "question": "On what date did the system reach the failure stage?"}
+{"id": "gwf-v2-003", "question": "Between which dates did the severe wear stage occur?"}
+{"id": "gwf-v2-004", "question": "When did moderate wear begin?"}
+{"id": "gwf-v2-005", "question": "Until what date did the healthy baseline extend with no abnormal indications?"}
+{"id": "gwf-v2-006", "question": "What is the model of the marine reduction gearbox investigated?"}
+{"id": "gwf-v2-007", "question": "Which vessel's propulsion train was monitored?"}
+{"id": "gwf-v2-008", "question": "What two steady speeds were used for data acquisition (in RPS)?"}
+{"id": "gwf-v2-009", "question": "What was the sampling rate per record?"}
+{"id": "gwf-v2-010", "question": "What was the duration of each time record?"}
+{"id": "gwf-v2-011", "question": "Which lubricant and viscosity grade were in service?"}
+{"id": "gwf-v2-012", "question": "Name the accelerometer model used on the shafts."}
+{"id": "gwf-v2-013", "question": "Which brand and model were used for the tachometer?"}
+{"id": "gwf-v2-014", "question": "How many teeth did the tachometer gear have?"}
+{"id": "gwf-v2-015", "question": "What is the gear type and module size?"}
+{"id": "gwf-v2-016", "question": "What is the driving/driven transmission ratio?"}
+{"id": "gwf-v2-017", "question": "Which monitoring method provided the earliest reliable indicator of wear onset?"}
+{"id": "gwf-v2-018", "question": "Name two spectral characteristics of the healthy baseline."}
+{"id": "gwf-v2-019", "question": "What two vibration-domain signs accompanied early flank wear during mild wear?"}
+{"id": "gwf-v2-020", "question": "At 15 RPS during early wear, what high-frequency behavior was observed?"}
+{"id": "gwf-v2-021", "question": "By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?"}
+{"id": "gwf-v2-022", "question": "List two hallmark spectral changes that defined the moderate wear stage."}
+{"id": "gwf-v2-023", "question": "During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?"}
+{"id": "gwf-v2-024", "question": "Name three combined indicators that characterized the severe wear stage."}
+{"id": "gwf-v2-025", "question": "What physical tooth-surface changes typified the transition into severe wear?"}
+{"id": "gwf-v2-026", "question": "Why can RMS energy drop at the moment of failure despite catastrophic damage?"}
+{"id": "gwf-v2-027", "question": "Which metric should frequency-domain monitoring emphasize for earlier detection?"}
+{"id": "gwf-v2-028", "question": "What is the recommended action at the severe wear stage?"}
+{"id": "gwf-v2-029", "question": "What is the recommended action at the moderate wear stage?"}
+{"id": "gwf-v2-030", "question": "Which two data sources should be synchronized into a single diagnostic report?"}
+{"id": "gwf-v2-031", "question": "Name one AI-driven image task suggested to support objective assessments."}
+{"id": "gwf-v2-032", "question": "What is the wear depth for case W1 (in μm)?"}
+{"id": "gwf-v2-033", "question": "What is the wear depth for case W13 (in μm)?"}
+{"id": "gwf-v2-034", "question": "What is the wear depth for case W22 (in μm)?"}
+{"id": "gwf-v2-035", "question": "What is the wear depth for case W24 (in μm)?"}
+{"id": "gwf-v2-036", "question": "What is the wear depth for case W25 (in μm)?"}
+{"id": "gwf-v2-037", "question": "What is the wear depth for case W31 (in μm)?"}
+{"id": "gwf-v2-038", "question": "What is the wear depth for case W33 (in μm)?"}
+{"id": "gwf-v2-039", "question": "What is the wear depth for case W35 (in μm)?"}
+{"id": "gwf-v2-040", "question": "Which wear case corresponds to 294 μm?"}
+{"id": "gwf-v2-041", "question": "Which wear case corresponds to 466 μm?"}
+{"id": "gwf-v2-042", "question": "Which wear case corresponds to 744 μm?"}
+{"id": "gwf-v2-043", "question": "Which wear case corresponds to 579 μm?"}
+{"id": "gwf-v2-044", "question": "List the health stages in chronological order."}
+{"id": "gwf-v2-045", "question": "At which two speeds were both baseline and severe-wear measurements acquired?"}
+{"id": "gwf-v2-046", "question": "Name the two primary sensor modalities used to document wear progression."}
