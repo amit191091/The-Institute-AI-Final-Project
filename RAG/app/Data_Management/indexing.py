@@ -6,12 +6,15 @@ from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
 
 from RAG.app.config import settings
+from RAG.app.logger import trace_func
 
 
+@trace_func
 def to_documents(records: List[dict]) -> List[Document]:
 	return [Document(page_content=r["page_content"], metadata=r["metadata"]) for r in records]
 
 
+@trace_func
 def _sanitize_metadata(md: Dict[str, Any] | None) -> Dict[str, Any]:
 	"""Ensure metadata values are only str, int, float, bool, or None for vector stores like Chroma.
 	Lists/tuples and dicts are JSON-serialized; non-serializable fallbacks become str().
@@ -42,6 +45,7 @@ def _sanitize_metadata(md: Dict[str, Any] | None) -> Dict[str, Any]:
 	return out
 
 
+@trace_func
 def _sanitize_docs(docs: List[Document]) -> List[Document]:
 	"""Sanitize document metadata to avoid Chroma upsert errors on complex types."""
 	sanitized = []
@@ -59,38 +63,70 @@ def _sanitize_docs(docs: List[Document]) -> List[Document]:
 	return sanitized
 
 
+@trace_func
 def build_dense_index(docs: List[Document], embedding_fn):
-	"""Build a dense index; try Chroma first, fallback to DocArrayInMemorySearch.
-	Uses the configured INDEX_DIR for persistence.
+	"""Build a dense index with an env-selectable backend.
+	Backends by priority/order:
+	  - RAG_VECTOR_BACKEND=faiss|docarray|chroma (default: chroma)
+	  - If chroma selected and fails, fallback to docarray then faiss.
+	If chroma is selected and RAG_CHROMA_DIR is set, persist to that directory (and optional RAG_CHROMA_COLLECTION).
 	"""
 	# Lazy import to avoid OS-specific failures at import time
-	try:
+	backend = (os.getenv("RAG_VECTOR_BACKEND", "chroma") or "chroma").strip().lower()
+	sdocs = _sanitize_docs(docs)
+	
+	def _try_chroma():
 		from langchain_community.vectorstores import Chroma
-		# Sanitize metadata to avoid Chroma upsert errors on complex types
-		sdocs = _sanitize_docs(docs)
-		
-		# Use configured INDEX_DIR
-		persist_dir = str(settings.INDEX_DIR)
-		Path(persist_dir).mkdir(parents=True, exist_ok=True)
-		
-		vs = Chroma.from_documents(documents=sdocs, embedding=embedding_fn, persist_directory=persist_dir)
-		# Chroma 0.4.x automatically persists documents, no need for manual persist()
-		return vs
-	except Exception:
-		# Fallback pure-Python: DocArray, then FAISS
-		try:
-			from langchain_community.vectorstores import DocArrayInMemorySearch
-
-			return DocArrayInMemorySearch.from_documents(_sanitize_docs(docs), embedding=embedding_fn)
-		except Exception as e:
+		# Use environment variable if set, otherwise fall back to settings
+		persist_dir = os.getenv("RAG_CHROMA_DIR") or str(settings.paths.INDEX_DIR)
+		collection = os.getenv("RAG_CHROMA_COLLECTION", None)
+		if persist_dir:
+			Path(persist_dir).mkdir(parents=True, exist_ok=True)
+			vs = Chroma.from_documents(documents=sdocs, embedding=embedding_fn, persist_directory=persist_dir, collection_name=collection) if collection else Chroma.from_documents(documents=sdocs, embedding=embedding_fn, persist_directory=persist_dir)
 			try:
-				from langchain_community.vectorstores import FAISS
+				vs.persist()
+			except Exception:
+				pass
+			return vs
+		return Chroma.from_documents(documents=sdocs, embedding=embedding_fn)
+	
+	def _try_docarray():
+		from langchain_community.vectorstores import DocArrayInMemorySearch
+		return DocArrayInMemorySearch.from_documents(sdocs, embedding=embedding_fn)
+	
+	def _try_faiss():
+		from langchain_community.vectorstores import FAISS
+		return FAISS.from_documents(sdocs, embedding_fn)
+	
+	# explicit selection
+	if backend == "faiss":
+		try:
+			return _try_faiss()
+		except Exception as e2:
+			# fallback chain
+			try:
+				return _try_docarray()
+			except Exception:
+				return _try_chroma()
+	if backend == "docarray":
+		try:
+			return _try_docarray()
+		except Exception:
+			try:
+				return _try_faiss()
+			except Exception:
+				return _try_chroma()
+	# default chroma with graceful fallback
+	try:
+		return _try_chroma()
+	except Exception:
+		try:
+			return _try_docarray()
+		except Exception:
+			return _try_faiss()
 
-				return FAISS.from_documents(_sanitize_docs(docs), embedding_fn)
-			except Exception as e2:
-				raise RuntimeError(f"Failed to initialize vector store: {e2}")
 
-
+@trace_func
 def dump_chroma_snapshot(vectorstore, out_path: Path) -> None:
 	"""Try to dump a lightweight snapshot of a Chroma vector store: ids, metadatas, and preview of docs.
 	Safe no-op if the vector store doesn't support .get().
@@ -146,8 +182,92 @@ def dump_chroma_snapshot(vectorstore, out_path: Path) -> None:
 		return
 
 
+@trace_func
 def build_sparse_retriever(docs: List[Document], k: int = 10):
 	bm25 = BM25Retriever.from_documents(docs)
 	bm25.k = k
+	print("im here on the sparse retriver trying to use bm25")
 	return bm25
+
+
+@trace_func
+def expand_table_kv_docs(docs: List[Document]) -> List[Document]:
+	"""Create additional Documents from table markdown by extracting key/value cells.
+	Heuristics:
+	  - Look for MARKDOWN block inside the table doc; parse pipe-rows until RAW or end.
+	  - Identify columns whose header contains 'feature'/'parameter' as key, and 'value' as value.
+	  - Fallback: use the first two non-empty columns.
+	  - Emit one Document per non-empty key/value with section='TableCell' and kv_* metadata.
+	"""
+	out = list(docs)
+	seen: set[tuple[str, int | None, str]] = set()
+	for d in docs:
+		md = d.metadata or {}
+		if (md.get("section") or md.get("section_type")) != "Table":
+			continue
+		text = d.page_content or ""
+		if "MARKDOWN:" not in text:
+			continue
+		try:
+			md_part = text.split("MARKDOWN:", 1)[1]
+			if "\nRAW:" in md_part:
+				md_part = md_part.split("\nRAW:", 1)[0]
+			lines = [ln.strip() for ln in md_part.splitlines() if ln.strip().startswith("|")]
+			if len(lines) < 2:
+				continue
+			# Parse header
+			header_cells = [c.strip() for c in lines[0].strip("|").split("|")]
+			# Build index map of non-empty header names
+			header_names: list[tuple[int, str]] = []
+			for i, h in enumerate(header_cells):
+				hh = " ".join(h.split())
+				if hh and hh.lower() != "---":
+					header_names.append((i, hh))
+			# Find key/value columns by name
+			key_idx = None
+			val_idx = None
+			for i, h in header_names:
+				hl = h.lower()
+				if key_idx is None and ("feature" in hl or "parameter" in hl or "name" == hl):
+					key_idx = i
+				if val_idx is None and ("value" in hl):
+					val_idx = i
+			# Fallback to first two non-empty columns
+			if key_idx is None or val_idx is None:
+				non_empty = [i for i, h in header_names]
+				if len(non_empty) >= 2:
+					key_idx = key_idx if key_idx is not None else non_empty[0]
+					# choose a different index for value
+					for cand in non_empty:
+						if cand != key_idx:
+							val_idx = cand
+							break
+			if key_idx is None or val_idx is None:
+				continue
+			# Iterate data rows (skip header + separator)
+			for row_line in lines[2:]:
+				cells = [c.strip() for c in row_line.strip("|").split("|")]
+				if max(key_idx, val_idx) >= len(cells):
+					continue
+				k = " ".join((cells[key_idx] or "").split())
+				v = " ".join((cells[val_idx] or "").split())
+				if not k or not v:
+					continue
+				# Emit a compact KV doc (dedupe by doc_id, table_number, kv_text)
+				kv_text = f"{k}: {v}"
+				key = (str(md.get("doc_id", "")), md.get("table_number"), kv_text)
+				if key in seen:
+					continue
+				seen.add(key)
+				kv_meta = _sanitize_metadata({
+					**md,
+					"section": "TableCell",
+					"kv_key": k,
+					"kv_value": v,
+					"source_section": "Table",
+				})
+				out.append(Document(page_content=kv_text, metadata=kv_meta))
+		except Exception:
+			continue
+	return out
 

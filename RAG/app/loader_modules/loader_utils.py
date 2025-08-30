@@ -88,11 +88,90 @@ def _get_loader_setting(name: str, default: bool | None) -> bool | None:
 		"USE_TABULA": settings.loader.USE_TABULA,
 		"USE_CAMELOT": settings.loader.USE_CAMELOT,
 		"USE_PDFPLUMBER": settings.loader.USE_PDFPLUMBER,
+		"USE_PYMUPDF": settings.loader.USE_PYMUPDF,
+		"USE_LLAMA_PARSE": settings.loader.USE_LLAMA_PARSE,
 		"EXTRACT_IMAGES": settings.loader.EXTRACT_IMAGES,
 		"SYNTH_TABLES": settings.loader.SYNTH_TABLES,
+		"EXPORT_TABLES": settings.loader.EXPORT_TABLES,
+		"DUMP_ELEMENTS": settings.loader.DUMP_ELEMENTS,
+		"USE_PYMUPDF_TEXT": settings.loader.USE_PYMUPDF_TEXT,
+		"PDFPLUMBER_DEBUG": settings.loader.PDFPLUMBER_DEBUG,
+		"CAMELOT_DEBUG": settings.loader.CAMELOT_DEBUG,
+		"TABULA_DEBUG": settings.loader.TABULA_DEBUG,
 	}
 	
 	return config_map.get(name, default)
+
+
+def _get_loader_string_setting(name: str, default: str = "") -> str:
+	"""Get loader string setting from centralized config with environment variable override."""
+	# Check environment variable first (for backward compatibility)
+	raw = os.getenv(f"RAG_{name}")
+	if raw is not None:
+		return raw
+	
+	# Use centralized configuration
+	config_map = {
+		"OCR_LANG": settings.loader.OCR_LANG,
+		"CAMELOT_FLAVORS": settings.loader.CAMELOT_FLAVORS,
+		"CAMELOT_PAGES": settings.loader.CAMELOT_PAGES,
+		"EXCLUSIVE_EXTRACTOR": settings.loader.EXCLUSIVE_EXTRACTOR,
+	}
+	
+	return config_map.get(name, default)
+
+
+def _get_loader_int_setting(name: str, default: int = 0) -> int:
+	"""Get loader integer setting from centralized config with environment variable override."""
+	# Check environment variable first (for backward compatibility)
+	raw = os.getenv(f"RAG_{name}")
+	if raw is not None:
+		try:
+			return int(raw)
+		except ValueError:
+			return default
+	
+	# Use centralized configuration
+	config_map = {
+		"MIN_TABLES_TARGET": settings.loader.MIN_TABLES_TARGET,
+		"TABLES_PER_PAGE": settings.loader.TABLES_PER_PAGE,
+		"LINE_COUNT_MIN": settings.loader.LINE_COUNT_MIN,
+		"TEXT_BLOCKS_MIN": settings.loader.TEXT_BLOCKS_MIN,
+		"CAMELOT_MIN_ROWS": settings.loader.CAMELOT_MIN_ROWS,
+		"CAMELOT_MIN_COLS": settings.loader.CAMELOT_MIN_COLS,
+	}
+	
+	return config_map.get(name, default)
+
+
+def _get_loader_float_setting(name: str, default: float = 0.0) -> float:
+	"""Get loader float setting from centralized config with environment variable override."""
+	# Check environment variable first (for backward compatibility)
+	raw = os.getenv(f"RAG_{name}")
+	if raw is not None:
+		try:
+			return float(raw)
+		except ValueError:
+			return default
+	
+	# Use centralized configuration
+	config_map = {
+		"CAMELOT_MIN_ACCURACY": settings.loader.CAMELOT_MIN_ACCURACY,
+		"CAMELOT_MAX_EMPTY_COL_RATIO": settings.loader.CAMELOT_MAX_EMPTY_COL_RATIO,
+		"CAMELOT_MIN_NUMERIC_RATIO": settings.loader.CAMELOT_MIN_NUMERIC_RATIO,
+	}
+	
+	return config_map.get(name, default)
+
+
+def _env_enabled(var_name: str, default: bool = False) -> bool:
+	"""Return True if the env var is a truthy flag.
+	
+	Truthy values: 1, true, yes, on (case-insensitive). Defaults to `default`.
+	This function is extracted from app/loaders.py for backward compatibility.
+	"""
+	value = os.environ.get(var_name, "1" if default else "0")
+	return str(value).lower() in ("1", "true", "yes", "on")
 
 # Placeholder for future LlamaIndex integration
 def _try_llamaindex_extraction(path: Path):

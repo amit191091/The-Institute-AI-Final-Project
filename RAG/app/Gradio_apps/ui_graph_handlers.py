@@ -37,8 +37,8 @@ def _gen_graph(source_choice: str, docs):
                 return gr.update(value=""), "(unknown source)"
             G = build_networkx_graph(docs)
         from RAG.app.config import settings
-        settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        out = settings.LOGS_DIR/"graph.html"
+        settings.paths.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        out = settings.paths.LOGS_DIR/"graph.html"
         render_graph_html(G, str(out))
         html_data = out.read_text(encoding="utf-8")
         # Best-effort inline via iframe srcdoc; also provide a link for full view
@@ -56,7 +56,7 @@ def _build_graph_from_normalized_json():
     import json as _json
     import networkx as _nx
     from RAG.app.config import settings
-    p = settings.LOGS_DIR/"normalized"/"graph.json"
+    p = settings.paths.LOGS_DIR/"normalized"/"graph.json"
     if not p.exists():
         raise RuntimeError("RAG/logs/normalized/graph.json not found")
     data = _json.loads(p.read_text(encoding="utf-8"))
@@ -87,7 +87,7 @@ def _build_graph_from_normalized_chunks():
     """Build graph from normalized chunks."""
     import networkx as _nx
     from RAG.app.config import settings
-    p = settings.LOGS_DIR/"normalized"/"chunks.jsonl"
+    p = settings.paths.LOGS_DIR/"normalized"/"chunks.jsonl"
     ndocs = load_normalized_docs(p)
     if not ndocs:
         raise RuntimeError("RAG/logs/normalized/chunks.jsonl not found or empty")

@@ -48,6 +48,8 @@ from RAG.app.loader_modules.table_utils import (
     _generate_table_summary,
     _generate_figure_summary,
     _export_tables_to_files,
+    _export_page_text_to_files,
+    _dump_elements_jsonl,
     _assign_table_numbers,
     _estimate_rows_cols_from_text,
     _score_table_candidate,
@@ -68,6 +70,17 @@ from RAG.app.loader_modules.loader_utils import (
     _try_llamaindex_extraction,
     partition_docx,
     partition_text
+)
+
+from RAG.app.loader_modules.element_types import (
+    Element,
+    Table,
+    Figure,
+    Text
+)
+
+from RAG.app.loader_modules.llamaparse_extractor import (
+    _try_llamaparse_tables
 )
 
 from RAG.app.loader_modules.excel_loaders import (
@@ -201,8 +214,11 @@ def load_elements(path: Path):
 		use_tabula = _get_loader_setting("USE_TABULA", False)
 		use_pdfplumber = _get_loader_setting("USE_PDFPLUMBER", True)
 		use_camelot = _get_loader_setting("USE_CAMELOT", None)
+		use_pymupdf = _get_loader_setting("USE_PYMUPDF", True)
+		use_llamaparse = _get_loader_setting("USE_LLAMA_PARSE", False)
 		use_synth = _get_loader_setting("SYNTH_TABLES", True)
 		use_images = _get_loader_setting("EXTRACT_IMAGES", True)
+		use_pymupdf_text = _get_loader_setting("USE_PYMUPDF_TEXT", True)
 		
 		# Optional: enrich with Tabula tables (disabled by default due to Java dependency)
 		if use_tabula is True:
@@ -265,11 +281,38 @@ def load_elements(path: Path):
 			if _figs:
 				els.extend(_figs)
 				get_logger().debug("%s: Extracted %d images as figures", path.name, len(_figs))
+		
+		# Optional: LlamaParse integration for enhanced table extraction
+		if use_llamaparse:
+			try:
+				llamaparse_tables = _try_llamaparse_tables(path)
+				if llamaparse_tables:
+					els.extend(llamaparse_tables)
+					get_logger().debug("%s: LlamaParse extracted %d tables", path.name, len(llamaparse_tables))
+			except Exception:
+				get_logger().debug("LlamaParse extraction failed; continuing")
 		# Optional: export tables to markdown/csv files and attach paths in metadata
+		export_tables = _get_loader_setting("EXPORT_TABLES", True)
+		if export_tables:
+			try:
+				_export_tables_to_files(els, path)
+			except Exception:
+				get_logger().debug("table export failed; continuing")
+		
+		# Optional: export page text to files for full-fidelity inspection
 		try:
-			_export_tables_to_files(els, path)
+			_export_page_text_to_files(els, path)
 		except Exception:
-			get_logger().debug("table export failed; continuing")
+			get_logger().debug("page-text export failed; continuing")
+		
+		# Optional: dump all extracted elements (raw, untruncated) to logs/elements for auditing
+		dump_elements = _get_loader_setting("DUMP_ELEMENTS", True)
+		if dump_elements:
+			try:
+				_dump_elements_jsonl(els, path)
+			except Exception:
+				get_logger().debug("elements dump failed; continuing")
+		
 		return els
 	if ext in (".docx", ".doc"):
 		_import_unstructured()
@@ -317,7 +360,7 @@ def load_many(paths: List[Path]):
 			import os, json
 			if settings.loader.DUMP_ELEMENTS:
 				from RAG.app.config import settings
-				dump_dir = settings.LOGS_DIR / "elements"
+				dump_dir = settings.paths.LOGS_DIR / "elements"
 				dump_dir.mkdir(parents=True, exist_ok=True)
 				out_path = dump_dir / f"{p.stem}.jsonl"
 				with open(out_path, "w", encoding="utf-8") as f:
@@ -333,3 +376,47 @@ def load_many(paths: List[Path]):
 		except Exception:
 			pass
 		yield p, els
+
+
+if __name__ == "__main__":
+    """Lightweight CLI for extractor smoke tests.
+
+    Usage (PowerShell):
+      python -m app.loaders "Gear wear Failure.pdf"
+
+    Honors env flags described in the module docstring. Prints table/image counts
+    and first few entries to stdout.
+    """
+    import sys
+    try:
+        from dotenv import dotenv_values, find_dotenv  # type: ignore
+        env_path = find_dotenv(usecwd=True, raise_error_if_not_found=False)
+        if env_path:
+            for k, v in (dotenv_values(env_path) or {}).items():
+                if v is not None and k not in os.environ:
+                    os.environ[k] = v
+    except Exception:
+        pass
+    log = get_logger()
+    if len(sys.argv) < 2:
+        print("usage: python -m app.loaders <path-to-pdf>")
+        sys.exit(2)
+    p = Path(sys.argv[1])
+    if not p.exists():
+        print(f"not found: {p}")
+        sys.exit(2)
+    els = load_elements(p)
+    nt = sum(1 for e in els if e.category == "table")
+    ni = sum(1 for e in els if e.category in ("image", "figure"))
+    print(f"{p.name}: tables={nt} images={ni}")
+    # Sample prints
+    for e in els[: min(5, len(els))]:
+        if e.category == "table":
+            head = (e.text or "").splitlines()[0] if (e.text or "") else ""
+            print(f"  - table via {e.metadata.get('extractor')} p={e.metadata.get('page_number')} | {head}")
+        else:
+            print(f"  - image via {e.metadata.get('extractor')} p={e.metadata.get('page_number')} -> {e.metadata.get('image_path')}")
+    try:
+        log.info("[smoke] %s: tables=%d images=%d", p.name, nt, ni)
+    except Exception:
+        pass

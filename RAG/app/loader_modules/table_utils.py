@@ -11,6 +11,7 @@ import re
 import warnings
 from types import SimpleNamespace
 from RAG.app.logger import get_logger
+from RAG.app.loader_modules.element_types import Element
 
 # Suppress all warnings from external libraries
 import logging
@@ -94,187 +95,214 @@ def _generate_figure_summary(page_text: str, page_num: int, img_index: int) -> s
 	
 	return f"Figure {img_index}: Image from page {page_num}"
 
-def _export_tables_to_files(elements, path: Path) -> None:
-	"""Persist detected table elements to data/elements as Markdown and CSV files.
-	Attach file paths back into element.metadata as table_md_path/table_csv_path when possible.
-	Always attempt to produce both formats (md and csv) for convenience.
+
+def _table_to_markdown(table) -> str:
+	"""Convert a sequence of rows (list[list]) into GitHub-flavored markdown.
+	
+	This function is extracted from app/loaders.py for enhanced table processing.
 	"""
-	from RAG.app.config import settings
-	base_dir = settings.paths.DATA_DIR / "elements"
-	base_dir.mkdir(parents=True, exist_ok=True)
-	# --- helpers for parsing/normalization ---
-	import csv as _csv
-	from io import StringIO as _StringIO
-	import re as _re
+	if not table or len(table) < 2:
+		return ""
+	
+	lines = []
+	def _clean(cell) -> str:
+		# Replace newlines and pipes inside cells to avoid breaking markdown rows
+		s = str(cell or "").replace("\r", " ").replace("\n", " ")
+		s = " ".join(s.split())  # collapse repeated spaces
+		s = s.replace("|", "/")  # avoid pipe-conflicts in markdown formatting
+		return s
 
-	def _parse_md_rows(text: str) -> list[list[str]]:
-		lines = [ln.rstrip() for ln in (text or "").splitlines() if ln.strip()]
-		rows: list[list[str]] = []
-		for ln in lines:
-			if not ln.startswith("|"):
-				continue
-			cells = [c.strip() for c in ln.split("|")]
-			if cells and cells[0] == "":
-				cells = cells[1:]
-			if cells and cells[-1] == "":
-				cells = cells[:-1]
-			# skip separator rows like --- or :---:
-			if cells and all(_re.fullmatch(r":?-{3,}:?", c or "-") for c in cells):
-				continue
-			rows.append(cells)
-		return rows
+	# Header (single logical line after cleaning)
+	header = "| " + " | ".join(_clean(cell) for cell in table[0]) + " |"
+	lines.append(header)
+	
+	# Separator
+	separator = "| " + " | ".join(["---"] * len(table[0])) + " |"
+	lines.append(separator)
+	
+	# Data rows
+	for row in table[1:]:
+		data_row = "| " + " | ".join(_clean(cell) for cell in row) + " |"
+		lines.append(data_row)
+	
+	return "\n".join(lines)
 
-	def _parse_csv_rows(text: str) -> list[list[str]]:
-		try:
-			f = _StringIO(text or "")
-			reader = _csv.reader(f)
-			return [list(r) for r in reader if any(c.strip() for c in r)]
-		except Exception:
-			return []
 
-	def _remove_empty_cols(rows: list[list[str]]) -> list[list[str]]:
-		if not rows:
-			return rows
-		w = max(len(r) for r in rows)
-		norm = [r + [""] * (w - len(r)) for r in rows]
-		keep_idx = []
-		for j in range(w):
-			col_vals = [norm[i][j].strip() for i in range(len(norm))]
-			if any(col_vals):
-				keep_idx.append(j)
-		return [[row[j] for j in keep_idx] for row in norm]
-
-	def _normalize_repeated_panel_headers(rows: list[list[str]]) -> list[list[str]] | None:
-		"""Detect patterns like [Case, Wear depth, Case, Wear depth, ...] and fold into two columns.
-		Returns normalized rows or None if no transformation was applied.
-		"""
-		if not rows or not rows[0] or len(rows[0]) < 4:
-			return None
-		head = [h.strip() for h in rows[0]]
-		lower = [h.lower() for h in head]
-		# find pairs of (Case, Wear depth ...)
-		pairs = []
-		j = 0
-		while j < len(lower) - 1:
-			is_case = lower[j].startswith("case")
-			is_wear = ("wear" in lower[j + 1]) and ("depth" in lower[j + 1])
-			if is_case and is_wear:
-				pairs.append((j, j + 1))
-				j += 2
-			else:
-				j += 1
-		if len(pairs) < 2:
-			return None
-		# Build long-format rows: [Case, Wear depth ...] from each pair, stacked vertically
-		out: list[list[str]] = []
-		# header: take from first pair, preserve units text
-		out_head = [rows[0][pairs[0][0]].strip(), rows[0][pairs[0][1]].strip()]
-		out.append(out_head)
-		for i in range(1, len(rows)):
-			for (a, b) in pairs:
-				val_a = rows[i][a].strip() if a < len(rows[i]) else ""
-				val_b = rows[i][b].strip() if b < len(rows[i]) else ""
-				if not val_a and not val_b:
+def _export_page_text_to_files(elements, pdf_path: Path) -> None:
+	"""Write per-page raw text files under data/elements/text/<stem>/p{page}.txt.
+	
+	This is lossless and does not truncate. If multiple text elements exist per page,
+	they will be appended in order of appearance.
+	"""
+	try:
+		from RAG.app.config import settings
+		out_dir = settings.paths.DATA_DIR / "elements" / "text" / pdf_path.stem
+		out_dir.mkdir(parents=True, exist_ok=True)
+		# Build map page -> list[text]
+		from collections import defaultdict
+		page_texts = defaultdict(list)
+		for el in elements:
+			if getattr(el, "category", getattr(el, "type", "")) in ("text", "Text"):
+				md = getattr(el, "metadata", None) or {}
+				page = md.get("page_number")
+				if page is None:
 					continue
-				out.append([val_a, val_b])
-		return out
-
-	def _rows_to_markdown(rows: list[list[str]]) -> str:
-		if not rows:
-			return ""
-		w = max(len(r) for r in rows)
-		norm = [r + [""] * (w - len(r)) for r in rows]
-		head = norm[0]
-		sep = ["---"] * w
-		fmt = lambda r: "| " + " | ".join(r) + " |"
-		return "\n".join([fmt(head), fmt(sep)] + [fmt(r) for r in norm[1:]])
-
-	def _rows_to_csv(rows: list[list[str]]) -> str:
-		f = _StringIO()
-		writer = _csv.writer(f)
-		for r in rows:
-			writer.writerow(r)
-		return f.getvalue()
-
-	for i, e in enumerate(elements, start=1):
-		if str(getattr(e, "category", "")).lower() != "table":
-			continue
-		text = (getattr(e, "text", "") or "").strip()
-		if not text:
-			continue
-		# Determine file stems (prefer stable table_number if assigned)
-		md_obj = getattr(e, "metadata", None)
-		table_no = None
-		if md_obj is not None:
+				t = (getattr(el, "text", "") or "")
+				if t:
+					page_texts[int(page)].append(str(t))
+		# Write files and an index.json
+		import json as _json
+		index = []
+		for page in sorted(page_texts.keys()):
+			fp = out_dir / f"p{int(page)}.txt"
 			try:
-				table_no = getattr(md_obj, "table_number", None)
+				fp.write_text("\n\n".join(page_texts[page]), encoding="utf-8")
 			except Exception:
-				pass
-		stem = f"{path.stem}-table-{int(table_no):02d}" if isinstance(table_no, int) else f"{path.stem}-table-{i}"
-		md_file = base_dir / f"{stem}.md"
-		csv_file = base_dir / f"{stem}.csv"
-		# Heuristics and parsing
-		looks_markdown = text.lstrip().startswith("|") and "|" in text
-		looks_csv = ("," in text and "\n" in text and not looks_markdown)
-		rows: list[list[str]] = []
-		if looks_markdown:
-			rows = _parse_md_rows(text)
-		elif looks_csv:
-			rows = _parse_csv_rows(text)
-		# Attempt normalization if we have parsed rows
-		if rows:
-			rows = _remove_empty_cols(rows)
-			norm = _normalize_repeated_panel_headers(rows)
-			if norm:
-				rows = norm
-		# Write both formats, preferring normalized rows if available
-		md_written = False
-		csv_written = False
-		# Build optional heading from metadata
-		head_prefix = ""
+				# Best-effort; continue
+				continue
+			try:
+				txt = fp.read_text(encoding="utf-8")
+				index.append({
+					"page": int(page),
+					"chars": len(txt),
+					"words": len(txt.split()),
+					"file": fp.as_posix(),
+				})
+			except Exception:
+				index.append({"page": int(page), "file": fp.as_posix()})
+		# Write index.json
 		try:
-			lbl = getattr(md_obj, "table_label", None)
-			cap = getattr(md_obj, "table_caption", None)
-			anch = getattr(md_obj, "table_anchor", None)
-			if lbl or cap:
-				title = (lbl or "Table").strip()
-				if cap:
-					title = f"{title}: {cap}"
-				if anch:
-					head_prefix = f"<a name=\"{anch}\"></a>\n### {title}\n\n"
-				else:
-					head_prefix = f"### {title}\n\n"
+			(out_dir / "index.json").write_text(_json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
 		except Exception:
-			head_prefix = ""
-		if rows:
-			try:
-				md_file.write_text(head_prefix + _rows_to_markdown(rows), encoding="utf-8")
-				md_written = True
-			except Exception:
-				pass
-			try:
-				csv_file.write_text(_rows_to_csv(rows), encoding="utf-8")
-				csv_written = True
-			except Exception:
-				pass
-		else:
-			# Fallback to original text dump as markdown
-			try:
-				md_file.write_text(head_prefix + text, encoding="utf-8")
-				md_written = True
-			except Exception:
-				pass
-		# Attach paths to element metadata if possible
-		md_obj = getattr(e, "metadata", None)
-		if md_obj is not None:
-			try:
-				# Some metadata are SimpleNamespace; set attributes dynamically
-				if md_written:
-					setattr(md_obj, "table_md_path", str(md_file))
-				if csv_written:
-					setattr(md_obj, "table_csv_path", str(csv_file))
-			except Exception:
-				pass
+			pass
+	except Exception:
+		# Non-fatal
+		pass
+
+
+def _dump_elements_jsonl(elements, pdf_path: Path) -> None:
+	"""Write all extracted elements as raw JSONL to logs/elements/<stem>-elements.jsonl.
+	
+	Fields: category, extractor, page_number, table_number (if any), image_path (if any),
+	and "text" with full content (no truncation).
+	
+	Controlled by RAG_DUMP_ELEMENTS environment variable (default: on).
+	"""
+	from RAG.app.loader_modules.loader_utils import _env_enabled
+	if not _env_enabled("RAG_DUMP_ELEMENTS", True):
+		return
+		
+	try:
+		from RAG.app.config import settings
+		out_dir = settings.paths.LOGS_DIR / "elements"
+		out_dir.mkdir(parents=True, exist_ok=True)
+		out_path = out_dir / f"{pdf_path.stem}-elements.jsonl"
+		import json as _json
+		with open(out_path, "w", encoding="utf-8") as f:
+			for el in elements:
+				md = getattr(el, "metadata", None) or {}
+				rec = {
+					"file": pdf_path.name,
+					"category": getattr(el, "category", getattr(el, "type", "Text")),
+					"extractor": md.get("extractor"),
+					"page_number": md.get("page_number"),
+					"table_number": md.get("table_number"),
+					"table_md_path": md.get("table_md_path"),
+					"table_csv_path": md.get("table_csv_path"),
+					"image_path": md.get("image_path"),
+					"figure_order": md.get("figure_order"),
+					"text": (getattr(el, "text", "") or ""),
+				}
+				try:
+					f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+				except Exception:
+					# Attempt a minimal fallback if JSON serialization barfs
+					try:
+						rec.pop("text", None)
+						f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
+					except Exception:
+						pass
+	except Exception:
+		# Non-fatal
+		pass
+
+
+def _export_tables_to_files(elements: List[Element], path: Path) -> None:
+    """Persist detected table elements to data/elements as Markdown and CSV files.
+
+    For each table element, write two files:
+      - Markdown: <stem>-table-XX.md (always)
+      - CSV:      <stem>-table-XX.csv (best-effort parsed from markdown rows)
+
+    Attach file paths back into element.metadata as table_md_path/table_csv_path
+    and set a stable table_number (1-based) if not already present.
+
+    Controlled by env RAG_EXPORT_TABLES (default: on).
+    """
+    from RAG.app.loader_modules.loader_utils import _env_enabled
+    if not _env_enabled("RAG_EXPORT_TABLES", True):
+        return
+    try:
+        from RAG.app.config import settings
+        out_dir = settings.paths.DATA_DIR / "elements"
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        return
+    # Determine document-order tables
+    tbl_indices = [i for i, e in enumerate(elements) if str(getattr(e, "category", "")).lower() == "table"]
+    for order, idx in enumerate(tbl_indices, start=1):
+        e = elements[idx]
+        text = (getattr(e, "text", "") or "").strip()
+        if not text:
+            continue
+        stem = f"{path.stem}-table-{order:02d}"
+        md_path = out_dir / f"{stem}.md"
+        csv_path = out_dir / f"{stem}.csv"
+        # Write Markdown as-is
+        try:
+            md_path.write_text(text, encoding="utf-8")
+        except Exception:
+            continue
+        # Best-effort CSV from markdown row lines
+        try:
+            lines = [ln for ln in text.splitlines() if ln.strip()]
+            csv_rows = []
+            for ln in lines:
+                if not ln.startswith("|"):
+                    continue
+                if "---" in ln:
+                    # header separator
+                    continue
+                cells = [c.strip() for c in ln.strip("|").split("|")]
+                # CSV escaping of quotes
+                csv_rows.append(
+                    ",".join(f'"{c.replace("\"", "\"\"")}"' for c in cells)
+                )
+            if csv_rows:
+                csv_path.write_text("\n".join(csv_rows), encoding="utf-8")
+        except Exception:
+            # ignore CSV failures; MD is still useful
+            pass
+        # Attach metadata
+        try:
+            meta = getattr(e, "metadata", None)
+            if isinstance(meta, dict):
+                meta.setdefault("table_number", order)
+                meta["table_md_path"] = md_path.as_posix()
+                if csv_path.exists():
+                    meta["table_csv_path"] = csv_path.as_posix()
+            elif meta is not None:
+                # SimpleNamespace or other attr-based containers
+                try:
+                    if getattr(meta, "table_number", None) is None:
+                        setattr(meta, "table_number", order)
+                    setattr(meta, "table_md_path", md_path.as_posix())
+                    if csv_path.exists():
+                        setattr(meta, "table_csv_path", csv_path.as_posix())
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
 def _assign_table_numbers(elements: list, path: Path) -> None:
 	"""Assign table numbers by matching page captions to page tables using text overlap.

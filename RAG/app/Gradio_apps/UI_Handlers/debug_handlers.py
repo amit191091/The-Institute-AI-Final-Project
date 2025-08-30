@@ -26,7 +26,7 @@ def audit_query_to_file(q, r, rtrace, out, metrics_txt, top_docs):
     """Audit query to JSONL file."""
     try:
         from RAG.app.config import settings
-        settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        settings.paths.LOGS_DIR.mkdir(parents=True, exist_ok=True)
         entry = {
             "question": q,
             "route": r,
@@ -42,7 +42,7 @@ def audit_query_to_file(q, r, rtrace, out, metrics_txt, top_docs):
                 for d in top_docs
             ],
         }
-        with open(settings.LOGS_DIR/"queries.jsonl", "a", encoding="utf-8") as f:
+        with open(settings.paths.LOGS_DIR/"queries.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception:
         pass

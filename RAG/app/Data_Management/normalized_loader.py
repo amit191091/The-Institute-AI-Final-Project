@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
+from RAG.app.logger import trace_func
+
 try:
     # Match indexing.to_documents usage
     from langchain_core.documents import Document  # type: ignore
@@ -14,6 +16,7 @@ except Exception:  # pragma: no cover
     from langchain.schema import Document  # type: ignore
 
 
+@trace_func
 def _coerce_int(x: Any) -> int | None:
     try:
         return int(x)
@@ -21,6 +24,7 @@ def _coerce_int(x: Any) -> int | None:
         return None
 
 
+@trace_func
 def _section_from_type(ctype: str, section_title: str | None) -> str:
     t = (ctype or "").lower()
     if t.startswith("figure_"):
@@ -31,6 +35,7 @@ def _section_from_type(ctype: str, section_title: str | None) -> str:
     return section_title or "Results and Analysis"
 
 
+@trace_func
 def load_normalized_docs(chunks_path: str | os.PathLike[str]) -> List[Document]:
     """Read logs/normalized/chunks.jsonl and convert each chunk to a Document.
 

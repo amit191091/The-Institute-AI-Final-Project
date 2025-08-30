@@ -1,10 +1,86 @@
+# Core Data Science Libraries
 numpy>=1.21.0
-opencv-python>=4.5.0
-scipy>=1.7.0
-matplotlib>=3.4.0
 pandas>=1.3.0
-scikit-image>=0.18.0
-h5py>=3.1.0
+opencv-python>=4.5.0
+matplotlib>=3.4.0
+scipy>=1.7.0
 scikit-learn>=1.0.0
 seaborn>=0.11.0
-Pillow>=8.3.0 
+
+# RAG System Dependencies
+langchain>=0.2.7
+langchain-community>=0.2.7
+langchain-openai>=0.1.16
+langchain-google-genai>=1.0.8
+openai>=1.40.0
+sentence-transformers>=2.7.0
+google-generativeai>=0.7.2
+
+# MCP Integration (Model Context Protocol)
+mcp>=1.0.0
+pydantic>=2.0.0
+
+# Web Interface
+gradio>=4.31.5
+
+# Graph Operations and Visualization
+networkx>=3.2
+pyvis>=0.3.2
+neo4j>=5.19.0
+
+# CLI and Environment
+typer[all]>=0.9.0
+python-dotenv>=1.0.0
+
+# Testing
+pytest>=8.3.3
+pytest-playwright>=0.5.0
+playwright>=1.46.0
+
+# Document Processing (Essential for PDF and DOCX)
+pypdf>=4.2.0
+pymupdf>=1.24.9
+pdfplumber>=0.11.4
+python-docx>=0.8.11
+tabula-py>=2.9.0
+unstructured[all-docs]>=0.14.9
+camelot-py[base]>=0.11.0
+
+# Excel File Support
+openpyxl>=3.0.0  # For .xlsx files
+xlrd>=2.0.0      # For .xls files
+
+# Vector Database and Embeddings
+chromadb>=0.5.4
+faiss-cpu>=1.7.0
+rank-bm25>=0.2.2
+
+# Evaluation and Metrics
+ragas>=0.1.9
+datasets>=2.20.0
+evaluate>=0.4.2
+
+# LlamaParse/LlamaIndex for robust PDF parsing & table extraction
+llama-parse>=0.4.0
+llama-index>=0.10.0
+
+# Optional: Confident AI DeepEval for additional evaluation metrics
+deepeval>=2.0.0
+
+# Additional dependencies that might be needed
+requests>=2.25.0
+tqdm>=4.60.0
+pillow>=8.0.0
+jupyter>=1.0.0
+ipykernel>=6.0.0
+
+# Environment Variables Required:
+# OPENAI_API_KEY=your_openai_api_key
+# GOOGLE_API_KEY=your_google_api_key
+# RAG_DATA_PATH=path_to_your_data_folder
+# RAG_INDEX_PATH=path_to_your_index_folder
+# RAG_LOG_PATH=path_to_your_logs_folder
+
+# Optional Environment Variables:
+# RAG_OCR_LANG=eng  # Set OCR language (default: eng for English)
+# RAG_LOG_LEVEL=WARNING  # Reduce verbosity: DEBUG, INFO, WARNING, ERROR (default: INFO)

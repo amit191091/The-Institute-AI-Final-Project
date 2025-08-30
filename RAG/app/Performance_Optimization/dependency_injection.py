@@ -57,8 +57,24 @@ class DependencyContainer:
                     self.logger = get_logger()
                 
                 def analyze_query(self, query: str) -> Dict[str, Any]:
+                    """Enhanced placeholder implementation for DI testing."""
                     self.logger.info(f"Analyzing query: {query}")
-                    return {"query_type": "general", "confidence": 0.8}  # Placeholder implementation
+                    
+                    # Basic query analysis for DI testing
+                    query_lower = query.lower()
+                    question_type = "general"
+                    
+                    if any(word in query_lower for word in ["gear", "wear", "failure"]):
+                        question_type = "equipment_related"
+                    elif any(word in query_lower for word in ["how", "what", "when", "where"]):
+                        question_type = "information_request"
+                    
+                    return {
+                        "question_type": question_type,
+                        "confidence": 0.8,
+                        "original_query": query,
+                        "is_di_test": True  # Flag to identify DI implementation
+                    }
                 
                 def apply_filters(self, documents: List[Document], filters: Dict[str, Any]) -> List[Document]:
                     from RAG.app.retrieve_modules.retrieve_filters import apply_filters as apply_filters_impl
@@ -80,8 +96,15 @@ class DependencyContainer:
                     self.logger = get_logger()
                 
                 def generate_answer(self, query: str, context_documents: List[Document]) -> str:
+                    """Enhanced placeholder implementation for DI testing."""
                     self.logger.info(f"Generating answer for query: {query}")
-                    return "Placeholder answer"  # Placeholder implementation
+                    
+                    # Basic answer generation for DI testing
+                    if not context_documents:
+                        return "No context documents available for DI testing."
+                    
+                    num_docs = len(context_documents)
+                    return f"DI Test Answer: Based on {num_docs} context documents. This is a placeholder implementation for dependency injection testing."
                 
                 def format_answer(self, answer: str, sources: List[Document]) -> Dict[str, Any]:
                     return {"answer": answer, "sources": sources}  # Placeholder implementation

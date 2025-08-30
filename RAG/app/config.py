@@ -12,6 +12,7 @@ class PathSettings:
     DATA_DIR: Path = PROJECT_ROOT / "RAG" / "data" # For data directory
     INDEX_DIR: Path = PROJECT_ROOT / "RAG" / "index" # For index directory
     LOGS_DIR: Path = PROJECT_ROOT / "RAG" / "logs" # For logs directory
+    DEEPEVAL_DIR: Path = PROJECT_ROOT / "RAG" / "deepeval" # For DeepEval working directory
     GEAR_IMAGES_DIR: Path = PROJECT_ROOT / "gear_images" # For gear images directory
 
 
@@ -30,6 +31,9 @@ class EmbeddingSettings:
 @dataclass(frozen=True)
 class LLMSettings:
     """Configuration for LLM models and parameters."""
+    # Primary LLM model selection - change this to switch between providers
+    PRIMARY_LLM_PROVIDER: str = "openai"  # Options: "openai", "google", "auto"
+    
     # Model names
     GOOGLE_MODEL: str = "gemini-1.5-flash" # For Google Gemini model
     OPENAI_MODEL: str = "gpt-4o-mini" # For OpenAI model (default)
@@ -51,9 +55,47 @@ class LLMSettings:
 @dataclass(frozen=True)
 class ChunkingSettings:
     """Configuration for document chunking."""
+    # Basic chunking settings
     CHUNK_TOK_AVG_RANGE: Tuple[int, int] = (250, 500) # For text chunks
     CHUNK_TOK_MAX: int = 800 # For Table and Figure chunks	
     MIN_PAGES: int = 10 # For minimum number of pages in a document
+    
+    # Advanced semantic chunking settings
+    USE_SEMANTIC_CHUNKING: bool = True # For AI-powered semantic chunking (default ON)
+    USE_HEADING_DETECTION: bool = True # For heading detection and hierarchy (default ON)
+    USE_DYNAMIC_TOKENS: bool = True # For content-type specific token limits (default ON)
+    
+    # Semantic chunking parameters
+    SEMANTIC_SIMILARITY_THRESHOLD: float = 0.7 # For sentence similarity threshold
+    SEMANTIC_BATCH_SIZE: int = 32 # For sentence transformer batch size
+    SEMANTIC_MODEL_NAME: str = "all-MiniLM-L6-v2" # For sentence transformer model
+    
+    # Heading detection parameters
+    HEADING_MIN_LENGTH: int = 3 # For minimum heading length
+    HEADING_MAX_LENGTH: int = 100 # For maximum heading length
+    HEADING_PATTERNS: List[str] = field(default_factory=lambda: [
+        r"^\d+\.\s+[A-Z]",  # 1. Heading
+        r"^\d+\.\d+\s+[A-Z]",  # 1.1 Subheading
+        r"^[A-Z][A-Z\s]{2,}$",  # ALL CAPS HEADING
+        r"^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$",  # Title Case Heading
+        r"^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*:$",  # Title Case with colon
+    ])
+    
+    # Dynamic token management
+    TEXT_TARGET_TOK: int = 375 # For text chunk target tokens (enhanced)
+    TEXT_MAX_TOK: int = 500 # For text chunk maximum tokens
+    FIGURE_TABLE_MAX_TOK: int = 800 # For figure/table chunk maximum tokens
+    CONTEXT_LOW_N: int = 6 # For context window size
+    
+    # Chunking quality settings
+    MIN_CHUNK_LENGTH: int = 50 # For minimum chunk length in characters
+    MAX_CHUNK_LENGTH: int = 2000 # For maximum chunk length in characters
+    PREFER_SEMANTIC_BREAKS: bool = True # For preferring semantic over length breaks
+    
+    # Debug and logging settings
+    CHUNKING_DEBUG: bool = False # For chunking debug output
+    LOG_CHUNK_STATS: bool = True # For logging chunk statistics (default ON)
+    EXPORT_CHUNK_METADATA: bool = True # For exporting chunk metadata (default ON)
 
 
 @dataclass(frozen=True)
@@ -229,9 +271,11 @@ class LoaderSettings:
     PDF_HI_RES: bool = False # For high-resolution PDF parsing (slowest)
     USE_TABULA: bool = False # For Tabula table extraction (requires Java)
     USE_CAMELOT: bool = False # For Camelot table extraction (slow)
-    USE_PDFPLUMBER: bool = False # For PDFPlumber table extraction (moderate)
-    EXTRACT_IMAGES: bool = False # For image extraction (slow)
-    SYNTH_TABLES: bool = False # For table synthesis (slow)
+    USE_PDFPLUMBER: bool = True # For PDFPlumber table extraction (moderate) - default ON
+    USE_PYMUPDF: bool = True # For PyMuPDF image extraction (fast and reliable) - default ON
+    USE_LLAMA_PARSE: bool = False # For LlamaParse enhanced table parsing (requires API key)
+    EXTRACT_IMAGES: bool = True # For image extraction (slow) - default ON
+    SYNTH_TABLES: bool = True # For table synthesis (slow) - default ON
     
     # Table extraction thresholds
     MIN_TABLES_TARGET: int = 2 # For minimum tables target
@@ -248,9 +292,21 @@ class LoaderSettings:
     CAMELOT_MAX_EMPTY_COL_RATIO: float = 0.6 # For maximum empty column ratio
     CAMELOT_MIN_NUMERIC_RATIO: float = 0.0 # For minimum numeric ratio (0-1)
     
+    # Export and debugging settings
+    EXPORT_TABLES: bool = True # For exporting tables to files (default ON)
+    DUMP_ELEMENTS: bool = True # For dumping elements for debugging (default ON)
+    USE_PYMUPDF_TEXT: bool = True # For PyMuPDF text extraction (default ON)
+    
+    # Debug flags for individual extractors
+    PDFPLUMBER_DEBUG: bool = False # For pdfplumber debug output
+    CAMELOT_DEBUG: bool = False # For camelot debug output
+    TABULA_DEBUG: bool = False # For tabula debug output
+    
+    # Exclusive extractor mode
+    EXCLUSIVE_EXTRACTOR: str = "" # For running only one extractor (useful for testing)
+    
     # Logging and debugging
     LOG_LEVEL: str = "ERROR" # For logging level
-    DUMP_ELEMENTS: bool = False # For dumping elements for debugging
 
 
 @dataclass(frozen=True)

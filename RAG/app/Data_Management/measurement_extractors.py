@@ -9,7 +9,10 @@ Technical data extraction functions.
 import re
 from typing import List, Tuple
 
+from RAG.app.logger import trace_func
 
+
+@trace_func
 def normalize_section_title(section: str, text: str) -> str:
     # Canonical list:
     # Executive Summary|System Description|Baseline Condition|Failure Progression|Investigation Findings|Results and Analysis|Recommendations|Conclusion
@@ -43,6 +46,7 @@ def normalize_section_title(section: str, text: str) -> str:
     return "Results and Analysis"
 
 
+@trace_func
 def detect_measurements_sensors_speed(text: str) -> Tuple[List[str], List[str], List[int]]:
     tl = text.lower()
     measurements: List[str] = []
@@ -72,6 +76,7 @@ def detect_measurements_sensors_speed(text: str) -> Tuple[List[str], List[str], 
     return measurements, sensors, speeds
 
 
+@trace_func
 def clean_caption(label: str) -> str:
     t = (label or "").strip()
     # Ensure single sentence. If multiple sentences, keep first; else leave.
@@ -79,6 +84,7 @@ def clean_caption(label: str) -> str:
     return parts[0] if parts else t
 
 
+@trace_func
 def minimal_table_summary(table_label: str) -> str:
     label = (table_label or "").strip()
     # Convert "Table N: X" -> "Table N summarizes X" as a safe default.

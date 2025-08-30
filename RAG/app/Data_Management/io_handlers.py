@@ -12,6 +12,8 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from RAG.app.logger import trace_func
+
 
 @dataclass
 class SnapshotRow:
@@ -79,6 +81,7 @@ class SnapshotRow:
         return self.raw.get("table_md_path")
 
 
+@trace_func
 def read_snapshot(path: str) -> List[SnapshotRow]:
     rows: List[SnapshotRow] = []
     with io.open(path, "r", encoding="utf-8") as f:
@@ -95,6 +98,7 @@ def read_snapshot(path: str) -> List[SnapshotRow]:
     return rows
 
 
+@trace_func
 def filter_noise(rows: List[SnapshotRow]) -> List[SnapshotRow]:
     from .text_processors import is_footer_preview, is_heading_only
     
@@ -109,6 +113,7 @@ def filter_noise(rows: List[SnapshotRow]) -> List[SnapshotRow]:
     return out
 
 
+@trace_func
 def write_outputs(chunks: List[Dict[str, Any]], graph: Dict[str, Any], out_dir: str) -> None:
     os.makedirs(out_dir, exist_ok=True)
     chunks_path = os.path.join(out_dir, "chunks.jsonl")

@@ -16,8 +16,15 @@ from RAG.app.logger import get_logger
 
 
 def get_embeddings():
-    """Prefer Google embeddings, fallback to OpenAI, then FakeEmbeddings for local smoke tests."""
+    """Use config-based provider selection for embeddings."""
+    # Use config setting for primary LLM provider
+    primary_provider = settings.llm.PRIMARY_LLM_PROVIDER.lower()
+    
+    # Check for environment override
     force_openai = os.getenv("FORCE_OPENAI_ONLY", "").strip().lower() in ("1", "true", "yes")
+    if force_openai:
+        primary_provider = "openai"
+    
     try:
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
     except Exception:
@@ -27,12 +34,22 @@ def get_embeddings():
     except Exception:
         OpenAIEmbeddings = None  # type: ignore
 
-    if force_openai and os.getenv("OPENAI_API_KEY") and OpenAIEmbeddings is not None:
-        return OpenAIEmbeddings(model=settings.embedding.EMBEDDING_MODEL_OPENAI)
-    if os.getenv("GOOGLE_API_KEY") and GoogleGenerativeAIEmbeddings is not None and not force_openai:
-        return GoogleGenerativeAIEmbeddings(model=settings.embedding.EMBEDDING_MODEL_GOOGLE)
+    # Initialize based on primary provider setting
+    if primary_provider == "openai":
+        if os.getenv("OPENAI_API_KEY") and OpenAIEmbeddings is not None:
+            return OpenAIEmbeddings(model=settings.embedding.EMBEDDING_MODEL_OPENAI)
+    elif primary_provider == "google":
+        if os.getenv("GOOGLE_API_KEY") and GoogleGenerativeAIEmbeddings is not None:
+            return GoogleGenerativeAIEmbeddings(model=settings.embedding.EMBEDDING_MODEL_GOOGLE)
+    elif primary_provider == "auto":
+        # Auto mode: try Google first, then OpenAI
+        if os.getenv("GOOGLE_API_KEY") and GoogleGenerativeAIEmbeddings is not None:
+            return GoogleGenerativeAIEmbeddings(model=settings.embedding.EMBEDDING_MODEL_GOOGLE)
+    
+    # Fallback to OpenAI if primary provider failed or not set
     if os.getenv("OPENAI_API_KEY") and OpenAIEmbeddings is not None:
         return OpenAIEmbeddings(model=settings.embedding.EMBEDDING_MODEL_OPENAI)
+    
     # Final fallback: FakeEmbeddings
     try:
         from langchain_community.embeddings import FakeEmbeddings  # type: ignore
@@ -58,22 +75,64 @@ class LLM:
         
         self._backend = None
         self._which = None
-        force_openai = os.getenv(settings.llm.FORCE_OPENAI_ENV, "").strip().lower() in ("1", "true", "yes")
         
-        # Prefer Google Gemini unless forced OpenAI
-        if os.getenv(settings.llm.GOOGLE_API_KEY_ENV) and not force_openai:
-            try:
-                from langchain_google_genai import ChatGoogleGenerativeAI
-                self._backend = ChatGoogleGenerativeAI(
-                    model=settings.llm.GOOGLE_MODEL, 
-                    temperature=settings.llm.TEMPERATURE
-                )
-                self._which = "google"
-            except Exception:
-                self._backend = None
-                
-        # Fallback to OpenAI (or forced)
-        if (self._backend is None or force_openai) and os.getenv(settings.llm.OPENAI_API_KEY_ENV):
+        # Use config setting for primary LLM provider
+        primary_provider = settings.llm.PRIMARY_LLM_PROVIDER.lower()
+        
+        # Check for environment override
+        force_openai = os.getenv(settings.llm.FORCE_OPENAI_ENV, "").strip().lower() in ("1", "true", "yes")
+        if force_openai:
+            primary_provider = "openai"
+        
+        # Initialize based on primary provider setting
+        if primary_provider == "openai":
+            # Try OpenAI first
+            if os.getenv(settings.llm.OPENAI_API_KEY_ENV):
+                try:
+                    from langchain_openai import ChatOpenAI
+                    model = os.getenv(settings.llm.OPENAI_CHAT_MODEL_ENV, settings.llm.OPENAI_MODEL)
+                    try:
+                        self._backend = ChatOpenAI(
+                            model=model, 
+                            temperature=settings.llm.TEMPERATURE
+                        )  # type: ignore[call-arg]
+                    except Exception:
+                        try:
+                            self._backend = ChatOpenAI(model_name=model)  # type: ignore[call-arg]
+                        except Exception:
+                            self._backend = ChatOpenAI()  # type: ignore[call-arg]
+                    self._which = "openai"
+                except Exception:
+                    self._backend = None
+                    
+        elif primary_provider == "google":
+            # Try Google first
+            if os.getenv(settings.llm.GOOGLE_API_KEY_ENV):
+                try:
+                    from langchain_google_genai import ChatGoogleGenerativeAI
+                    self._backend = ChatGoogleGenerativeAI(
+                        model=settings.llm.GOOGLE_MODEL, 
+                        temperature=settings.llm.TEMPERATURE
+                    )
+                    self._which = "google"
+                except Exception:
+                    self._backend = None
+                    
+        elif primary_provider == "auto":
+            # Auto mode: try Google first, then OpenAI
+            if os.getenv(settings.llm.GOOGLE_API_KEY_ENV):
+                try:
+                    from langchain_google_genai import ChatGoogleGenerativeAI
+                    self._backend = ChatGoogleGenerativeAI(
+                        model=settings.llm.GOOGLE_MODEL, 
+                        temperature=settings.llm.TEMPERATURE
+                    )
+                    self._which = "google"
+                except Exception:
+                    self._backend = None
+        
+        # Fallback to OpenAI if primary provider failed or not set
+        if self._backend is None and os.getenv(settings.llm.OPENAI_API_KEY_ENV):
             try:
                 from langchain_openai import ChatOpenAI
                 model = os.getenv(settings.llm.OPENAI_CHAT_MODEL_ENV, settings.llm.OPENAI_MODEL)
@@ -216,8 +275,8 @@ def import_normalized_graph_data() -> int:
         if os.getenv("RAG_IMPORT_NORMALIZED_GRAPH", "0").lower() in ("1", "true", "yes"):
             from RAG.app.Gradio_apps.graphdb_import_normalized import import_normalized_graph
             
-            gpath = settings.LOGS_DIR / "normalized" / "graph.json"
-            cpath = settings.LOGS_DIR / "normalized" / "chunks.jsonl"
+            gpath = settings.paths.LOGS_DIR / "normalized" / "graph.json"
+            cpath = settings.paths.LOGS_DIR / "normalized" / "chunks.jsonl"
             
             if gpath.exists() and cpath.exists():
                 n = import_normalized_graph(gpath, cpath)
@@ -232,14 +291,14 @@ def log_normalized_graph_summary() -> None:
     """Log summary of normalized graph if available."""
     try:
         if os.getenv("RAG_USE_NORMALIZED_GRAPH", "0").lower() in ("1", "true", "yes"):
-            gpath = settings.LOGS_DIR / "normalized" / "graph.json"
+            gpath = settings.paths.LOGS_DIR / "normalized" / "graph.json"
             if gpath.exists():
                 data = json.loads(gpath.read_text(encoding="utf-8"))
                 print(f"[NormalizedGraph] nodes={len(data.get('nodes', []))}, edges={len(data.get('edges', []))}")
         # Optional: import normalized graph into Neo4j with page/table/figure edges
         if os.getenv("RAG_IMPORT_NORMALIZED_GRAPH", "0").lower() in ("1", "true", "yes"):
-            gpath = settings.LOGS_DIR / "normalized" / "graph.json"
-            cpath = settings.LOGS_DIR / "normalized" / "chunks.jsonl"
+            gpath = settings.paths.LOGS_DIR / "normalized" / "graph.json"
+            cpath = settings.paths.LOGS_DIR / "normalized" / "chunks.jsonl"
             if gpath.exists() and cpath.exists():
                 n2 = import_normalized_graph(gpath, cpath)
                 print(f"[GraphDB] normalized import result={n2}")

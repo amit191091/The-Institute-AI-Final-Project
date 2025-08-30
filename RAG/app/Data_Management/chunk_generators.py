@@ -9,14 +9,18 @@ Chunk creation and merging logic functions.
 import hashlib
 from typing import Any, Dict, List, Optional, Set
 
+from RAG.app.logger import trace_func
+
 from .text_processors import norm_path
 from .date_parsers import parse_dates, infer_stage
 from .measurement_extractors import detect_measurements_sensors_speed, normalize_section_title
 
 
+@trace_func
 def sha1(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()
 
+@trace_func
 def emit_chunk(
     row,
     text: str,
@@ -67,6 +71,7 @@ def emit_chunk(
     return chunk
 
 
+@trace_func
 def merge_adjacent_chunks(rows: List, max_merge_span: int = 3) -> List[Dict[str, Any]]:
     """Merge adjacent text chunks with similar characteristics."""
     if not rows:

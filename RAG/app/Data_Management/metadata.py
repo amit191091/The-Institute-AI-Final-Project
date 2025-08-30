@@ -1,9 +1,12 @@
 ﻿from typing import Dict, List, Optional
 import re
 
+from RAG.app.logger import trace_func
+
 SECTION_ENUM = {"Summary", "Timeline", "Table", "Figure", "Analysis", "Conclusion", "Text"}
 
 
+@trace_func
 def classify_section_type(kind: str, text: str) -> str:
 	k = (kind or "").lower()
 	t = (text or "").lower()
@@ -27,12 +30,14 @@ _STOP = set(
 )
 
 
+@trace_func
 def extract_keywords(text: str, top_n: int = 10) -> List[str]:
-	words = re.findall(r"[A-Za-z0-9┬░%]+", text)
+	words = re.findall(r"[A-Za-z0-9°%]+", text)
 	words = [w for w in words if w.lower() not in _STOP]
 	return words[:top_n]
 
 
+@trace_func
 def extract_entities(text: str) -> List[str]:
 	pats = [
 		r"\bCASE[-_ ]?\d+\b",
@@ -40,7 +45,7 @@ def extract_entities(text: str) -> List[str]:
 		r"\bBRG[-_ ]?\w+\b",
 		r"\bGEAR[-_ ]?\w+\b",
 		r"\b\d{4}-\d{2}-\d{2}\b",
-		r"\b\d+(?:\.\d+)?\s?(MPa|RPM|┬░C|N|kN|mm|Hz|MPH|kW)\b",
+		r"\b\d+(?:\.\d+)?\s?(MPa|RPM|°C|N|kN|mm|Hz|MPH|kW)\b",
 	]
 	out: List[str] = []
 	for p in pats:
@@ -54,6 +59,7 @@ def extract_entities(text: str) -> List[str]:
 	return sorted(set(out))
 
 
+@trace_func
 def extract_date_tokens(text: str) -> Dict[str, List[str]]:
 	"""Extract month/day tokens from text to help date-specific retrieval.
 	Returns lowercase month names and day numbers as strings.
@@ -101,6 +107,7 @@ def extract_date_tokens(text: str) -> Dict[str, List[str]]:
 	return {"month_tokens": month_tokens, "day_tokens": day_tokens}
 
 
+@trace_func
 def extract_incident(text: str) -> Dict[str, Optional[str]]:
 	itype = None
 	if re.search(r"\bfail(ure|ed)|fracture|fatigue|overheat|seiz(e|ure)\b", text, re.I):
@@ -110,7 +117,7 @@ def extract_incident(text: str) -> Dict[str, Optional[str]]:
 	if m:
 		idate = m.group(1)
 	amount_range = None
-	m2 = re.findall(r"(\d+(?:\.\d+)?)\s?(MPa|RPM|┬░C|N|kN|mm)", text)
+	m2 = re.findall(r"(\d+(?:\.\d+)?)\s?(MPa|RPM|°C|N|kN|mm)", text)
 	if m2:
 		nums = [float(x[0]) for x in m2]
 		try:
@@ -120,6 +127,7 @@ def extract_incident(text: str) -> Dict[str, Optional[str]]:
 	return {"IncidentType": itype, "IncidentDate": idate, "AmountRange": amount_range}
 
 
+@trace_func
 def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | None = None) -> Dict:
 	ents = extract_entities(chunk["content"])
 	inc = extract_incident(chunk["content"])
@@ -161,6 +169,12 @@ def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | No
 		"amount_range": inc["AmountRange"],
 		"month_tokens": date_toks.get("month_tokens", []),
 		"day_tokens": date_toks.get("day_tokens", []),
+		# hierarchy passthrough
+		"section_id": chunk.get("section_id"),
+		"section_title": chunk.get("section_title"),
+		"section_level": chunk.get("section_level"),
+		"section_parent_id": chunk.get("section_parent_id"),
+		"section_breadcrumbs": chunk.get("section_breadcrumbs"),
 	}
 	return {"page_content": chunk["content"], "metadata": metadata}
 

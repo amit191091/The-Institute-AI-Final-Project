@@ -11,7 +11,10 @@ import json
 import os
 from typing import Any, Dict, List, Optional, Set
 
+from RAG.app.logger import trace_func
 
+
+@trace_func
 def add_node(nodes: Dict[str, Dict[str, Any]], node_id: str, node_type: str, properties: Dict[str, Any]) -> None:
     """Add a node to the graph."""
     if node_id not in nodes:
@@ -22,6 +25,7 @@ def add_node(nodes: Dict[str, Dict[str, Any]], node_id: str, node_type: str, pro
         }
 
 
+@trace_func
 def add_edge(edges: List[Dict[str, Any]], edge_type: str, source_id: str, target_id: str, properties: Optional[Dict[str, Any]] = None) -> None:
     """Add an edge to the graph."""
     edge = {
@@ -34,6 +38,7 @@ def add_edge(edges: List[Dict[str, Any]], edge_type: str, source_id: str, target
     edges.append(edge)
 
 
+@trace_func
 def build_graph_from_chunks(chunk_items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Build graph from chunk items."""
     nodes: Dict[str, Dict[str, Any]] = {}
@@ -135,6 +140,7 @@ def build_graph_from_chunks(chunk_items: List[Dict[str, Any]]) -> Dict[str, Any]
     return {"nodes": list(nodes.values()), "edges": edges}
 
 
+@trace_func
 def write_outputs(chunks: List[Dict[str, Any]], graph: Dict[str, Any], out_dir: str) -> None:
     os.makedirs(out_dir, exist_ok=True)
     chunks_path = os.path.join(out_dir, "chunks.jsonl")

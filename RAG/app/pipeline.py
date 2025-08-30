@@ -40,12 +40,36 @@ from RAG.app.pipeline_modules.pipeline_ingestion import clean_run_outputs, disco
 
 # Optional graph visualization/database modules. Provide no-op fallbacks if missing.
 try:
-    from RAG.app.Gradio_apps.graph import build_networkx_graph, render_graph_html  # type: ignore
+    from RAG.app.pipeline_modules.graph import build_graph, render_graph_html  # type: ignore
+    from RAG.app.pipeline_modules.graphdb import build_graph_db, run_cypher  # type: ignore
+    from RAG.app.pipeline_modules.graphdb_import_normalized import import_normalized_graph  # type: ignore
 except Exception:  # pragma: no cover
-    def build_networkx_graph(docs):
+    def build_graph(docs):
         return None
     def render_graph_html(G, out_path: str):
         return None
+    def build_graph_db(docs):
+        return 0
+    def run_cypher(query, parameters=None):
+        return []
+    def import_normalized_graph(graph_path, chunks_path):
+        return 0
+
+# Optional advanced modules. Provide no-op fallbacks if missing.
+try:
+    from RAG.app.pipeline_modules.clean_table_extract import extract_tables_clean  # type: ignore
+    from RAG.app.pipeline_modules.llamaindex_export import export_llamaindex_for  # type: ignore
+    from RAG.app.pipeline_modules.llamaindex_compare import build_alt_indexes  # type: ignore
+    from RAG.app.Evaluation_Analysis.deepeval_integration import run_eval as run_eval_deepeval  # type: ignore
+except Exception:  # pragma: no cover
+    def extract_tables_clean(pdf_path):
+        return []
+    def export_llamaindex_for(paths, out_root=None):
+        return 0
+    def build_alt_indexes(paths, embeddings):
+        return {}
+    def run_eval_deepeval(dataset):
+        return None, []
 
 from RAG.app.Evaluation_Analysis.evaluation_utils import run_eval_detailed, pretty_metrics
 
@@ -59,11 +83,8 @@ def run_evaluation(docs, hybrid, llm: LLM):
     if not qa_path:
         log.warning("Evaluation requested but QA file not found.")
         return
-    try:
-        if os.getenv("OPENAI_API_KEY"):
-            os.environ.setdefault("RAGAS_LLM_PROVIDER", "openai")
-    except Exception:
-        pass
+    # RAGAS now uses config-based provider selection
+    pass
     qa_rows = load_json_or_jsonl(qa_path)
     gt_rows = load_json_or_jsonl(gt_path) if gt_path else []
     gt_map = normalize_ground_truth(gt_rows)
@@ -130,6 +151,27 @@ def run_evaluation(docs, hybrid, llm: LLM):
     except Exception as e:
         print(f"RAGAS evaluation failed: {e}")
         return
+    
+    # Set up output directory
+    out_dir = settings.LOGS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    
+    # DeepEval integration
+    try:
+        de_sum, de_rows = run_eval_deepeval(ds)
+        if de_sum:
+            print("\nDeepEval summary:")
+            print(json.dumps(de_sum, indent=2))
+            
+            # Save DeepEval results
+            with open(out_dir / "eval_deepeval_summary.json", "w", encoding="utf-8") as f:
+                json.dump(_nan_to_none(de_sum), f, ensure_ascii=False, indent=2)
+            with open(out_dir / "eval_deepeval_per_question.jsonl", "w", encoding="utf-8") as f:
+                for rec in de_rows:
+                    f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False) + "\n")
+    except Exception as e:
+        log.warning(f"DeepEval run failed: {e}")
+    
     def _nan_to_none(x):
         if isinstance(x, float) and math.isnan(x):
             return None
@@ -138,8 +180,6 @@ def run_evaluation(docs, hybrid, llm: LLM):
         if isinstance(x, dict):
             return {k: _nan_to_none(v) for k, v in x.items()}
         return x
-    out_dir = settings.LOGS_DIR
-    out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "eval_ragas_summary.json", "w", encoding="utf-8") as f:
         json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2)
     with open(out_dir / "eval_ragas_per_question.jsonl", "w", encoding="utf-8") as f:
@@ -170,6 +210,17 @@ def run() -> None:
     
     # Get logger for this module
     log = get_logger()
+    
+    # Advanced environment configuration
+    # Default-enable DeepEval when API key is present
+    if (os.getenv("CONFIDENT_API_KEY") or os.getenv("DEEPEVAL_API_KEY")) and os.getenv("RAG_DEEPEVAL") is None:
+        os.environ.setdefault("RAG_DEEPEVAL", "1")
+    
+    # Enhanced logging of core toggles
+    log.info("FLAGS: HEADLESS=%s EVAL=%s USE_NORMALIZED=%s VEC_BACKEND=%s LLM_INDEX=%s LLAMAPARSE=%s", 
+             os.getenv("RAG_HEADLESS"), os.getenv("RAG_EVAL"), os.getenv("RAG_USE_NORMALIZED"), 
+             os.getenv("RAG_VECTOR_BACKEND", "chroma"), os.getenv("RAG_ENABLE_LLAMAINDEX"), os.getenv("RAG_USE_LLAMAPARSE"))
+    
     log.info("Starting RAG pipeline...")
     
     # Use RAGService for business logic
@@ -194,6 +245,63 @@ def run() -> None:
         render_graph_html(G, graph_html)
     except Exception:
         graph_html = None
+    
+    # Graph database integration
+    try:
+        if os.getenv("RAG_GRAPH_DB", "1").lower() not in ("0", "false", "no"):
+            n = build_graph_db(docs)
+            log.info(f"[GraphDB] Upserted ~{n} nodes/edges to Neo4j")
+    except Exception as e:
+        log.warning(f"Graph database integration failed: {e}")
+    
+    # Normalized graph processing
+    try:
+        if os.getenv("RAG_USE_NORMALIZED_GRAPH", "0").lower() in ("1", "true", "yes"):
+            gpath = settings.paths.LOGS_DIR / "normalized" / "graph.json"
+            if gpath.exists():
+                data = json.loads(gpath.read_text(encoding="utf-8"))
+                log.info(f"[NormalizedGraph] nodes={len(data.get('nodes', []))}, edges={len(data.get('edges', []))}")
+        
+        if os.getenv("RAG_IMPORT_NORMALIZED_GRAPH", "0").lower() in ("1", "true", "yes"):
+            gpath = settings.paths.LOGS_DIR / "normalized" / "graph.json"
+            cpath = settings.paths.LOGS_DIR / "normalized" / "chunks.jsonl"
+            if gpath.exists() and cpath.exists():
+                n2 = import_normalized_graph(gpath, cpath)
+                log.info(f"[GraphDB] normalized import result={n2}")
+    except Exception as e:
+        log.warning(f"Normalized graph processing failed: {e}")
+    
+    # LlamaIndex export integration
+    try:
+        enable_llx = os.getenv("RAG_ENABLE_LLAMAINDEX", "0").lower() in ("1", "true", "yes")
+        if enable_llx:
+            # Get document paths from service
+            paths = getattr(service, 'input_paths', [])
+            if not paths:
+                # Fallback: try to discover paths
+                paths = discover_input_paths()
+            if paths:
+                n = export_llamaindex_for(paths)
+                if n:
+                    log.info(f"[LlamaIndex] Exported artifacts for {n} document(s) under data/elements/llamaindex")
+    except Exception as e:
+        log.warning(f"LlamaIndex export failed: {e}")
+    
+    # Alternative indexes building
+    try:
+        if os.getenv("RAG_BUILD_ALT_INDEXES", "0").lower() in ("1", "true", "yes"):
+            # Get document paths and embeddings
+            paths = getattr(service, 'input_paths', [])
+            if not paths:
+                paths = discover_input_paths()
+            if paths:
+                embeddings = get_embeddings()
+                alt = build_alt_indexes(paths, embeddings)
+                for key, obj in (alt or {}).items():
+                    log.info(f"ALT[{key}]: docs={len(obj.get('docs', []))} | dense={type(obj.get('dense')).__name__} | sparse={type(obj.get('sparse')).__name__}")
+    except Exception as e:
+        log.warning(f"Alternative indexes building failed: {e}")
+    
     llm = LLM()
     # Optional: evaluation mode
     if os.getenv("RAG_EVAL", "").lower() in ("1", "true", "yes"):

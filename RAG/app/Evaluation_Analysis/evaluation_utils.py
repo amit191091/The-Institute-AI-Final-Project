@@ -61,8 +61,6 @@ from .text_processors import (
 # ============================================================================
 # EVALUATION FUNCTIONS
 # ============================================================================
-# EVALUATION FUNCTIONS
-# ============================================================================
 
 # Import from answer_evaluators module
 from .answer_evaluators import (
@@ -74,15 +72,11 @@ from .answer_evaluators import (
 # ============================================================================
 # RAGAS SETUP FUNCTIONS
 # ============================================================================
-# RAGAS SETUP FUNCTIONS
-# ============================================================================
 
 # Import from ragas_setup module
 from .ragas_setup import _setup_ragas_llm, _setup_ragas_embeddings
 
 
-# ============================================================================
-# RAGAS EVALUATION FUNCTIONS
 # ============================================================================
 # RAGAS EVALUATION FUNCTIONS
 # ============================================================================
@@ -92,6 +86,22 @@ from .ragas_evaluators import (
     run_eval,
     run_eval_detailed,
     pretty_metrics
+)
+
+
+# ============================================================================
+# ADVANCED EVALUATION UTILITIES
+# ============================================================================
+
+# Import advanced utilities from eval_ragas.py script
+from .advanced_evaluation_utils import (
+    overlap_prf1,
+    _mean_safe,
+    _maybe_float,
+    _pick,
+    _is_table_like_question,
+    _table_correct,
+    append_eval_footer
 )
 
 

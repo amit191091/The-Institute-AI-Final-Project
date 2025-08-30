@@ -9,6 +9,8 @@ Date parsing and timeline logic functions.
 import re
 from typing import Optional, Tuple
 
+from RAG.app.logger import trace_func
+
 
 MONTHS = {
     "january": "01",
@@ -26,6 +28,7 @@ MONTHS = {
 }
 
 
+@trace_func
 def anchor_sort_key(anchor: str, page: int) -> Tuple[int, Tuple[int, str]]:
     # Sort by page, then by anchor type+numeric
     # anchors could be p12-t3, figure-2, table-03
@@ -47,6 +50,7 @@ def anchor_sort_key(anchor: str, page: int) -> Tuple[int, Tuple[int, str]]:
     return (page, (a_type, f"{a_num:06d}"))
 
 
+@trace_func
 def infer_stage(date_s: Optional[str], date_e: Optional[str], single_date: Optional[str]) -> Optional[str]:
     # date thresholds as per spec
     # <= 2023-04-08 baseline
@@ -82,6 +86,7 @@ def infer_stage(date_s: Optional[str], date_e: Optional[str], single_date: Optio
     return None
 
 
+@trace_func
 def parse_dates(text: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     # Returns (date_start, date_end, date)
     # Year is assumed 2023 as per spec.

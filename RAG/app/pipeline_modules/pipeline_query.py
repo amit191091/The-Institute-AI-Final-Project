@@ -15,6 +15,13 @@ from RAG.app.retrieve import query_analyzer, apply_filters, rerank_candidates, l
 from RAG.app.Agent_Components.agents import route_question_ex, answer_summary, answer_table, answer_needle, route_question
 from RAG.app.logger import get_logger
 
+# Optional LLM-based router (safe no-op if unavailable)
+try:
+    from RAG.app.pipeline_modules.router_chain import route_llm  # type: ignore
+except Exception:  # pragma: no cover
+    def route_llm(question: str) -> str:  # type: ignore
+        return "DEFAULT"
+
 
 def analyze_query(question: str) -> Dict[str, Any]:
     """Analyze a query to extract intent, keywords, and filters."""
@@ -138,7 +145,12 @@ def answer_question(docs: List, hybrid_retriever, llm, question: str,
     if sec and not filtered:
         filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
     top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
-    route, rtrace = route_question_ex(question)
+    # Prefer LLM router when enabled; fall back to heuristic router
+    route = route_llm(question)
+    if route == "DEFAULT":
+        route, rtrace = route_question_ex(question)
+    else:
+        rtrace = {"matched": ["llm_router"], "route": route, "simplified": qa.get("intent", {})}
 
     def _doc_head(d):
         md = getattr(d, "metadata", {}) or {}
@@ -245,7 +257,10 @@ def answer_with_contexts(docs: List, hybrid_retriever, llm, question: str) -> tu
         top_docs = candidates[: settings.CONTEXT_TOP_N] if candidates else []
     if not top_docs:
         top_docs = docs[: settings.CONTEXT_TOP_N]
-    route = route_question(question)
+    # Use LLM router with fallback to heuristic
+    route = route_llm(question)
+    if route == "DEFAULT":
+        route = route_question(question)
     if route == "summary":
         ans = answer_summary(llm, top_docs, question)
     elif route == "table":

@@ -18,6 +18,18 @@ from RAG.app.retrieve_modules.retrieve_fallbacks import (
     _add_threshold_fallback
 )
 
+# Optional Cross-Encoder reranker
+try:
+    from RAG.app.retrieve_modules.reranker_ce import rerank as ce_rerank  # type: ignore
+except Exception:  # pragma: no cover
+    ce_rerank = None  # type: ignore
+
+# Optional LLM router
+try:
+    from RAG.app.retrieve_modules.query_intent import get_intent  # optional LLM router
+except Exception:
+    get_intent = None  # type: ignore
+
 
 def _score_document(doc: Document, q: str, analysis: Dict[str, Any]) -> float:
     """Score a single document based on relevance to the query."""
@@ -158,6 +170,13 @@ def rerank_candidates(q: str, candidates: List[Document], top_n: int = 8) -> Lis
     """
     if not candidates:
         return []
+    
+    # If CE reranker is enabled and available, prefer it
+    try:
+        if os.getenv("RAG_USE_CE_RERANKER", "0").lower() in ("1", "true", "yes") and ce_rerank is not None:
+            return ce_rerank(q, candidates, top_n=top_n)
+    except Exception:
+        pass
     
     # Apply fallback enhancements
     candidates = _add_wear_depth_fallback(q, candidates)

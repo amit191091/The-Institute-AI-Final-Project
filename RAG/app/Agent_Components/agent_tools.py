@@ -1,13 +1,26 @@
 ﻿from __future__ import annotations
 from typing import Any, Dict, List, Tuple
+import warnings
+try:
+    import pandas as _pd  # type: ignore
+except Exception:  # pragma: no cover
+    _pd = None  # type: ignore
 
 from langchain.schema import Document
+
+from RAG.app.logger import trace_func
 
 # Thin wrappers around existing pipeline functions to expose as agent tools
 from RAG.app.retrieve import query_analyzer, apply_filters, rerank_candidates
 from RAG.app.Agent_Components.prompts import PLANNER_SYSTEM, PLANNER_PROMPT
+try:
+    from RAG.app.table_ops import markdown_to_df, filter_rows as table_filter_rows, read_kv as table_read_kv
+except Exception:
+    markdown_to_df = None  # type: ignore
+    table_filter_rows = None  # type: ignore
+    table_read_kv = None  # type: ignore
 
-
+@trace_func
 def _doc_brief(d: Document) -> Dict[str, Any]:
     md = d.metadata or {}
     return {
@@ -21,7 +34,7 @@ def _doc_brief(d: Document) -> Dict[str, Any]:
         "preview": (d.page_content or "")[:180],
     }
 
-
+@trace_func
 def tool_analyze_query(question: str) -> Dict[str, Any]:
     qa = query_analyzer(question)
     return {
@@ -30,7 +43,7 @@ def tool_analyze_query(question: str) -> Dict[str, Any]:
         "keywords": qa.get("keywords"),
     }
 
-
+@trace_func
 def tool_retrieve_candidates(question: str, hybrid) -> List[Dict[str, Any]]:
     try:
         cands = hybrid.invoke(question) or []
@@ -38,12 +51,12 @@ def tool_retrieve_candidates(question: str, hybrid) -> List[Dict[str, Any]]:
         cands = []
     return [_doc_brief(d) for d in cands[:20]]
 
-
+@trace_func
 def tool_rerank(question: str, candidates: List[Document], top_n: int = 8) -> List[Dict[str, Any]]:
     top = rerank_candidates(question, candidates, top_n=top_n)
     return [_doc_brief(d) for d in top]
 
-
+@trace_func
 def tool_retrieve_filtered(question: str, docs: List[Document], hybrid) -> Dict[str, Any]:
     qa = query_analyzer(question)
     try:
@@ -57,7 +70,7 @@ def tool_retrieve_filtered(question: str, docs: List[Document], hybrid) -> Dict[
         "top_docs": [_doc_brief(d) for d in top],
     }
 
-
+@trace_func
 def tool_list_figures(docs: List[Document]) -> List[Dict[str, Any]]:
     figs = [d for d in docs if (d.metadata or {}).get("section") == "Figure"]
     def _key(d):
@@ -92,7 +105,7 @@ def tool_list_figures(docs: List[Document]) -> List[Dict[str, Any]]:
         })
     return out
 
-
+@trace_func
 def tool_audit_and_fill_figures(docs: List[Document]) -> Dict[str, Any]:
     """Ensure each Figure has a numeric figure_number and sequential figure_order per file.
     - figure_number: keep existing numeric; if missing/non-numeric, infer by order encountered per file
@@ -167,7 +180,7 @@ def tool_audit_and_fill_figures(docs: List[Document]) -> Dict[str, Any]:
         "sample": changes,
     }
 
-
+@trace_func
 def tool_plan(observations: str, llm_callable) -> str:
     """Run a short planner prompt against the configured LLM."""
     prompt = PLANNER_SYSTEM + "\n\n" + PLANNER_PROMPT.format(observations=observations or "(none)")
@@ -175,3 +188,103 @@ def tool_plan(observations: str, llm_callable) -> str:
         return llm_callable(prompt)
     except Exception as e:
         return f"(planner failed: {e})\n\n{prompt}"
+
+
+# --- Table utilities exposed as tools ---
+@trace_func
+def tool_table_read_kv(md_path: str, keys: List[str]) -> Dict[str, Any]:
+    if markdown_to_df is None or table_read_kv is None:
+        return {"error": "table_ops not available"}
+    try:
+        df = markdown_to_df(md_path)
+        vals = table_read_kv(df, keys)
+        return {"values": vals}
+    except Exception as e:
+        return {"error": str(e)}
+
+@trace_func
+def tool_table_filter(md_path: str, constraints: Dict[str, Any]) -> Dict[str, Any]:
+    if markdown_to_df is None or table_filter_rows is None:
+        return {"error": "table_ops not available"}
+    try:
+        df = markdown_to_df(md_path)
+        f = table_filter_rows(df, constraints or {})
+        try:
+            rows = df_to_rows_with_col_index(f, max_rows=10)
+            count = len(f)
+        except Exception:
+            rows = []
+            count = 0
+        return {"count": count, "rows": rows}
+    except Exception as e:
+        return {"error": str(e)}
+
+# --- Helpers for robust DataFrame serialization (duplicates, MultiIndex) ---
+@trace_func
+def _flatten_and_uniquify_columns(cols) -> List[str]:
+    """Return a list of string column names matching the original order, with duplicates uniquely suffixed.
+
+    - Flattens MultiIndex by joining levels with " | ".
+    - Converts None/non-string names to strings.
+    - Deduplicates by appending _2, _3, ... to repeated names.
+    """
+    try:
+        nlevels = getattr(cols, "nlevels", 1)
+        if nlevels and nlevels > 1:
+            raw = [" | ".join([str(x) for x in tup]) for tup in list(cols)]
+        else:
+            raw = ["" if (c is None) else str(c) for c in list(cols)]
+    except Exception:
+        raw = [str(c) for c in list(cols)]
+    seen: Dict[str, int] = {}
+    out: List[str] = []
+    for name in raw:
+        base = name.strip() or "col"
+        if base not in seen:
+            seen[base] = 1
+            out.append(base)
+        else:
+            seen[base] += 1
+            out.append(f"{base}_{seen[base]}")
+    return out
+
+@trace_func
+def df_to_rows_with_col_index(df, max_rows: int = 10) -> List[Dict[str, Any]]:
+    """Serialize a DataFrame into a list of row dicts with per-row column-index mapping.
+
+    Each row dict includes:
+    - "__col_index__": { deduped_col_name: original_position }
+    - the row's values under deduped_col_name keys
+
+    Ensures pandas does not warn about duplicate columns by deduplicating names first.
+    """
+    if _pd is None:
+        # Best-effort fallback without pandas helpers
+        try:
+            f2 = df.copy()
+        except Exception:
+            return []
+    else:
+        f2 = df.copy()
+    try:
+        deduped_cols = _flatten_and_uniquify_columns(f2.columns)
+        f2.columns = deduped_cols
+    except Exception:
+        # If we cannot set columns, return empty result to avoid noisy warnings upstream
+        return []
+    # Build a stable mapping of column -> positional index
+    col_index = {name: idx for idx, name in enumerate(deduped_cols)}
+    # Suppress pandas duplicate column warnings (shouldn't occur after dedupe, but belt-and-suspenders)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            base_rows: List[Dict[str, Any]] = f2.head(max_rows).to_dict("records")  # type: ignore[attr-defined]
+        except Exception:
+            base_rows = []
+    # Attach per-row mapping
+    out: List[Dict[str, Any]] = []
+    for r in base_rows:
+        rec = {"__col_index__": col_index}
+        rec.update(r)
+        out.append(rec)
+    return out

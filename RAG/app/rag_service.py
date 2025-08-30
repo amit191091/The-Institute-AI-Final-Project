@@ -98,6 +98,19 @@ class RAGService:
         """
         return self.orchestrator.query(question, use_agent)
 
+    def query_with_orchestrator(self, question: str, do_answer: bool = True) -> Dict[str, Any]:
+        """
+        Query the RAG system using the advanced orchestrator.
+        
+        Args:
+            question: User question
+            do_answer: Whether to generate an answer
+            
+        Returns:
+            Dict[str, Any]: Orchestrated query results with detailed trace
+        """
+        return self.orchestrator.query_with_orchestrator(question, do_answer)
+
     def evaluate_system(self, eval_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Evaluate the RAG system using RAGAS.

@@ -7,63 +7,147 @@ RAGAS setup and configuration functions.
 """
 
 import os
+from RAG.app.logger import trace_func
+
+# Optional Google safety enums (available in newer google-generativeai)
+try:
+    from google.generativeai.types import HarmCategory, HarmBlockThreshold  # type: ignore
+except Exception:  # pragma: no cover
+    HarmCategory = None  # type: ignore
+    HarmBlockThreshold = None  # type: ignore
 
 
+@trace_func
 def _setup_ragas_llm():
-	"""Setup LLM for RAGAS evaluation - uses centralized LLM configuration."""
-	
-	# Import the centralized LLM setup from rag_service
-	try:
-		from RAG.app.rag_service import RAGService
-		rag_service = RAGService()
-		llm_function = rag_service._get_llm()
-		
-		# Convert function-based LLM to LangChain format for RAGAS
-		# RAGAS expects a LangChain LLM object, so we need to create a wrapper
-		try:
-			from langchain_openai import ChatOpenAI
-			from RAG.app.config import settings
-			
-			# Use the same model as configured in the main system
-			openai_model = settings.llm.OPENAI_MODEL
-			llm = ChatOpenAI(model=openai_model, temperature=settings.llm.TEMPERATURE)
-			print(f"[RAGAS LLM] Using OpenAI model: {openai_model}")
-			return llm
-		except Exception as e:
-			print(f"Failed to setup LangChain LLM for RAGAS: {e}")
-			return None
-			
-	except Exception as e:
-		print(f"Failed to access centralized LLM setup: {e}")
-		return None
+    """Setup LLM for RAGAS evaluation using config-based provider selection."""
+    from RAG.app.config import settings
+    
+    # Use config setting for primary LLM provider
+    primary_provider = settings.llm.PRIMARY_LLM_PROVIDER.lower()
+    
+    # Check for environment override
+    force_openai = os.getenv("FORCE_OPENAI_ONLY", "").strip().lower() in ("1", "true", "yes")
+    if force_openai:
+        primary_provider = "openai"
+    
+    # Initialize based on primary provider setting
+    if primary_provider == "openai":
+        if os.getenv("OPENAI_API_KEY"):
+            try:
+                from langchain_openai import ChatOpenAI
+                openai_model = os.getenv("OPENAI_CHAT_MODEL", settings.llm.OPENAI_MODEL)
+                llm = ChatOpenAI(model=openai_model, temperature=0)
+                print(f"[RAGAS LLM] Using OpenAI model: {openai_model}")
+                return llm
+            except Exception as e:
+                print(f"Failed to setup OpenAI LLM for RAGAS: {e}")
+                
+    elif primary_provider == "google":
+        if os.getenv("GOOGLE_API_KEY"):
+            try:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                preferred_model = os.getenv("GOOGLE_CHAT_MODEL", settings.llm.GOOGLE_MODEL)
+                llm = ChatGoogleGenerativeAI(
+                    model=preferred_model,
+                    temperature=0,
+                    safety_settings=None,
+                )
+                print(f"[RAGAS LLM] Using Google Gemini model: {preferred_model}")
+                return llm
+            except Exception as e:
+                print(f"Failed to setup Google LLM for RAGAS: {e}")
+                
+    elif primary_provider == "auto":
+        # Auto mode: try Google first, then OpenAI
+        if os.getenv("GOOGLE_API_KEY"):
+            try:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                preferred_model = os.getenv("GOOGLE_CHAT_MODEL", settings.llm.GOOGLE_MODEL)
+                llm = ChatGoogleGenerativeAI(
+                    model=preferred_model,
+                    temperature=0,
+                    safety_settings=None,
+                )
+                print(f"[RAGAS LLM] Using Google Gemini model: {preferred_model}")
+                return llm
+            except Exception as e:
+                print(f"Failed to setup Google LLM for RAGAS: {e}")
+    
+    # Fallback to OpenAI if primary provider failed
+    if os.getenv("OPENAI_API_KEY"):
+        try:
+            from langchain_openai import ChatOpenAI
+            openai_model = os.getenv("OPENAI_CHAT_MODEL", settings.llm.OPENAI_MODEL)
+            llm = ChatOpenAI(model=openai_model, temperature=0)
+            print(f"[RAGAS LLM] Using OpenAI model (fallback): {openai_model}")
+            return llm
+        except Exception as e:
+            print(f"Failed to setup OpenAI LLM for RAGAS: {e}")
+
+    return None
 
 
+@trace_func
 def _setup_ragas_embeddings():
-	"""Setup embeddings for RAGAS evaluation - uses centralized configuration."""
-	try:
-		from RAG.app.config import settings
-		# Try OpenAI embeddings first (consistent with main system)
-		if os.getenv("OPENAI_API_KEY"):
-			try:
-				from langchain_openai import OpenAIEmbeddings
-				embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-				print("[RAGAS Embeddings] Using OpenAI text-embedding-3-small")
-				return embeddings
-			except Exception as e:
-				print(f"Failed to setup OpenAI embeddings for RAGAS: {e}")
-		
-		# Fallback to Google embeddings if OpenAI not available
-		if os.getenv("GOOGLE_API_KEY"):
-			try:
-				from langchain_google_genai import GoogleGenerativeAIEmbeddings
-				embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-				print("[RAGAS Embeddings] Using Google text-embedding-004")
-				return embeddings
-			except Exception as e:
-				print(f"Failed to setup Google embeddings for RAGAS: {e}")
-		
-		return None
-		
-	except Exception as e:
-		print(f"Failed to setup embeddings for RAGAS: {e}")
-		return None
+    """Setup embeddings for RAGAS evaluation using config-based provider selection."""
+    from RAG.app.config import settings
+    
+    # Use config setting for primary LLM provider
+    primary_provider = settings.llm.PRIMARY_LLM_PROVIDER.lower()
+    
+    # Check for environment override
+    force_openai = os.getenv("FORCE_OPENAI_ONLY", "").strip().lower() in ("1", "true", "yes")
+    if force_openai:
+        primary_provider = "openai"
+    
+    # Initialize based on primary provider setting
+    if primary_provider == "openai":
+        if os.getenv("OPENAI_API_KEY"):
+            try:
+                from langchain_openai import OpenAIEmbeddings
+                embeddings = OpenAIEmbeddings(
+                    model=settings.embedding.EMBEDDING_MODEL_OPENAI
+                )
+                print(f"[RAGAS Embeddings] Using OpenAI {settings.embedding.EMBEDDING_MODEL_OPENAI}")
+                return embeddings
+            except Exception as e:
+                print(f"Failed to setup OpenAI embeddings for RAGAS: {e}")
+                
+    elif primary_provider == "google":
+        if os.getenv("GOOGLE_API_KEY"):
+            try:
+                from langchain_google_genai import GoogleGenerativeAIEmbeddings
+                embeddings = GoogleGenerativeAIEmbeddings(
+                    model=settings.embedding.EMBEDDING_MODEL_GOOGLE
+                )
+                print(f"[RAGAS Embeddings] Using Google {settings.embedding.EMBEDDING_MODEL_GOOGLE}")
+                return embeddings
+            except Exception as e:
+                print(f"Failed to setup Google embeddings for RAGAS: {e}")
+                
+    elif primary_provider == "auto":
+        # Auto mode: try Google first, then OpenAI
+        if os.getenv("GOOGLE_API_KEY"):
+            try:
+                from langchain_google_genai import GoogleGenerativeAIEmbeddings
+                embeddings = GoogleGenerativeAIEmbeddings(
+                    model=settings.embedding.EMBEDDING_MODEL_GOOGLE
+                )
+                print(f"[RAGAS Embeddings] Using Google {settings.embedding.EMBEDDING_MODEL_GOOGLE}")
+                return embeddings
+            except Exception as e:
+                print(f"Failed to setup Google embeddings for RAGAS: {e}")
+    
+    # Fallback to OpenAI if primary provider failed
+    if os.getenv("OPENAI_API_KEY"):
+        try:
+            from langchain_openai import OpenAIEmbeddings
+            embeddings = OpenAIEmbeddings(
+                model=settings.embedding.EMBEDDING_MODEL_OPENAI
+            )
+            print(f"[RAGAS Embeddings] Using OpenAI (fallback): {settings.embedding.EMBEDDING_MODEL_OPENAI}")
+            return embeddings
+        except Exception as e:
+            print(f"Failed to setup OpenAI embeddings for RAGAS: {e}")
+    
+    return None

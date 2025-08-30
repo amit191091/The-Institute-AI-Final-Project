@@ -286,7 +286,7 @@ def create_graph_ui_tab(docs):
         # Initial load if file exists
         try:
             from RAG.app.config import settings
-            graph_html_path = settings.LOGS_DIR/"graph.html"
+            graph_html_path = settings.paths.LOGS_DIR/"graph.html"
             if graph_html_path.exists():
                 html_data = graph_html_path.read_text(encoding="utf-8")
                 import html as _html

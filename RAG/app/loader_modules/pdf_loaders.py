@@ -35,6 +35,16 @@ logging.getLogger("tabula").setLevel(logging.ERROR)
 logging.getLogger("PIL").setLevel(logging.ERROR)
 logging.getLogger("Pillow").setLevel(logging.ERROR)
 
+# OCR capabilities for enhanced figure text extraction
+try:
+    from PIL import Image  # type: ignore
+    import pytesseract  # type: ignore
+    OCR_AVAILABLE = True
+except Exception:
+    Image = None  # type: ignore
+    pytesseract = None  # type: ignore
+    OCR_AVAILABLE = False
+
 # Initialize variables for lazy imports
 partition_pdf = None
 
@@ -193,74 +203,162 @@ def _analyze_pdf_pages_for_tables(path: Path):
 	except Exception:
 		return [], None
 
+def _extract_text_via_ocr(image_path: Path) -> str:
+    """Extract text from image using OCR (Tesseract).
+    
+    Returns extracted text or empty string if OCR fails or is unavailable.
+    """
+    if not OCR_AVAILABLE or not Image or not pytesseract or not image_path.exists():
+        return ""
+    
+    try:
+        # Open image and perform OCR
+        with Image.open(image_path) as img:
+            # Convert to RGB if needed for better OCR results
+            if img.mode not in ('RGB', 'L'):
+                img = img.convert('RGB')
+            
+            # Extract text using Tesseract
+            extracted_text = pytesseract.image_to_string(img, config='--psm 6').strip()
+            
+            # Clean up the text - remove excessive whitespace
+            cleaned_text = " ".join(extracted_text.split())
+            
+            # Only return if we got meaningful text (more than just noise)
+            if len(cleaned_text) > 10 and any(c.isalpha() for c in cleaned_text):
+                return cleaned_text
+                
+    except Exception as e:
+        get_logger().debug(f"OCR extraction failed for {image_path}: {e}")
+    
+    return ""
+
 def _try_extract_images(path: Path):
-	"""Extract images from PDF pages as Figure elements using PyMuPDF (fitz).
-	Saves images to data/images and creates proper Figure elements with OCR summaries.
-	"""
-	try:
-		import fitz  # PyMuPDF
-	except Exception:
-		get_logger().debug("PyMuPDF not available; skip image extraction")
-		return []
-	from RAG.app.config import settings
-	out_dir = settings.paths.DATA_DIR / "images"
-	out_dir.mkdir(parents=True, exist_ok=True)
-	elements = []
-	try:
-		doc = fitz.open(str(path))
-		for pno in range(len(doc)):
-			page = doc[pno]
-			for img_index, img in enumerate(page.get_images(full=True), start=1):
-				xref = img[0]
-				pix = fitz.Pixmap(doc, xref)
-				# Save as PNG
-				fname = f"{path.stem}-p{pno+1}-img{img_index}.png"
-				fpath = out_dir / fname
-				try:
-					if pix.alpha:  # convert RGBA to RGB
-						pix = fitz.Pixmap(fitz.csRGB, pix)
-					pix.save(fpath)
-				finally:
-					pix = None  # release
-				
-				# Try to get text around the image for context (PyMuPDF compatible across versions)
-				page_text = ""
-				_get_text = getattr(page, "get_text", None)
-				if callable(_get_text):
-					try:
-						# Newer PyMuPDF versions support get_text() defaulting to 'text'
-						page_text = _get_text()
-					except TypeError:
-						# Older signatures require an explicit type
-						try:
-							page_text = _get_text("text")
-						except Exception:
-							page_text = ""
-				else:
-					# Very old PyMuPDF used getText
-					_getText = getattr(page, "getText", None)
-					if callable(_getText):
-						try:
-							page_text = _getText("text")
-						except Exception:
-							page_text = ""
-				
-				# Generate figure summary inline
-				figure_summary = _generate_figure_summary_inline(str(page_text), pno + 1, img_index)
-				
-				elements.append(
-					SimpleNamespace(
-						text=f"[FIGURE] {figure_summary}\nImage file: {fpath}",
-						category="Figure",
-						metadata=SimpleNamespace(
-							page_number=pno + 1, 
-							id=f"img-{path.name}-{pno+1}-{img_index}", 
-							image_path=str(fpath),
-							figure_summary=figure_summary
-						),
-					)
-				)
-	except Exception as e:
-		get_logger().debug("Image extraction failed (%s)", e.__class__.__name__)
-		return []
-	return elements
+    """Extract embedded images using PyMuPDF (fitz).
+
+    Saves images to data/images/<stem>-p<page>-img<idx>.png and returns Figure elements
+    with metadata: extractor, page_number, image_path, figure_order (per-page index).
+    Controlled by RAG_USE_PYMUPDF (default: on).
+    """
+    try:
+        import fitz  # PyMuPDF
+    except Exception:
+        get_logger().debug("PyMuPDF not available; skip image extraction")
+        return []
+    
+    from RAG.app.loader_modules.loader_utils import _env_enabled
+    if not _env_enabled("RAG_USE_PYMUPDF", True):
+        return []
+    
+    log = get_logger()
+    from RAG.app.config import settings
+    out_dir = settings.paths.DATA_DIR / "images"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    elements = []
+    
+    try:
+        doc = fitz.open(str(path))  # type: ignore[misc]
+        for pno in range(len(doc)):
+            page = doc.load_page(pno)
+            images = page.get_images(full=True)
+            for idx, img in enumerate(images, start=1):
+                try:
+                    xref = img[0]
+                    base = f"{path.stem}-p{pno+1}-img{idx}.png"
+                    out_path = out_dir / base
+                    pix = doc.extract_image(xref)
+                    iw = pix.get("width") if isinstance(pix, dict) else None
+                    ih = pix.get("height") if isinstance(pix, dict) else None
+                    # Some images are already PNG/JPEG; keep extension consistent for consumer simplicity
+                    with open(out_path, "wb") as f:
+                        f.write(pix.get("image", b""))
+                    meta = {
+                        "extractor": "pymupdf",
+                        "page_number": pno + 1,
+                        "image_path": str(out_path.as_posix()),
+                        "figure_order": idx,
+                        "image_width": iw,
+                        "image_height": ih,
+                    }
+                    
+                    # Enhanced text extraction: try OCR if enabled
+                    ocr_text = ""
+                    if _env_enabled("RAG_USE_OCR", True):
+                        ocr_text = _extract_text_via_ocr(out_path)
+                        if ocr_text:
+                            meta["ocr_text"] = ocr_text
+                    
+                    # Try to find associated text around the figure
+                    figure_context = ""
+                    try:
+                        # Extract text blocks from the page for context
+                        _gt = getattr(page, "get_text", None) or getattr(page, "getText", None)
+                        text_dict: dict = {}
+                        if callable(_gt):
+                            try:
+                                _res = _gt("dict")
+                                if isinstance(_res, dict):
+                                    text_dict = _res
+                                else:
+                                    text_dict = {}
+                            except Exception:
+                                try:
+                                    _res2 = _gt()
+                                    text_dict = _res2 if isinstance(_res2, dict) else {}
+                                except Exception:
+                                    text_dict = {}
+                        text_blocks = text_dict.get("blocks", []) if isinstance(text_dict, dict) else []
+                        page_text_parts = []
+                        for block in text_blocks:
+                            if "lines" in block:
+                                for line in block["lines"]:
+                                    for span in line.get("spans", []):
+                                        text = span.get("text", "").strip()
+                                        if text:
+                                            page_text_parts.append(text)
+                        
+                        page_text = " ".join(page_text_parts)
+                        # Look for figure references (Figure 1, Fig. 2, etc.)
+                        fig_refs = re.findall(rf"(?:Figure|Fig\.?)\s*{idx}[:\.]?\s*([^.!?]*[.!?])", page_text, re.IGNORECASE)
+                        if fig_refs:
+                            figure_context = " ".join(fig_refs[:2])  # Take first 2 matches
+                            meta["figure_context"] = figure_context
+                    except Exception:
+                        pass
+                    
+                    # Build comprehensive text description
+                    txt_parts = [f"[FIGURE]"]
+                    
+                    # Add OCR text if available
+                    if ocr_text:
+                        txt_parts.append(f"OCR Text: {ocr_text}")
+                    
+                    # Add figure context if found
+                    if figure_context:
+                        txt_parts.append(f"Context: {figure_context}")
+                    
+                    # Add basic metadata
+                    txt_parts.append(f"Image file: {out_path.as_posix()}")
+                    txt_parts.append(f"Page: {pno+1}")
+                    txt_parts.append(f"Figure {idx}")
+                    
+                    txt = "\n".join(txt_parts)
+                    # Mark tiny images as assets (icons, bullets)
+                    try:
+                        if isinstance(iw, int) and isinstance(ih, int) and (iw < 128 or ih < 128):
+                            meta["is_asset"] = True
+                    except Exception:
+                        pass
+                    
+                    elements.append(
+                        SimpleNamespace(
+                            text=txt,
+                            category="Figure",
+                            metadata=SimpleNamespace(**meta),
+                        )
+                    )
+                except Exception:
+                    continue
+    except Exception as e:
+        log.warning(f"PyMuPDF image extraction failed: {e}")
+    return elements

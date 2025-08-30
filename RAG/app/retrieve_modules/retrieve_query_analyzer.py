@@ -1,10 +1,21 @@
 import re
+import os
 from typing import Dict, Any
 from RAG.app.config import settings
+from RAG.app.Agent_Components.agents import simplify_question
+
+# Optional LLM router
+try:
+    from RAG.app.retrieve_modules.query_intent import get_intent  # optional LLM router
+except Exception:
+    get_intent = None  # type: ignore
 
 
 def query_analyzer(query: str) -> Dict[str, Any]:
     """Analyze query to extract filters, keywords, and canonical form."""
+    # Use LLM router if enabled, otherwise fall back to regex-based analysis
+    simp = (get_intent(query) if get_intent is not None and (os.getenv("RAG_USE_LLM_ROUTER", "0").lower() in ("1","true","yes")) else simplify_question(query))
+    
     query_lower = query.lower()
     
     # Enhanced question type detection
@@ -79,5 +90,7 @@ def query_analyzer(query: str) -> Dict[str, Any]:
         "is_threshold_question": is_threshold_question,
         "is_escalation_question": is_escalation_question,
         "is_module_question": is_module_question,
-        "original_query": query
+        "original_query": query,
+        "canonical": str(simp.get("canonical") or "").strip() or None,
+        "intent": simp  # expose full simplifier intent for downstream routing/augmentation
     }

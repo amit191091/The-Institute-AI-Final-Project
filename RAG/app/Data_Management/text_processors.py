@@ -9,18 +9,23 @@ Text cleaning and normalization functions.
 import re
 from typing import Optional
 
+from RAG.app.logger import trace_func
 
+
+@trace_func
 def norm_path(p: Optional[str]) -> Optional[str]:
     if not p:
         return p
     return p.replace("\\", "/")
 
 
+@trace_func
 def is_footer_preview(text: str) -> bool:
     # Matches patterns like "12 | P a g e"
     return bool(re.fullmatch(r"\s*\d+\s*\|\s*P\s*a\s*g\s*e\s*", text))
 
 
+@trace_func
 def is_heading_only(text: str) -> bool:
     # Treat very short single-line headings as noise (e.g., "Case", "Recommendations")
     # Keep if it contains colon or ends with a period (likely sentence).
@@ -33,6 +38,7 @@ def is_heading_only(text: str) -> bool:
     return 0 < len(words) <= 3
 
 
+@trace_func
 def clean_caption(label: str) -> str:
     t = (label or "").strip()
     # Ensure single sentence. If multiple sentences, keep first; else leave.

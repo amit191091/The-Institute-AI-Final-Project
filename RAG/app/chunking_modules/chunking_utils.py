@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 import re
 import os
 from RAG.app.logger import get_logger
@@ -200,3 +200,17 @@ def add_keywords_to_chunks(chunks):
     for chunk in chunks:
         content = chunk.get("content", "")
         chunk["keywords"] = extract_keywords(content)
+
+
+def _md_get(md: Any, key: str, default: Any = None) -> Any:
+    """Helper to read metadata values from either dict-like or attr-like containers."""
+    if md is None:
+        return default
+    try:
+        # dict-like first
+        if isinstance(md, dict):
+            return md.get(key, default)
+        # attr-like fallback
+        return getattr(md, key, default)
+    except Exception:
+        return default

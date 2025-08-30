@@ -63,6 +63,13 @@ def process_query_and_candidates(q, docs, hybrid, debug=None):
     
     top_docs = rerank_candidates(q, filtered, top_n=8)
     
+    # Cross-encoder reranking (from app version)
+    if debug and debug.get("cross_encoder") is not None:
+        try:
+            top_docs = debug["cross_encoder"].invoke(q, top_docs)
+        except Exception:
+            pass
+    
     # Fallbacks to avoid empty contexts for metrics/answering
     if not top_docs:
         # Use unfiltered candidates
