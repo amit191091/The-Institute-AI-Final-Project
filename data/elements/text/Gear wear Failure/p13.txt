@@ -1,0 +1,9 @@
+13 | P a g e  
+ 
+ 
+ 
+Figure 3: Fast Fourier Transform (FFT) spectrogram at 15 [RPS] (above) and 45 [RPS] (below). The white 
+dashed line marks the separation between healthy and faulty cases. 
+ 
+Figure 4: Normalized Frequency Modulation Energy (FME) against wear depth at 15 [RPS] (above) and 15 
+[RPS] (below).

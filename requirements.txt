@@ -1,0 +1,36 @@
+python-dotenv
+langchain>=0.2.7
+langchain-community>=0.2.7
+langchain-openai>=0.1.16
+langchain-google-genai>=1.0.8
+chromadb>=0.5.4
+rank-bm25>=0.2.2
+unstructured[all-docs]>=0.14.9
+pypdf>=4.2.0
+gradio>=4.31.5
+google-generativeai>=0.7.2
+openai>=1.40.0
+ragas>=0.1.9
+datasets>=2.20.0
+evaluate>=0.4.2
+pdfplumber>=0.11.4
+# True cross-encoder reranker
+sentence-transformers>=2.7.0
+# Optional: Confident AI DeepEval for additional evaluation metrics
+deepeval>=2.0.0
+# Optional table extractor
+camelot-py[base]>=0.11.0
+# Tabula (Java-based) Python bindings
+tabula-py>=2.9.0
+# Images extraction via PyMuPDF
+pymupdf>=1.24.9
+networkx>=3.2
+pyvis>=0.3.2
+neo4j>=5.19.0
+# LlamaParse/LlamaIndex for robust PDF parsing & table extraction
+llama-parse>=0.4.0
+llama-index>=0.10.0
+# Dev/test optional
+pytest>=8.3.3
+pytest-playwright>=0.5.0
+playwright>=1.46.0

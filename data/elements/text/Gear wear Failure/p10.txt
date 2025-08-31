@@ -1,0 +1,39 @@
+10 | P a g e  
+ 
+ 
+deviations in their patterns. A more distinct change appeared by W13, when the RMS values 
+rose above the baseline. This established that the earliest effective indicator of wear was 
+visual, while the dynamic response lagged behind. 
+From April 23 to May 7, the gear entered the moderate wear stage. Here, both time-domain 
+and frequency-domain analyses showed consistent deviations. The RMS values rose further, 
+the waveform displayed irregularity, and the spectral data revealed emerging sidebands 
+around the meshing frequency, pointing to the onset of mechanical instability. These 
+findings matched the photographic evidence, where tooth surface deterioration became 
+increasingly visible. The progression demonstrated that once wear passes a certain 
+threshold, signal analysis becomes a reliable diagnostic tool, complementing the images. 
+The severe wear stage was observed between May 14 and June 11. During this period, the 
+mechanical degradation accelerated. The RMS levels escalated significantly, waveform 
+distortion became pronounced, and spectral content showed clear harmonics and sideband 
+growth. The photographic record confirmed substantial material loss and deformation of the 
+tooth surface. At this point, the wear process transitioned from a detectable but controlled 
+fault to one posing imminent risk of failure. 
+On June 15, the progression culminated in a complete failure. The worn gear tooth fractured 
+under load, resulting in a critical mechanical malfunction. The energy transmitted through 
+the system dropped sharply, consistent with the interruption of load transfer due to the 
+tooth breakage. This failure was the direct outcome of prolonged severe wear, highlighting 
+the importance of early detection and timely intervention. 
+In summary, the conclusions are as follows: 
+1. The newly installed data acquisition system successfully enabled dual-domain 
+analysis, confirming the value of combining time- and frequency-based monitoring. 
+2. Photographic inspections provided the earliest indicators of wear, visible from April 
+9, well before measurable vibration deviations. 
+3. Mild wear persisted until April 23, during which signals remained largely unaffected, 
+underscoring the importance of visual monitoring at early stages. 
+4. Moderate wear from April 23 to May 7 was marked by consistent RMS increases, 
+signal irregularities, and spectral sidebands, validating the progression of the fault. 
+5. Severe wear between May 14 and June 11 showed rapid escalation, clear in both 
+signals and photographs, demonstrating the system’s deteriorating condition. 
+6. Final failure on June 15 occurred due to gear tooth fracture, directly caused by 
+unchecked severe wear, explaining the observed reduction in system energy. 
+These findings confirm the complementary role of image-based inspection and vibration 
+analysis, and they establish a clear timeline of the wear process leading to failure.

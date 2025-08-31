@@ -1,0 +1,42 @@
+7 | P a g e  
+ 
+ 
+stable and low, representing a healthy reference level. Corresponding gear images showed 
+intact teeth profiles without visible irregularities. This baseline was later used as the 
+benchmark for all subsequent comparisons. 
+Mild Wear Progression 
+The first signs of wear appeared on April 9, initially detected through tooth profile images. A 
+small deviation from the healthy baseline was visible on the flanks of several teeth, although 
+the signals remained largely unchanged at this early stage. Between April 9 and April 23, 
+progressive visual changes were observed: tooth wear was visible in the photographs but 
+did not yet manifest in the vibration data. From April 16 onward, subtle variations emerged 
+in both time domain and spectral domain signals, with small irregularities beginning to 
+disrupt the smooth baseline pattern. These deviations, while still minor, marked the 
+transition toward measurable wear. By April 23, RMS values rose above the baseline, 
+confirming the onset of detectable wear in both the visual and signal-based assessments. 
+Moderate Wear Progression 
+From the afternoon of April 23 until May 7, the system entered a phase characterized as 
+moderate wear. During this period, both time domain and spectral indicators showed clear 
+divergence from the healthy reference. RMS values exhibited a sustained upward trend, and 
+the time domain signals developed pronounced irregularities, including asymmetry in the 
+oscillatory waveforms. Spectral analysis confirmed the presence of secondary peaks not 
+observed in the baseline, suggesting energy redistribution across higher harmonics. Images 
+of the gear teeth revealed progressively deeper wear scars, with surface material visibly 
+removed and sharpness lost at the edges. The alignment between visual degradation and 
+signal variation validated the progression of wear beyond the mild stage. 
+Severe Wear Progression 
+From May 14 to June 11, the wear advanced into the severe stage. Signal data during this 
+phase showed significant energy concentration shifts in the spectral domain, with 
+broadening peaks and elevated noise levels. The time domain traces became increasingly 
+erratic, reflecting unstable operation of the gear system. RMS values climbed markedly, far 
+exceeding both the baseline and moderate wear levels. Corresponding tooth images 
+depicted extensive surface damage, including deep pits and irregular wear patches. The 
+severity of the damage made it clear that the component was approaching its functional 
+limits, with reduced load-carrying capability and high risk of imminent failure. 
+Failure Stage 
+On June 15, the system experienced a critical failure directly attributed to the severe 
+progression of wear. The failure manifested as a sudden reduction in energy observed 
+across both time and spectral analyses, consistent with a loss of mechanical engagement 
+within the gear set. The RMS levels, which had peaked during severe wear, showed an 
+abrupt decline, reflecting the collapse of normal vibration transmission. Post-event 
+inspection of the gear teeth confirmed the failure mechanism: extensive surface removal had
