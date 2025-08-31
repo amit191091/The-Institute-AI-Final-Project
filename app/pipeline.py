@@ -626,6 +626,33 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
         candidates = hybrid.invoke(q_exec)
     except Exception:
         candidates = hybrid.invoke(q_exec)
+    
+    # Document domain filtering to prevent cross-document contamination
+    try:
+        primary_subject = qa.get("filters", {}).get("primary_subject")
+        if primary_subject == "gear_wear":
+            # For gear-related questions, strongly filter for gear wear documents
+            def _is_gear_doc(d):
+                md = getattr(d, "metadata", {}) or {}
+                fn = str(md.get("file_name") or md.get("file_path") or "").lower()
+                return any(term in fn for term in ["gear", "wear", "gear_wear", "gearbox", "transmission"])
+            gear_candidates = [d for d in candidates if _is_gear_doc(d)]
+            if gear_candidates:  # Use gear docs if available
+                candidates = gear_candidates
+                log.info(f"DOMAIN_FILTER: trace_id={trace_id} filtered_to=gear_wear candidates={len(candidates)}")
+        elif primary_subject == "bearing":
+            # For bearing-related questions, filter for bearing documents
+            def _is_bearing_doc(d):
+                md = getattr(d, "metadata", {}) or {}
+                fn = str(md.get("file_name") or md.get("file_path") or "").lower()
+                return any(term in fn for term in ["bearing", "sliding", "journal", "thrust"])
+            bearing_candidates = [d for d in candidates if _is_bearing_doc(d)]
+            if bearing_candidates:  # Use bearing docs if available
+                candidates = bearing_candidates
+                log.info(f"DOMAIN_FILTER: trace_id={trace_id} filtered_to=bearing candidates={len(candidates)}")
+    except Exception as e:
+        log.warning(f"DOMAIN_FILTER_ERROR: trace_id={trace_id} error={e}")
+    
     # Optional: scope by filename via env to remove cross-doc noise during focused evals
     try:
         scope_file = os.getenv("RAG_FILE_SCOPE", "").strip()
@@ -1315,7 +1342,7 @@ def run_evaluation(docs, hybrid, llm: _LLM):
 @trace_func
 def run() -> None:
     """Entry point that mirrors the prior Main.main() behavior."""
-    print("stating program")
+    print("starting program")
     # Prevent third-party libraries from auto-loading and parsing .env (which causes noisy parse warnings)
     try:
         os.environ.setdefault("DOTENV_DISABLE", "1")
@@ -1408,14 +1435,18 @@ def run() -> None:
             try:
                 if os.getenv("RAG_EVAL", "").lower() in ("1", "true", "yes"):
                     run_evaluation(docs, hybrid, llm)
-                    # In headless mode, don't launch UI afterward
+                    # In headless mode, stop after evaluation
                     if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
+                        print("[HEADLESS] Evaluation complete. Skipping UI launch.")
                         return
             except Exception as e:
                 print(f"[UI-ONLY] Evaluation failed: {e}")
 
             # Launch UI directly (with resilient port fallback)
             try:
+                if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
+                    print("[HEADLESS] UI-ONLY flow in headless mode: skipping UI launch.")
+                    return
                 ui = build_ui(docs, hybrid, llm, debug=None)
                 share = os.getenv("GRADIO_SHARE", "").lower() in ("1", "true", "yes")
                 base_server = os.getenv("GRADIO_SERVER_NAME", "127.0.0.1")
@@ -1515,6 +1546,7 @@ def run() -> None:
                 if os.getenv("RAG_EVAL", "").lower() in ("1", "true", "yes"):
                     run_evaluation(docs, hybrid, llm)
                     if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
+                        print("[HEADLESS] Evaluation complete. Skipping UI launch.")
                         return
             except Exception as e:
                 print(f"[FALLBACK] Evaluation failed: {e}")
@@ -1595,6 +1627,7 @@ def run() -> None:
     if os.getenv("RAG_EVAL", "").lower() in ("1", "true", "yes"):
         run_evaluation(docs, hybrid, llm)
         if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
+            print("[HEADLESS] Evaluation complete. Skipping UI launch.")
             return
     # Launch Gradio UI (skip in headless mode). Try a few alternative ports if busy.
     if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):

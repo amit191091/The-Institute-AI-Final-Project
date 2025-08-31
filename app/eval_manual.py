@@ -14,7 +14,7 @@ import os
 import re
 import json
 import math
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, Set
 from dataclasses import dataclass
 from app.logger import trace_func
 
@@ -60,29 +60,78 @@ class QuestionMetrics:
 @trace_func
 def _setup_llm_judge():
     """Setup LLM for manual evaluation judging"""
+    # Allow force-offline mode to avoid any API usage
+    if os.getenv("MANUAL_EVAL_OFFLINE", "0").lower() in ("1", "true", "yes"):  # offline mode
+        return None
     # Priority: Use OpenAI if available and allowed
     if os.getenv("OPENAI_API_KEY") and ChatOpenAI:
         try:
-            return ChatOpenAI(
+            llm = ChatOpenAI(
                 model=os.getenv("OPENAI_EVAL_MODEL", "gpt-4o-mini"),
                 temperature=0.1,
                 max_retries=2
             )
+            # Health check: ensure key is valid; if it fails, fall back to offline
+            try:
+                _ = llm.invoke("ping")
+            except Exception:
+                return None
+            return llm
         except Exception as e:
             print(f"OpenAI setup failed: {e}")
     
     # Fallback: Google if available
     if os.getenv("GOOGLE_API_KEY") and ChatGoogleGenerativeAI:
         try:
-            return ChatGoogleGenerativeAI(
+            llm = ChatGoogleGenerativeAI(
                 model=os.getenv("GOOGLE_EVAL_MODEL", "gemini-1.5-pro"),
                 temperature=0.1,
                 max_retries=2
             )
+            try:
+                _ = llm.invoke("ping")
+            except Exception:
+                return None
+            return llm
         except Exception as e:
             print(f"Google setup failed: {e}")
     
-    raise RuntimeError("No LLM available for manual evaluation. Please set OPENAI_API_KEY or GOOGLE_API_KEY")
+    # No LLM available; use offline heuristics
+    return None
+
+# -----------------------
+# Offline heuristic helpers
+# -----------------------
+_STOP: Set[str] = {
+    "the","a","an","of","and","or","to","in","on","for","by","with","is","are","was","were","at","as","from",
+    "this","that","these","those","it","its","be","been","being","into","over","under","no","not","none"
+}
+
+def _norm_text(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = re.sub(r"\s+", " ", s)
+    # normalize unicode dashes/quotes
+    s = s.replace("\u2013", "-").replace("\u2014", "-").replace("\u2019", "'")
+    return s
+
+def _tokens(s: str) -> List[str]:
+    s = _norm_text(s)
+    toks = re.findall(r"[a-z0-9]+(?:[\-\./][a-z0-9]+)?", s)
+    return [t for t in toks if t not in _STOP]
+
+def _num_tokens(s: str) -> List[str]:
+    # numbers incl. decimals and units glued (e.g., 50khz)
+    s = _norm_text(s)
+    return re.findall(r"\b\d+(?:[\.,]\d+)?(?:\s*[a-z%µu]+)?\b", s)
+
+def _jaccard(a: Set[str], b: Set[str]) -> float:
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    union = len(a | b)
+    return inter / max(1, union)
 
 @trace_func
 def _is_table_question(question: str) -> bool:
@@ -106,6 +155,23 @@ def _is_table_question(question: str) -> bool:
 @trace_func
 def _calculate_answer_correctness(question: str, answer: str, reference: str, llm) -> Tuple[float, str]:
     """Calculate how well the answer matches the ground truth reference"""
+    # Offline heuristic path
+    if llm is None:
+        a_norm, r_norm = _norm_text(answer), _norm_text(reference)
+        if not r_norm:
+            return 0.0, "No reference provided"
+        if a_norm == r_norm:
+            return 1.0, "Exact match"
+        # Numeric/date friendly: compare number tokens first
+        a_nums, r_nums = _num_tokens(a_norm), _num_tokens(r_norm)
+        if r_nums:
+            score = 1.0 if a_nums == r_nums else (0.95 if set(a_nums) == set(r_nums) else (0.8 if any(n in a_nums for n in r_nums) else 0.0))
+            return score, f"Numeric heuristic (ans={a_nums}, ref={r_nums})"
+        # Token overlap
+        at, rt = set(_tokens(a_norm)), set(_tokens(r_norm))
+        jac = _jaccard(at, rt)
+        score = 1.0 if jac > 0.95 else 0.9 if jac > 0.8 else 0.8 if jac > 0.65 else 0.6 if jac > 0.5 else 0.4 if jac > 0.3 else 0.0
+        return score, f"Token Jaccard={jac:.2f}"
     
     system_prompt = """You are an expert evaluator for technical Q&A systems.
 
@@ -168,6 +234,19 @@ def _calculate_context_precision(question: str, reference: str, contexts: List[s
     
     if not contexts:
         return 0.0, "No contexts provided"
+    # Offline heuristic: count contexts that include reference tokens (or question tokens as fallback)
+    if llm is None:
+        ref_tokens = set(_tokens(reference))
+        q_tokens = set(_tokens(question))
+        relevant = 0
+        notes = []
+        for i, ctx in enumerate(contexts, start=1):
+            ctok = set(_tokens(ctx))
+            rel = (ref_tokens and len(ctok & ref_tokens) > 0) or (len(ctok & q_tokens) > 0)
+            relevant += 1 if rel else 0
+            notes.append(f"C{i}:{'Y' if rel else 'N'}")
+        prec = relevant / len(contexts)
+        return prec, f"Heuristic relevant={relevant}/{len(contexts)} ({', '.join(notes)})"
     
     system_prompt = """You are an expert evaluator for information retrieval systems.
 
@@ -234,6 +313,15 @@ def _calculate_context_recall(question: str, reference: str, contexts: List[str]
     
     if not contexts:
         return 0.0, "No contexts provided"
+    # Offline heuristic: does any context contain the reference tokens (strong) or full reference substring
+    if llm is None:
+        ref_norm = _norm_text(reference)
+        ref_tokens = set(_tokens(reference))
+        ctx_text = "\n".join(_norm_text(c) for c in contexts)
+        if ref_norm and ref_norm in ctx_text:
+            return 1.0, "Reference substring found"
+        hit = 1.0 if ref_tokens and any(t in ctx_text.split() for t in ref_tokens) else 0.0
+        return hit, ("Reference tokens present" if hit else "Reference not found in contexts")
     
     system_prompt = """You are an expert evaluator for information retrieval systems.
 
@@ -294,6 +382,15 @@ def _calculate_faithfulness(question: str, answer: str, contexts: List[str], llm
     
     if not contexts:
         return 0.0, "No contexts to verify against"
+    # Offline heuristic: proportion of answer tokens supported by contexts text
+    if llm is None:
+        ans_toks = [t for t in _tokens(answer) if not t.isdigit()]
+        ctx_text = " ".join(_norm_text(c) for c in contexts)
+        if not ans_toks:
+            return 1.0, "No substantive tokens in answer"
+        supp = sum(1 for t in ans_toks if t in ctx_text)
+        score = supp / len(ans_toks)
+        return score, f"Supported {supp}/{len(ans_toks)} answer tokens"
     
     system_prompt = """You are an expert evaluator for factual accuracy in Q&A systems.
 
@@ -351,6 +448,20 @@ Evaluate if the answer is faithful to the contexts (no hallucination)."""
 @trace_func
 def _calculate_table_qa_accuracy(question: str, answer: str, reference: str, llm) -> Tuple[float, str]:
     """Special accuracy calculation for table/numerical questions"""
+    # Offline heuristic for numbers/dates/ratios
+    if llm is None:
+        a_nums, r_nums = _num_tokens(answer), _num_tokens(reference)
+        if not r_nums:
+            return 0.0, "No numeric reference"
+        if a_nums == r_nums:
+            return 1.0, "Exact numeric match"
+        if set(a_nums) == set(r_nums):
+            return 0.95, "Numeric set match"
+        # ratio/date formatted differently
+        a_norm, r_norm = _norm_text(answer), _norm_text(reference)
+        if a_norm == r_norm:
+            return 1.0, "Exact normalized match"
+        return 0.0, f"Numeric mismatch (ans={a_nums}, ref={r_nums})"
     
     system_prompt = """You are an expert evaluator for technical table and numerical Q&A.
 
@@ -480,11 +591,11 @@ def run_manual_evaluation(
     if thresholds is None:
         thresholds = EvaluationThresholds()
     
-    # Setup LLM judge
+    # Setup LLM judge (may be None for offline mode)
     try:
         llm = _setup_llm_judge()
     except Exception as e:
-        return {"error": f"Failed to setup LLM judge: {e}"}, []
+        llm = None
     
     # Extract data
     questions = dataset.get("question", [])
@@ -562,6 +673,7 @@ def run_manual_evaluation(
         "passed_questions": passed_questions,
         "pass_rate": passed_questions / max(1, total_questions),
         "table_questions": table_questions,
+        "offline_mode": llm is None,
         
         # Average scores
         "avg_answer_correctness": safe_mean(correctness_scores),

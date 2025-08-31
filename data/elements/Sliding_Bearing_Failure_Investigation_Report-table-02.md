@@ -1,8 +1,0 @@
-|  | Time |  |  | Notes |  |
-| --- | --- | --- | --- | --- | --- |
-| 05:35 |  |  | Start on |  |  |
-| 06:00 |  |  | No abnormal |  |  |
-| 06:30 |  |  | No abnormal |  |  |
-| 07:00 |  |  | No abnormal |  |  |
-| 07:10 |  |  | High RMS but normal |  |  |
-| 07:30 |  |  | Alert Level 1 |  |  |

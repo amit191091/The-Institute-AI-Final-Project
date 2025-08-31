@@ -1,5 +1,5 @@
 """LLM-powered query intent detection (optional).
-Falls back to regex-based simplify_question when LLM unavailable or disabled.
+Falls back to direct analysis when LLM unavailable or disabled.
 
 Enable via env:
   RAG_USE_LLM_ROUTER=true|1
@@ -14,9 +14,6 @@ import os
 import re
 from typing import Dict, Any
 from app.logger import get_logger, trace_func
-
-# Local fallback
-from app.agents import simplify_question
 
 _CACHE: dict[str, Dict[str, Any]] = {}
 
@@ -119,8 +116,15 @@ def analyze_query_llm(q: str) -> Dict[str, Any] | None:
 
 @trace_func
 def get_intent(q: str) -> Dict[str, Any]:
-    """Return intent dict. Prefer LLM when enabled, fallback to regex simplify_question."""
+    """Return intent dict. Prefer LLM when enabled, fallback to direct analysis."""
     data = analyze_query_llm(q)
     if data is None:
-        return simplify_question(q)
+        # Simple fallback without complex preprocessing
+        ql = q.lower()
+        return {
+            "wants_figure": any(w in ql for w in ("figure", "image", "fig ", "photo", "plot", "graph")),
+            "wants_table": "table" in ql,
+            "wants_summary": any(w in ql for w in ("summary", "summarize", "overview")),
+            "canonical": q.strip(),
+        }
     return data

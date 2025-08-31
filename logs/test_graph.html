@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Knowledge Graph - Enhanced Layout</title>
+  <script src="https://unpkg.com/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
+  <style>
+    body { margin: 0; padding: 10px; font-family: Arial, sans-serif; }
+    #kg { width: 100%; height: 800px; border: 2px solid #ddd; border-radius: 8px; }
+    .controls { margin-bottom: 10px; }
+    .info { background: #f5f5f5; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+     <div class="info">
+     <strong>Enhanced Knowledge Graph</strong><br>
+     • Nodes sized by connectivity (more connections = bigger)<br>
+     • <span style="color:#E74C3C">Red nodes</span>: W-cases (W1, W2, W3, etc.)<br>
+     • <span style="color:#3498DB">Blue nodes</span>: Technical terms (RMS, FME, GMF, RPS)<br>
+     • <span style="color:#F39C12">Orange nodes</span>: Dates and times<br>
+     • <span style="color:#27AE60">Green nodes</span>: Other entities<br>
+     • <span style="color:#9B59B6">Purple nodes</span>: Document chunks<br>
+     • Drag nodes to reposition • Use mouse wheel to zoom • Right-click for options
+   </div>
+  <div id="kg"></div>
+  <script>
+    const nodes = new vis.DataSet([]);
+    const edges = new vis.DataSet([]);
+    const container = document.getElementById('kg');
+    const data = { nodes, edges };
+    const options = {"nodes": {"shape": "dot", "shadow": true, "borderWidth": 2, "borderColor": "#000000"}, "edges": {"smooth": {"type": "continuous", "forceDirection": "none"}, "color": {"color": "#848484", "opacity": 0.6}, "width": 1}, "physics": {"forceAtlas2Based": {"gravitationalConstant": -100, "centralGravity": 0.005, "springLength": 150, "springConstant": 0.05, "damping": 0.3, "avoidOverlap": 0.8}, "stabilization": {"enabled": true, "iterations": 2000, "updateInterval": 50, "fit": true}, "minVelocity": 0.75, "maxVelocity": 30}, "interaction": {"hover": true, "tooltipDelay": 200, "hideEdgesOnDrag": true, "navigationButtons": true, "keyboard": true, "zoomView": true, "dragView": true}};
+    const network = new vis.Network(container, data, options);
+    
+    // Add some helpful event listeners
+    network.on("stabilizationProgress", function(params) {
+        console.log('Stabilization progress:', params.iterations + '/' + params.total);
+    });
+    
+    network.on("stabilizationIterationsDone", function() {
+        console.log('Graph layout stabilized');
+    });
+  </script>
+</body>
+</html>

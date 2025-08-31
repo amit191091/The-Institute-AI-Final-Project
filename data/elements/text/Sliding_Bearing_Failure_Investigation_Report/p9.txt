@@ -1,8 +1,0 @@
-Figure 3: Vibration signal spectrum during failure. 
- 
-Figure 4: Vibration signal zoom in to observe the abnormalities. 
-Implement Alarm Escalation and Response Drills 
-1. Define clear escalation rules when RMS or sideband thresholds are exceeded, 
-ensuring rapid decision-making. 
-2. Conduct operator training to interpret early-warning signs in both images and 
-signals, enabling timely shutdown or controlled load reduction.

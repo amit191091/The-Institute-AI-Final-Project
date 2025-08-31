@@ -5,6 +5,7 @@ from app.logger import trace_func
 
 from app.metadata import classify_section_type, extract_keywords
 from app.utils import approx_token_len, simple_summarize, truncate_to_tokens, naive_markdown_table, split_into_sentences, split_into_paragraphs, slugify, sha1_short
+from app.figure_enhancer import enhance_figure_content, enhance_table_content, extract_figure_descriptions_from_chunks, extract_table_descriptions_from_chunks
 
 @trace_func
 def structure_chunks(elements, file_path: str) -> List[Dict]:
@@ -247,6 +248,24 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 	# Doc-level last assigned figure number to prevent resets (e.g., if a new page restarts numbering)
 	last_figure_number_assigned: int = 0
 
+	# Phase 1: Pre-process all text elements to extract figure descriptions
+	# This will build a global cache of figure/table descriptions that can be used during figure processing
+	all_text_chunks = []
+	for el in elements:
+		kind = getattr(el, "category", getattr(el, "type", "Text")) or "Text"
+		if kind.lower() in ("text", "title", "narrative_text", "composite_element"):
+			raw_text = getattr(el, "text", "") or ""
+			if raw_text and len(raw_text.strip()) > 20:  # Only meaningful text
+				all_text_chunks.append({"content": raw_text})
+	
+	# Extract figure and table descriptions from all text
+	global_figure_descriptions = extract_figure_descriptions_from_chunks(all_text_chunks)
+	global_table_descriptions = extract_table_descriptions_from_chunks(all_text_chunks)
+	
+	if trace and (global_figure_descriptions or global_table_descriptions):
+		log.debug(f"Extracted {len(global_figure_descriptions)} figure descriptions and {len(global_table_descriptions)} table descriptions")
+
+	# Phase 2: Process elements with access to global descriptions
 	# Track indices consumed by cross-element coalescing (to avoid double-processing)
 	consumed: set[int] = set()
 
@@ -398,6 +417,13 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			# If a full label exists, include at the top for clarity
 			label_hdr = f"LABEL: {table_label}\n" if (table_label and str(table_label).strip()) else ""
 			content = f"[TABLE]\n{label_hdr}SUMMARY:\n{distilled}\n{(analysis + '\n') if analysis else ''}MARKDOWN:\n{md or as_text}\nRAW:\n{as_text}"
+			
+			# Enhance table content with descriptions from document text
+			try:
+				content = enhance_table_content(content, table_number, all_text_chunks)
+			except Exception as e:
+				log.warning("Table enhancement failed: %s", e)
+			
 			tok = approx_token_len(content)
 			if tok > 800:
 				content = truncate_to_tokens(content, 800)
@@ -588,7 +614,21 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				custom_anchor = f"figure-{figure_number_final}"
 
 			# Build content with normalized caption shown to the LLM; compute token budget after composing
-			content = f"[FIGURE]\nCAPTION:\n{figure_summary_short}\nSUMMARY:\n{figure_summary}"
+			# Enhanced figure content processing to handle garbled OCR
+			try:
+				enhanced_content = enhance_figure_content(
+					content=caption_norm,
+					figure_number=figure_number_final,
+					all_chunks=all_text_chunks
+				)
+				# If enhancement produced meaningful content, use it
+				if enhanced_content and enhanced_content != caption_norm and "garbled" in enhanced_content.lower():
+					content = f"[FIGURE]\n{enhanced_content}"
+				else:
+					content = f"[FIGURE]\nCAPTION:\n{figure_summary_short}\nSUMMARY:\n{figure_summary}"
+			except Exception as e:
+				# Fallback to original format if enhancement fails
+				content = f"[FIGURE]\nCAPTION:\n{figure_summary_short}\nSUMMARY:\n{figure_summary}"
 			tok = approx_token_len(content)
 			if tok > 800:
 				content = truncate_to_tokens(content, 800)

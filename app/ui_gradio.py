@@ -658,6 +658,22 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		pass
 
 	def on_ask(q, debug_toggle):
+		# Import conversation context
+		try:
+			from app.conversation_context import conversation_context
+		except Exception:
+			conversation_context = None
+		
+		# Check for ambiguous queries and handle disambiguation
+		if conversation_context is not None:
+			ambiguity_info = conversation_context.detect_ambiguous_query(q)
+			if ambiguity_info['needs_disambiguation']:
+				# Return disambiguation prompt instead of answering
+				disambiguation_msg = conversation_context.generate_disambiguation_prompt(
+					q, ambiguity_info['available_documents']
+				)
+				return disambiguation_msg, "", "", "", "", gr.Markdown(""), "", gr.DataFrame(), "", ""
+		
 		qa = query_analyzer(q)
 		# Inject scope filters from selection (if set via dropdown)
 		try:
@@ -722,7 +738,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					return bool(_re.match(rf"^\s*table\s*{int(str(tv))}\b", lab, _re.I))
 				return True
 			filtered = [d for d in docs if _fallback_ok(d)]
-		top_docs = rerank_candidates(q, filtered, top_n=8)
+		top_docs = rerank_candidates(q, filtered, top_n=8, filters=qa.get("filters", {}))
 		# Optional cross-encoder reranker for better final ordering
 		try:
 			from app.reranker_ce import rerank as ce_rerank
@@ -1103,6 +1119,24 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		_reason_upd = gr.update(value=reasoning_trace or {}, visible=_dbg_visible)
 		# Update figure preview slot when available; leave None to avoid clearing external viewers
 		fig_update = gr.update(value=fig_path) if 'fig_path' in locals() and fig_path else None
+		
+		# CONVERSATION CONTEXT: Track this interaction for future question disambiguation
+		if conversation_context is not None and top_docs:
+			# Determine which document this answer came from
+			primary_doc = None
+			if top_docs:
+				doc_counts = {}
+				for doc in top_docs:
+					doc_name = doc.metadata.get("file_name", "unknown")
+					doc_counts[doc_name] = doc_counts.get(doc_name, 0) + 1
+				# Use the most frequently appearing document
+				primary_doc = max(doc_counts.items(), key=lambda x: x[1])[0] if doc_counts else None
+			
+			if primary_doc:
+				# Calculate confidence based on how much of the answer came from this document
+				confidence = doc_counts.get(primary_doc, 0) / len(top_docs) if top_docs else 0.5
+				conversation_context.add_interaction(primary_doc, q, confidence)
+		
 		return out, metrics_txt, _acc_upd, _router_upd, _filters_upd, _dense_upd, _sparse_upd, _hybrid_upd, _topdocs_upd, _compare_upd, _reason_upd, fig_update
 
 	# Build a sleeker Blocks UI with tabs
@@ -1364,11 +1398,6 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					outputs=[ingest_status],
 				)
 
-			with gr.Tab("Inspect"):
-				gr.Markdown("### Top indexed docs (sample)")
-				sample_docs = [d for d in docs[:12]]
-				gr.Textbox(value=_fmt_docs(sample_docs, max_items=12), label="Sample Contexts", lines=15)
-
 			with gr.Tab("Graph"):
 				gr.Markdown("### Knowledge Graph (auto-built)")
 				# If the Main built a graph, it will be at logs/graph.html
@@ -1384,6 +1413,12 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					value="Docs co-mention (default)",
 					label="Graph source"
 				)
+				
+				# Normalization section
+				gr.Markdown("#### Data Normalization")
+				normalize_status = gr.Markdown(value="Click to normalize the current data snapshot for enhanced retrieval and graph analysis.")
+				btn_normalize = gr.Button("Normalize Data Snapshot", variant="secondary")
+				
 				btn_graph = gr.Button("Generate / Refresh Graph")
 				gr.Markdown("#### Graph DB (Neo4j) — optional")
 				# Prefill with a sample so clicks don't pass an empty string on some Gradio builds
@@ -1509,6 +1544,64 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					except Exception as e:
 						return gr.update(value=""), f"(failed to build graph: {e})"
 
+				def _normalize_data():
+					"""Run the normalization process on the current data snapshot."""
+					try:
+						from app.normalize_snapshot import read_snapshot, maybe_upgrade_with_full_text, filter_noise, chunks_and_graph, write_outputs
+						
+						# Check if db_snapshot.jsonl exists
+						snapshot_path = Path("logs") / "db_snapshot.jsonl"
+						if not snapshot_path.exists():
+							return "❌ No data snapshot found. Please ingest documents first."
+						
+						full_snapshot_path = Path("logs") / "db_snapshot_full.jsonl"
+						output_dir = Path("logs") / "normalized"
+						
+						# Run the normalization pipeline
+						rows = read_snapshot(str(snapshot_path))
+						if not rows:
+							return "❌ Empty data snapshot. Please ingest documents first."
+						
+						# Optionally upgrade with full text if available
+						if full_snapshot_path.exists():
+							rows = maybe_upgrade_with_full_text(rows, str(full_snapshot_path))
+						
+						# Filter noise and generate normalized chunks and graph
+						rows = filter_noise(rows)
+						chunks, graph = chunks_and_graph(rows)
+						
+						# Write outputs
+						write_outputs(chunks, graph, str(output_dir))
+						
+						# Update status with results
+						chunks_count = len(chunks)
+						nodes_count = len(graph.get('nodes', []))
+						edges_count = len(graph.get('edges', []))
+						
+						result_msg = f"""✅ **Normalization Complete!**
+						
+**Output Files:**
+- `logs/normalized/chunks.jsonl` - {chunks_count} enhanced chunks
+- `logs/normalized/graph.json` - {nodes_count} nodes, {edges_count} edges
+
+**What was normalized:**
+- Merged small text fragments within sections
+- Extracted semantic metadata (wear stages, measurements, sensors)  
+- Created structured relationships between documents, sections, figures, and tables
+- Consolidated timeline events and removed duplicates
+
+**Next Steps:**
+- Set `RAG_USE_NORMALIZED=1` to use enhanced chunks for retrieval
+- Set `RAG_USE_NORMALIZED_GRAPH=1` to enable graph features
+- Use "Normalized graph.json" or "Normalized chunks" source in the dropdown above to visualize
+"""
+						return result_msg
+						
+					except ImportError as e:
+						return f"❌ Normalization modules not available: {e}"
+					except Exception as e:
+						return f"❌ Normalization failed: {e}"
+
 				# Initial load if file exists
 				try:
 					graph_html_path = Path("logs")/"graph.html"
@@ -1522,6 +1615,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				except Exception:
 					_graph_status.value = "(Graph not available yet – click the button to generate it.)"
 				btn_graph.click(_gen_graph, inputs=[src], outputs=[_graph_view, _graph_status])
+				btn_normalize.click(_normalize_data, inputs=[], outputs=[normalize_status])
 
 				def _run_cypher_ui(q:str=""):
 					try:
@@ -1586,7 +1680,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					filtered = apply_filters(cands, qa.get("filters", {}))
 					if not filtered:
 						filtered = cands
-					top_docs = rerank_candidates(q_text, filtered, top_n=8)
+					top_docs = rerank_candidates(q_text, filtered, top_n=8, filters=qa.get("filters", {}))
 					try:
 						from app.reranker_ce import rerank as ce_rerank
 						if ce_rerank is not None:

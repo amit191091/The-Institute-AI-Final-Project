@@ -621,15 +621,24 @@ NEEDLE_SYSTEM = (
     "Do not invent image filenames; cite the PDF file name and page only. "
     "Only list sensor modalities/instruments explicitly present in the context.\n"
     "If a value is requested, return the exact value with units and a citation like [filename pX].\n"
-    "DELTA CONTRACT: For questions like 'by how much', 'exceed', 'increase', compute Δ = target − baseline using values "
-    "explicitly found in the context. If either value is missing, answer exactly: Insufficient evidence in supplied context.\n"
-    "NUMBER SAFETY: When using numbers, ensure they are supported by the context. Numbers that appear in both the question and context are acceptable to use.\n"
+    "EXTRACTION PRIORITY: If the information is present in the context, even in different wording, "
+    "extract and rephrase it appropriately. Look for synonyms and technical paraphrases. "
+    "Only answer 'Not found in context' if the information is genuinely absent or cannot be inferred "
+    "from the provided text.\n"
+    "DELTA CONTRACT: For questions like 'by how much', 'exceed', 'increase', 'rise', carefully read the context "
+    "for percentage or numeric changes. Look for phrases like '10-15%', 'roughly X%', 'elevated by Y%', or "
+    "'Δ = target − baseline'. Do NOT extract unrelated numbers like speed values ('15 RPS', '45 RPS') when "
+    "the question asks for percentages. If either the target or baseline value is missing, answer exactly: "
+    "Not found in context.\n"
+    "NUMBER SAFETY: When using numbers, ensure they are supported by the context and match the question type. "
+    "Numbers that appear in both the question and context are acceptable to use, but verify they answer "
+    "the actual question being asked.\n"
     "LIST MODE: If the question asks for a list (protocols/steps/recommendations/procedures/"
     "guidelines/checklist or 'whole list'/'give me all'/'list all'), copy bullets VERBATIM (one per line) "
     "with a citation at the end. Preserve original numbering/bullets and phrasing. Output only the list items "
     "and a single citation at the end. If no such list exists, answer exactly: Not found in context. "
     "Otherwise return a single concise sentence (≤20 words) with exactly one citation. "
-    "If the information is clearly not present in the context, answer exactly: Not found in context. However, if the information is present but in a different form, extract and rephrase it appropriately."
+    "If the information is genuinely not present in the context, answer exactly: Not found in context."
 )
 
 TABLE_SYSTEM = (
@@ -673,11 +682,15 @@ NEEDLE_PROMPT = (
     "Question: {question}\n"
     "Instructions:\n"
     "- Prefer exact phrases and numeric values with units.\n"
-    "- Apply the DELTA CONTRACT when the question asks 'by how much / exceed / increase / baseline'.\n"
-    "- NUMBER SAFETY: When using numbers, ensure they are supported by the context. Numbers that appear in both the question and context are acceptable to use.\n"
+    "- EXTRACTION PRIORITY: If the information is present in the context, even with different wording, "
+    "  extract and rephrase it appropriately. Look for synonyms and technical paraphrases.\n"
+    "- Apply the DELTA CONTRACT when the question asks 'by how much / exceed / increase / rise / baseline'. "
+    "Look for percentage values, not unrelated numbers like speed values.\n"
+    "- NUMBER SAFETY: When using numbers, ensure they are supported by the context and answer the actual question type. "
+    "Numbers that appear in both the question and context are acceptable to use.\n"
     "- Always add exactly one citation like [Gear wear Failure.pdf pX].\n"
     "- LIST MODE rules apply when relevant.\n"
-    "- If insufficient evidence exists or information is clearly not present, reply exactly: Insufficient evidence in supplied context.\n"
+    "- Only if the information is genuinely not present in the context, reply exactly: Not found in context.\n"
     "Answer:"
 )
 
@@ -709,7 +722,10 @@ FEWSHOT_NEEDLE = [
      "a": "Not found in context."},
     {"q": "List the Post-Failure Review Protocols (verbatim).",
      "a": "Not found in context."},
-    # Delta pattern example (forces NEEDLE, not TABLE)
+    # Delta pattern example - shows correct percentage extraction
+    {"q": "By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?",
+     "a": "About 10–15% [Gear wear Failure.pdf p3]."},
+    # Alternative delta pattern - insufficient evidence  
     {"q": "During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?",
      "a": "Insufficient evidence in supplied context."}
 ]

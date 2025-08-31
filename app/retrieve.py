@@ -1,11 +1,10 @@
 import os
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
 from app.logger import get_logger
 
 from langchain.schema import Document
 from langchain.retrievers import EnsembleRetriever
-from app.agents import simplify_question
 # Optional Cross-Encoder reranker
 try:
 	from app.reranker_ce import rerank as ce_rerank  # type: ignore
@@ -16,15 +15,87 @@ try:
 	from app.query_intent import get_intent  # optional LLM router
 except Exception:
 	get_intent = None  # type: ignore
+try:
+	from app.conversation_context import conversation_context  # conversation tracking
+except Exception:
+	conversation_context = None  # type: ignore
 
 
 @trace_func
 def query_analyzer(q: str) -> Dict:
 	"""Extract keywords, case/client IDs, dates to build metadata filters.
 	Also returns a 'canonical' simplified query from a rules-based pre-agent.
+	Enhanced with document domain detection and conversation context to prevent cross-document contamination.
 	"""
 	filt: Dict[str, str] = {}
-	simp = (get_intent(q) if get_intent is not None and (os.getenv("RAG_USE_LLM_ROUTER", "0").lower() in ("1","true","yes")) else simplify_question(q))
+	
+	# CONVERSATION CONTEXT: Check for ambiguous queries and get document preferences
+	conversation_info = {}
+	if conversation_context is not None:
+		ambiguity_info = conversation_context.detect_ambiguous_query(q)
+		conversation_info = {
+			'is_ambiguous': ambiguity_info['is_ambiguous'],
+			'preferred_document': ambiguity_info['preferred_document'],
+			'available_documents': ambiguity_info['available_documents'],
+			'needs_disambiguation': ambiguity_info['is_ambiguous'] and len(ambiguity_info['available_documents']) > 1
+		}
+		
+		# If query is ambiguous but we have conversation context, bias toward preferred document
+		bias_document = conversation_context.should_bias_retrieval(q)
+		if bias_document:
+			# Extract just the core document name (e.g., "Gear wear Failure.pdf" -> "gear")
+			if "gear" in bias_document.lower():
+				filt["conversation_bias"] = "gear_wear"
+			elif "bearing" in bias_document.lower():
+				filt["conversation_bias"] = "bearing"
+	
+	# Use LLM intent if available, otherwise use direct analysis
+	if get_intent is not None and (os.getenv("RAG_USE_LLM_ROUTER", "0").lower() in ("1","true","yes")):
+		simp = get_intent(q)
+	else:
+		# Direct analysis without complex simplify_question preprocessing
+		ql = q.lower()
+		simp = {
+			"wants_figure": any(w in ql for w in ("figure", "image", "fig ", "photo", "plot", "graph")),
+			"wants_table": "table" in ql,
+			"canonical": q.strip(),
+		}
+		# Extract specific figure/table numbers
+		fig_match = re.search(r"figure\s+(\d+)", ql)
+		if fig_match:
+			simp["figure_number"] = int(fig_match.group(1))
+		table_match = re.search(r"table\s+(\d+)", ql) 
+		if table_match:
+			simp["table_number"] = int(table_match.group(1))
+		# Extract case ID patterns (e.g., W26, case 45)
+		case_match = re.search(r"\b(?:case\s+)?([wW]\d{1,3}|\d{1,3})\b", q)
+		if case_match:
+			simp["case_id"] = case_match.group(1)
+	
+	# DOMAIN DETECTION: Identify document subject to prevent cross-document contamination
+	domain_keywords = {
+		"gear": ["gear", "gears", "gearbox", "tooth", "teeth", "mesh", "meshing", "pinion", "spur", "transmission", "ratio"],
+		"bearing": ["bearing", "bearings", "sliding", "journal", "thrust", "ball", "roller", "race", "cage"],
+		"shaft": ["shaft", "shafts", "coupling", "alignment", "balance", "runout"],
+		"vibration": ["vibration", "rms", "fme", "gmf", "frequency", "spectral", "spectrum", "amplitude"],
+		"lubrication": ["oil", "lubricant", "lubrication", "viscosity", "contamination", "degradation"]
+	}
+	
+	detected_domains = []
+	for domain, keywords in domain_keywords.items():
+		if any(keyword in ql for keyword in keywords):
+			detected_domains.append(domain)
+	
+	# For gear-related questions, strongly prefer gear wear documents
+	if "gear" in detected_domains or any(term in ql for term in ["gear wear", "tooth wear", "flank wear"]):
+		filt["primary_subject"] = "gear_wear"  # This will be used to scope retrieval
+	elif "bearing" in detected_domains and "gear" not in detected_domains:
+		filt["primary_subject"] = "bearing"
+	
+	# Add conversation and domain info to trace for debugging
+	simp["detected_domains"] = detected_domains
+	simp["conversation_info"] = conversation_info
+	
 	# Safer patterns: require word boundaries; avoid matching 'id' inside 'did'
 	# Accept 'case: XYZ' or 'case id: XYZ' or 'client: ABC' but not bare 'id'
 	# Only capture case id when explicitly labeled with ':' or '-' (avoid 'wear case corresponds')
@@ -70,6 +141,10 @@ def apply_filters(docs: List[Document], filters: Dict) -> List[Document]:
 			if k in ("dataset_id", "source_document_id"):
 				if meta.get(k) != v:
 					return False
+			# CONVERSATION BIAS: Soft preference for documents from conversation context
+			if k == "conversation_bias":
+				# This is a soft filter - we'll use it for scoring/reranking rather than hard filtering
+				continue
 			# 'case_id' in our corpus (e.g., W1, W13) typically lives in table cell text, not metadata.
 			# Ignoring this hard filter avoids over-pruning to zero and lets reranker/lexical handle it.
 			if k == "case_id":
@@ -205,13 +280,166 @@ def lexical_overlap(a: str, b: str) -> float:
 
 
 @trace_func
-def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) -> List[Document]:
+def calculate_content_quality_score(content: str, metadata: dict) -> float:
+	"""Calculate content quality score to prioritize prose over metadata.
+	
+	This addresses the core retrieval issue where low-quality chunks (figure captions,
+	table headers, etc.) are ranked equally with high-quality analytical prose.
+	
+	Returns:
+		float: Quality multiplier (0.5-1.5) where higher = better content
+	"""
+	if not content or len(content.strip()) < 10:
+		return 0.5
+	
+	content_lower = content.lower().strip()
+	section_type = metadata.get("section") or metadata.get("section_type", "")
+	
+	# Strong penalties for known low-quality content types
+	if section_type in ("Figure", "TableCell"):
+		return 0.6
+	
+	# Detect figure captions and headers (short, metadata-like text)
+	if len(content) < 100:
+		# Very short content - likely caption, header, or metadata
+		if any(indicator in content_lower for indicator in 
+			   ["figure", "fig.", "table", "p.", "page", "source:", "caption"]):
+			return 0.65
+		# Short but could be meaningful (table data, technical specs)
+		return 0.75
+	
+	# Detect prose vs. structured data characteristics
+	sentences = [s.strip() for s in content.split('.') if len(s.strip()) > 5]
+	avg_sentence_length = sum(len(s.split()) for s in sentences) / max(len(sentences), 1)
+	
+	# Indicators of high-quality analytical prose
+	prose_indicators = 0.0
+	
+	# Complex sentence structure (good for analysis)
+	if avg_sentence_length > 15:
+		prose_indicators += 0.3
+	elif avg_sentence_length > 10:
+		prose_indicators += 0.2
+	
+	# Analytical language patterns
+	analytical_terms = [
+		"analysis", "shows", "indicates", "demonstrates", "reveals", "suggests",
+		"observed", "measured", "calculated", "determined", "found", "results",
+		"conclusion", "evidence", "data", "study", "examination", "investigation"
+	]
+	analytical_matches = sum(1 for term in analytical_terms if term in content_lower)
+	prose_indicators += min(0.3, analytical_matches * 0.05)
+	
+	# Technical depth indicators (good for gear analysis)
+	technical_terms = [
+		"spectral", "domain", "frequency", "amplitude", "peaks", "baseline",
+		"mesh", "vibration", "wear", "rms", "analysis", "signal", "broadband"
+	]
+	technical_matches = sum(1 for term in technical_terms if term in content_lower)
+	prose_indicators += min(0.2, technical_matches * 0.03)
+	
+	# Penalties for metadata-like content
+	metadata_penalties = 0.0
+	
+	# List-like or bullet-point content
+	if content.count('\n•') > 2 or content.count('\n-') > 2:
+		metadata_penalties += 0.2
+	
+	# Very short lines (typical of captions/headers)
+	lines = [line.strip() for line in content.split('\n') if line.strip()]
+	if lines:
+		avg_line_length = sum(len(line) for line in lines) / len(lines)
+		if avg_line_length < 30:
+			metadata_penalties += 0.3
+	
+	# Numeric-heavy content without context (raw data tables)
+	import re
+	numbers = re.findall(r'\d+\.?\d*', content)
+	if len(numbers) > len(content.split()) * 0.3:  # More than 30% numbers
+		if not any(term in content_lower for term in analytical_terms):
+			metadata_penalties += 0.2
+	
+	# Calculate final quality score
+	base_quality = 1.0
+	quality_score = base_quality + prose_indicators - metadata_penalties
+	
+	# Ensure score stays in reasonable bounds
+	return max(0.5, min(1.5, quality_score))
+
+
+@trace_func
+def calculate_semantic_relevance_boost(query: str, content: str, metadata: dict) -> float:
+	"""Calculate semantic relevance boost for content that directly addresses the query.
+	
+	This addresses the issue where relevant content gets buried under noise by
+	specifically rewarding content that contains the answer pattern.
+	
+	Returns:
+		float: Relevance boost (0.0-0.5) to add to base score
+	"""
+	query_lower = query.lower()
+	content_lower = content.lower()
+	
+	relevance_boost = 0.0
+	
+	# Direct topic matching - reward content that discusses the same concepts
+	if "spectral" in query_lower and "spectral" in content_lower:
+		if "domain" in content_lower and "analysis" in content_lower:
+			relevance_boost += 0.2  # Exact topic match
+	
+	if "baseline" in query_lower and "baseline" in content_lower:
+		relevance_boost += 0.15
+	
+	# Context density - reward content where query terms appear close together
+	query_terms = [term for term in query_lower.split() 
+				   if len(term) > 3 and term not in ["the", "and", "for", "with", "what", "how"]]
+	
+	if len(query_terms) >= 2:
+		# Find windows where multiple query terms appear close together
+		words = content_lower.split()
+		for i in range(len(words) - 10):
+			window = " ".join(words[i:i+10])
+			matches_in_window = sum(1 for term in query_terms if term in window)
+			if matches_in_window >= 2:
+				relevance_boost += min(0.15, matches_in_window * 0.03)
+				break
+	
+	# Answer pattern detection - look for content that provides explanations
+	if any(question_word in query_lower for question_word in ["what", "how", "why", "describe"]):
+		# Reward content with explanatory patterns
+		explanatory_patterns = [
+			r'shows?\s+that', r'indicates?\s+that', r'demonstrates?\s+that',
+			r'reveals?\s+that', r'suggests?\s+that', r'found\s+that',
+			r'observed\s+that', r'measured\s+', r'calculated\s+',
+			r'analysis\s+shows?', r'results?\s+show', r'data\s+shows?'
+		]
+		
+		import re
+		for pattern in explanatory_patterns:
+			if re.search(pattern, content_lower):
+				relevance_boost += 0.1
+				break
+	
+	# Length appropriateness - for "what" questions, prefer substantial explanations
+	if "what" in query_lower or "describe" in query_lower:
+		if len(content) > 200 and len(content) < 1000:  # Sweet spot for explanations
+			relevance_boost += 0.05
+	
+	return min(0.5, relevance_boost)
+
+
+@trace_func
+def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8, filters: Optional[Dict] = None) -> List[Document]:
 	# If CE reranker is enabled and available, prefer it
 	try:
 		if os.getenv("RAG_USE_CE_RERANKER", "0").lower() in ("1", "true", "yes") and ce_rerank is not None:
 			return ce_rerank(query, candidates, top_n=top_n)
 	except Exception:
 		pass
+		
+	# Extract conversation bias from filters
+	conversation_bias = (filters or {}).get("conversation_bias")
+	
 	def _normalize(text: str) -> str:
 		# lightweight normalization to improve sparse/lexical matching
 		t = (text or "").lower()
@@ -413,11 +641,36 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 		except Exception:
 			domain_boost = 0.0
 
-		score = (base + meta_boost + sec_boost + src_boost + date_boost + tokens_boost + number_bonus + num_boost + signal_boost + fig_text_adj + domain_boost) * _len_penalty(len(d.page_content), (md.get("section") == "Figure" or md.get("section_type") == "Figure"))
+		# NEW: Conversation bias boost
+		conversation_boost = 0.0
+		try:
+			if conversation_bias:
+				file_name = str(md.get("file_name", "")).lower()
+				if conversation_bias == "gear_wear" and "gear" in file_name:
+					conversation_boost += 0.15  # Strong bias toward gear documents
+				elif conversation_bias == "bearing" and "bearing" in file_name:
+					conversation_boost += 0.15  # Strong bias toward bearing documents
+		except Exception:
+			pass
+
+		# NEW: Content quality scoring to prioritize prose over metadata
+		quality_multiplier = calculate_content_quality_score(d.page_content, md)
+		semantic_relevance = calculate_semantic_relevance_boost(query, d.page_content, md)
+
+		# Calculate base score with all existing boosts including conversation bias
+		base_score = (base + meta_boost + sec_boost + src_boost + date_boost + tokens_boost + 
+					  number_bonus + num_boost + signal_boost + fig_text_adj + domain_boost + 
+					  conversation_boost + semantic_relevance)
+		
+		# Apply quality multiplier to prioritize high-quality content
+		score = base_score * quality_multiplier * _len_penalty(len(d.page_content), (md.get("section") == "Figure" or md.get("section_type") == "Figure"))
+		
 		# Attach transient score for UI/debug (do not persist to vectorstore)
 		try:
 			md_dbg = dict(md)
-			md_dbg["_score"] = round(float((base + meta_boost + sec_boost + src_boost + date_boost + tokens_boost + number_bonus + num_boost + signal_boost + fig_text_adj + domain_boost) * _len_penalty(len(d.page_content), (md.get("section") == "Figure" or md.get("section_type") == "Figure"))), 4)
+			md_dbg["_score"] = round(float(score), 4)
+			md_dbg["_quality"] = round(float(quality_multiplier), 3)  # Debug info
+			md_dbg["_semantic"] = round(float(semantic_relevance), 3)  # Debug info
 			d.metadata = md_dbg
 		except Exception:
 			pass

@@ -95,110 +95,7 @@ class LLMCallable(Protocol):
 		...
 
 
-@trace_func
-def simplify_question(q: str) -> Dict:
-	"""Return a very simple, mostly-binary intent and a canonical query string.
-	No LLM, just regex/keywords. Keys:
-	  - canonical: str
-	  - wants_date, wants_table, wants_figure, wants_summary, wants_value, wants_exact: bool
-	  - table_number, figure_number, case_id, target_attr, event: optional str
-	"""
-	import re
-	ql = (q or "").lower()
-	out: Dict[str, object] = {
-		"canonical": "",
-		"wants_date": False,
-		"wants_table": False,
-		"wants_figure": False,
-		"wants_summary": False,
-		"wants_value": False,
-		"wants_exact": False,
-		"table_number": None,
-		"figure_number": None,
-		"case_id": None,
-		"target_attr": None,
-		"event": None,
-	}
-	# Flags
-	out["wants_exact"] = any(w in ql for w in ("exact", "precise"))
-	out["wants_summary"] = any(w in ql for w in ("summary", "summarize", "overview", "conclusion", "overall"))
-	# Treat metrics/inventory and ratio questions as table lookups
-	_ratio_hit = bool(re.search(r"\b(transmission|transmition|gear)\s+ratio\b|\bz\s*driv(?:ing|en)\b|\bzdriv", ql))
-	out["wants_table"] = ("table" in ql) or _ratio_hit or bool(re.search(r"\bwear depth\b|\brms\b|\bfme\b|\bcrest factor\b", ql))
-	# Treat instrumentation/sensor inventory and threshold questions as table-style lookups
-	if any(w in ql for w in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation", "threshold", "alert threshold", "limits")):
-		out["wants_table"] = True
-	out["wants_figure"] = any(w in ql for w in ("figure", "fig ", "image", "graph", "plot"))
-	out["wants_date"] = any(w in ql for w in ("when", "date", "day")) or bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b", ql))
-	out["wants_value"] = any(w in ql for w in ("what is", "value", "how much", "amount")) or out["wants_table"]
-	# Additional cues frequently asked: sample rate and sensitivity (with common misspellings)
-	if ("sample rate" in ql) or ("sampling rate" in ql) or ("sampling" in ql and "rate" in ql):
-		out["wants_table"] = True
-		out["target_attr"] = out.get("target_attr") or "sampling rate"
-	if any(w in ql for w in ("sensitivity", "sensativity", "sensetivity")):
-		out["wants_table"] = True
-		out["target_attr"] = out.get("target_attr") or "sensitivity"
 
-	# Extract specifics
-	mt = re.search(r"\btable\s*(\d{1,2})\b", ql)
-	if mt:
-		out["table_number"] = mt.group(1)
-	mf = re.search(r"\bfigure\s*(\d{1,2})\b", ql)
-	if mf:
-		out["figure_number"] = mf.group(1)
-	mc = re.search(r"\b(w\d{1,3})\b", ql)
-	if mc:
-		out["case_id"] = mc.group(1).upper()
-
-	# Attribute
-	if "wear depth" in ql:
-		out["target_attr"] = "wear depth"
-	elif re.search(r"\brms\b", ql):
-		out["target_attr"] = "rms"
-	elif "crest factor" in ql:
-		out["target_attr"] = "crest factor"
-	elif re.search(r"\bfme\b", ql):
-		out["target_attr"] = "fme"
-	elif _ratio_hit or "gear ratio" in ql:
-		out["target_attr"] = "transmission ratio"
-	elif any(w in ql for w in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation")):
-		out["target_attr"] = "sensors"
-
-	# Event for date-style questions
-	if any(w in ql for w in ("failure", "failed")):
-		out["event"] = "failure date"
-	elif any(w in ql for w in ("measurement", "measuerment", "measured")) and any(w in ql for w in ("start", "started", "begin")):
-		out["event"] = "measurement start date"
-	elif any(w in ql for w in ("initial wear", "onset of wear", "first wear")):
-		out["event"] = "initial wear date"
-	elif any(w in ql for w in ("healthy",)) and any(w in ql for w in ("through", "until")):
-		out["event"] = "healthy through date"
-
-	# Build canonical
-	canonical = ""
-	if out["wants_table"] and out.get("case_id"):
-		attr = out.get("target_attr") or "value"
-		canonical = f"table lookup: {attr} for case {out['case_id']}"
-	elif out["wants_table"] and out.get("table_number"):
-		attr = out.get("target_attr") or "value"
-		canonical = f"table {out['table_number']} {attr}"
-	elif out["wants_figure"] and out.get("figure_number"):
-		canonical = f"figure {out['figure_number']}"
-	elif out["wants_date"]:
-		ev = out.get("event") or "date in timeline"
-		if out["wants_exact"]:
-			canonical = f"exact {ev}"
-		else:
-			canonical = ev
-	elif out["wants_summary"]:
-		canonical = "summary of report"
-	else:
-		# Strip filler words to keep it minimal
-		qq = re.sub(r"\b(please|kindly|could you|can you|what is|find|tell me)\b", " ", ql)
-		qq = re.sub(r"\s+", " ", qq).strip()
-		canonical = qq[:120]
-	out["canonical"] = canonical
-	return out
 
 
 @trace_func
@@ -207,16 +104,33 @@ def route_question_ex(q: str) -> Tuple[str, Dict]:
 	Routes: summary | table | needle
 	"""
 	ql = q.lower()
-	simp = (get_intent(q) if get_intent is not None and (os.getenv("RAG_USE_LLM_ROUTER", "0").lower() in ("1","true","yes")) else simplify_question(q))
-	# Build structured trace (not chain-of-thought) with detected signals
+	
+	# Use LLM router if enabled, otherwise use direct routing logic
+	if get_intent is not None and (os.getenv("RAG_USE_LLM_ROUTER", "0").lower() in ("1","true","yes")):
+		llm_intent = get_intent(q)
+		# Build signals for trace without simplify_question dependency
+		signals = {
+			"has_table_token": any(tok in ql for tok in ("table", "chart")),
+			"has_figure_token": any(tok in ql for tok in ("figure", "fig ", "image", "graph", "plot")),
+			"has_timeline_token": any(tok in ql for tok in ("timeline", "chronology", "when did", "what happened", "date")),
+			"has_sensor_tokens": any(tok in ql for tok in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation")),
+			"has_sampling_tokens": ("sample rate" in ql) or ("sampling rate" in ql) or ("sampling" in ql and "rate" in ql),
+			"has_sensitivity_tokens": any(tok in ql for tok in ("sensitivity", "sensativity", "sensetivity")),
+		}
+		trace: Dict = {"matched": ["llm_router"], "route": None, "llm_intent": llm_intent, "signals": signals, "domain_hint": None, "wants_figure": False}
+		# Use LLM intent result (implementation would depend on get_intent structure)
+		# For now, fall back to direct routing
+	
+	# Direct routing logic without simplify_question preprocessing
 	signals = {
 		"has_table_token": any(tok in ql for tok in ("table", "chart")),
 		"has_figure_token": any(tok in ql for tok in ("figure", "fig ", "image", "graph", "plot")),
-		"has_timeline_token": any(tok in ql for tok in ("timeline", "chronology")) or bool(simp.get("wants_date")),
+		"has_timeline_token": any(tok in ql for tok in ("timeline", "chronology", "when did", "what happened", "date")),
 		"has_sensor_tokens": any(tok in ql for tok in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation")),
 		"has_sampling_tokens": ("sample rate" in ql) or ("sampling rate" in ql) or ("sampling" in ql and "rate" in ql),
 		"has_sensitivity_tokens": any(tok in ql for tok in ("sensitivity", "sensativity", "sensetivity")),
 	}
+	
 	# Detect domain hints from question text
 	ql_low = q.lower()
 	dom = None
@@ -224,13 +138,17 @@ def route_question_ex(q: str) -> Tuple[str, Dict]:
 		dom = "gear"
 	if any(re.search(p, ql_low, re.I) for p in [r"\bcuticle\b", r"\bexocuticle\b", r"\bendocuticle\b", r"\blamellae\b", r"\bpincer\b", r"\btubules\b", r"\bconditioning\b", r"\banneal\b", r"\b≤\s*\d+\s*°c\b"]):
 		dom = "materials"
+	
 	wants_figure = bool(re.search(r"^\s*(show|open|display|see)\b.*\bfigure\b\s*\d+", ql_low))
-	trace: Dict = {"matched": [], "route": None, "simplified": simp, "signals": signals, "domain_hint": dom, "wants_figure": wants_figure}
-	# Summary cues
-	if simp.get("wants_summary"):
+	
+	trace: Dict = {"matched": [], "route": None, "signals": signals, "domain_hint": dom, "wants_figure": wants_figure}
+	
+	# Summary cues - direct detection
+	if any(tok in ql for tok in ("summary", "summarize", "overview", "conclusion", "overall")):
 		trace["matched"].append("summary_keywords")
 		trace["route"] = "summary"
 		return "summary", trace
+	
 	# Protocol/list-style cues: prefer structured extraction via summary/table
 	if any(tok in ql for tok in (
 		"protocol", "protocols", "procedure", "procedures", "guideline", "guidelines", "steps", "checklist", "recommendation", "recommendations"
@@ -242,28 +160,39 @@ def route_question_ex(q: str) -> Tuple[str, Dict]:
 			return "table", trace
 		trace["route"] = "summary"
 		return "summary", trace
-	if any(m in ql for m in ("timeline", "chronology", "when did", "what happened on", "what happend on")) or simp.get("wants_date"):
+	
+	# Timeline/date questions - direct detection
+	if any(m in ql for m in ("timeline", "chronology", "when did", "what happened on", "what happend on")) or \
+	   any(w in ql for w in ("when", "date", "day")) or bool(re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b", ql)):
 		# Prefer table-style (structured) agent for date lookups to keep answers concise & factual
 		trace["matched"].append("timeline_date")
 		trace["route"] = "table"
 		return "table", trace
+	
 	# Percent/delta cues should go to needle unless explicit table/μm/W-case
 	if any(tok in ql for tok in ("%", "percent", "by how much", "rise", "increase", "exceed", "above baseline", "vs baseline", "delta")) \
 		and not any(tok in ql for tok in ("table", "μm", "um", "wear depth", "case w")):
 		trace["matched"].append("delta_percent_needle")
 		trace["route"] = "needle"
 		return "needle", trace
+	
 	# Pure figure navigation -> needle (figure mode)
 	if wants_figure:
 		trace["matched"].append("figure_nav_needle")
 		trace["route"] = "needle"
 		return "needle", trace
-	# Table/Figure cues
-	if simp.get("wants_table") or any(w in ql for w in ("table", "chart", "value", "figure", "fig ", "image", "graph", "plot")) or signals.get("has_sampling_tokens") or signals.get("has_sensitivity_tokens"):
+	
+	# Table/Figure cues - direct detection without simplify_question
+	if any(w in ql for w in ("table", "chart", "value", "figure", "fig ", "image", "graph", "plot")) or \
+	   signals.get("has_sampling_tokens") or signals.get("has_sensitivity_tokens") or \
+	   any(w in ql for w in ("sensor", "sensors", "accelerometer", "tachometer", "instrumentation")) or \
+	   bool(re.search(r"\bwear depth\b", ql)) or bool(re.search(r"\bw\d{1,3}\b", ql)) or \
+	   bool(re.search(r"\b(transmission|transmition|gear)\s+ratio\b|\bz\s*driv(?:ing|en)\b|\bzdriv", ql)):
 		trace["matched"].append("table_figure_keywords")
 		trace["route"] = "table"
 		return "table", trace
-	# Default
+	
+	# Default to needle for factual extraction
 	trace["matched"].append("fallback_needle")
 	trace["route"] = "needle"
 	return "needle", trace
