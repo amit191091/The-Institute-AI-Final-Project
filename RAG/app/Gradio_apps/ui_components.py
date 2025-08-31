@@ -43,6 +43,12 @@ def _extract_table_figure_context(docs):
 		if md_path and Path(str(md_path)).exists():
 			try:
 				content = Path(str(md_path)).read_text(encoding="utf-8")
+				# Ensure proper markdown table formatting for Gradio
+				if content.strip().startswith('|'):
+					# This is a table, ensure it's properly formatted
+					content = content.strip()
+					# Add a blank line before the table for proper markdown rendering
+					content = f"\n{content}\n"
 				link_line = f"(table files: [markdown]({md_path})" + (f" | [csv]({csv_path})" if csv_path else "") + ")"
 				out.append(f"{head}\n{link_line}\n\n{content}")
 				continue

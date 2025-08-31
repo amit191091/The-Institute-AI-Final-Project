@@ -64,6 +64,18 @@ def _try_tabula_tables(path: Path):
 			except Exception as e:
 				# pandas DataFrame supports to_csv; add ignore for static checkers
 				md_text = df.to_csv(index=False)  # type: ignore[call-arg]
+			
+			# Clean up the table structure if needed
+			try:
+				from RAG.app.loader_modules.table_cleaner import clean_table_structure, is_table_clean
+				if not is_table_clean(md_text):
+					cleaned_text = clean_table_structure(md_text)
+					if cleaned_text and cleaned_text != md_text:
+						md_text = cleaned_text
+			except Exception as e:
+				# If cleaning fails, use original text
+				pass
+			
 			# Generate a semantic table summary to aid chunking
 			from RAG.app.loader_modules.table_utils import _generate_table_summary
 			summary = _generate_table_summary(md_text)
@@ -106,6 +118,17 @@ def _try_pdfplumber_tables(path: Path):
 						body = rows[1:]
 						fmt = lambda r: "| " + " | ".join(r) + " |"
 						md_text = "\n".join([fmt(header), fmt(sep)] + [fmt(r) for r in body])
+						
+						# Clean up the table structure if needed
+						try:
+							from RAG.app.loader_modules.table_cleaner import clean_table_structure, is_table_clean
+							if not is_table_clean(md_text):
+								cleaned_text = clean_table_structure(md_text)
+								if cleaned_text and cleaned_text != md_text:
+									md_text = cleaned_text
+						except Exception as e:
+							# If cleaning fails, use original text
+							pass
 						from RAG.app.loader_modules.table_utils import _generate_table_summary
 						summary = _generate_table_summary(md_text)
 						idx += 1
@@ -217,6 +240,18 @@ def _try_camelot_tables(path: Path, pages_override: str | None = None):
 					md_text = df.to_markdown(index=False)  # type: ignore[attr-defined]
 				except Exception as e:
 					md_text = df.to_csv(index=False)
+				
+				# Clean up the table structure if needed
+				try:
+					from RAG.app.loader_modules.table_cleaner import clean_table_structure, is_table_clean
+					if not is_table_clean(md_text):
+						cleaned_text = clean_table_structure(md_text)
+						if cleaned_text and cleaned_text != md_text:
+							md_text = cleaned_text
+				except Exception as e:
+					# If cleaning fails, use original text
+					pass
+				
 				from RAG.app.loader_modules.table_utils import _generate_table_summary
 				summary = _generate_table_summary(md_text)
 				idx += 1
@@ -285,6 +320,17 @@ def _synthesize_tables_from_text(els, path: Path):
 			count += 1
 			md = getattr(e, "metadata", None)
 			page_no = getattr(md, "page_number", None) if md else None
+			
+			# Clean up the table structure if needed
+			try:
+				from RAG.app.loader_modules.table_cleaner import clean_table_structure, is_table_clean
+				if not is_table_clean(text):
+					cleaned_text = clean_table_structure(text)
+					if cleaned_text and cleaned_text != text:
+						text = cleaned_text
+			except Exception as e:
+				# If cleaning fails, use original text
+				pass
 			
 			# Generate a better summary for the table
 			from RAG.app.loader_modules.table_utils import _generate_table_summary

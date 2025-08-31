@@ -9,7 +9,7 @@ from RAG.app.config import settings
 def _add_wear_depth_fallback(q: str, candidates: List[Document]) -> List[Document]:
     """Add wear depth table data if missing from candidates."""
     analysis = query_analyzer(q)
-    if analysis.get("question_type") == "wear_depth_question" or "wear depth" in q.lower():
+    if analysis.get("question_type") in ["wear_depth_question", "wear_depth_tooth1_question", "wear_depth_other_teeth_question"] or "wear depth" in q.lower():
         # Check if we have any table data in candidates
         has_table_data = any(
             any(case in c.page_content.lower() for case in settings.query_analysis.WEAR_CASES_MAIN)

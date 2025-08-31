@@ -220,18 +220,33 @@ def load_elements(path: Path):
 		use_images = _get_loader_setting("EXTRACT_IMAGES", True)
 		use_pymupdf_text = _get_loader_setting("USE_PYMUPDF_TEXT", True)
 		
-		# Optional: enrich with Tabula tables (disabled by default due to Java dependency)
-		if use_tabula is True:
-			_added = _try_tabula_tables(path)
-			if _added:
-				els.extend(_added)
-				get_logger().debug("%s: Tabula extracted %d tables", path.name, len(_added))
-	# Optional: pdfplumber table extraction (default ON)
-		if (use_pdfplumber is None) or (use_pdfplumber is True):
-			_pdfp = _try_pdfplumber_tables(path)
-			if _pdfp:
-				els.extend(_pdfp)
-				get_logger().debug("%s: pdfplumber extracted %d tables", path.name, len(_pdfp))
+		# Use clean table extraction for better results
+		clean_tables = []
+		try:
+			from RAG.app.pipeline_modules.clean_table_extract import extract_tables_clean
+			clean_tables = extract_tables_clean(path)
+			if clean_tables:
+				els.extend(clean_tables)
+				get_logger().debug("%s: Clean extraction found %d tables", path.name, len(clean_tables))
+			else:
+				get_logger().debug("%s: Clean extraction returned no tables, using standard methods", path.name)
+		except Exception as e:
+			get_logger().debug("Clean table extraction failed, falling back to standard methods: %s", e)
+		
+		# Fallback to standard methods if clean extraction didn't find tables
+		if not clean_tables:
+			# Optional: enrich with Tabula tables (disabled by default due to Java dependency)
+			if use_tabula is True:
+				_added = _try_tabula_tables(path)
+				if _added:
+					els.extend(_added)
+					get_logger().debug("%s: Tabula extracted %d tables", path.name, len(_added))
+			# Optional: pdfplumber table extraction (default ON)
+			if (use_pdfplumber is None) or (use_pdfplumber is True):
+				_pdfp = _try_pdfplumber_tables(path)
+				if _pdfp:
+					els.extend(_pdfp)
+					get_logger().debug("%s: pdfplumber extracted %d tables", path.name, len(_pdfp))
 		# Optional: Camelot table extraction (auto if unset) - only when needed
 		if (use_camelot is None) or (use_camelot is True):
 			# Only run Camelot if pdfplumber found too few tables and pages look promising

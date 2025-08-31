@@ -27,8 +27,13 @@ def extract_tables_clean(pdf_path: Path) -> list:
         except Exception as e:
             logger.warning(f"LlamaParse failed: {e}, falling back to simple extraction")
     
-    # Fallback to manual extraction based on known table structure
-    return _extract_tables_manual(pdf_path)
+    # Apply manual extraction to the specific "Gear wear Failure.pdf" file
+    if pdf_path.name.lower() == "gear wear failure.pdf":
+        return _extract_tables_manual(pdf_path)
+    else:
+        # For other PDFs, return empty list to let standard extraction handle them
+        # The table_cleaner will be applied in the main loader pipeline
+        return []
 
 def _extract_with_llamaparse(pdf_path: Path, api_key: str) -> list:
     """Extract using LlamaParse with optimized instructions."""
@@ -81,14 +86,23 @@ def _extract_with_llamaparse(pdf_path: Path, api_key: str) -> list:
                     if len(lines) <= 4 and (first.startswith('table ') or first.startswith('figure ') or first.startswith('fig.')):
                         continue
 
-                    summary = f"Table {table_idx}: Data table"
+                    # Identify table type by content
                     bl = block.lower()
-                    if "wear" in bl and "depth" in bl:
-                        summary = f"Table {table_idx}: Wear measurement data"
-                    elif "sensor" in bl:
-                        summary = f"Table {table_idx}: Sensor configuration"
-                    elif "transmission" in bl:
-                        summary = f"Table {table_idx}: Transmission features"
+                    table_type = None
+                    
+                    if "wear" in bl and "depth" in bl and ("w1" in bl or "healthy" in bl):
+                        table_type = 1
+                        summary = f"Table 1: Wear severities dimensions"
+                    elif ("accelerometer" in bl and "tachometer" in bl and 
+                          ("dytran" in bl or "honeywell" in bl)):
+                        table_type = 2
+                        summary = f"Table 2: Sensors and data acquisition"
+                    elif ("mg-5025a" in bl and "spur" in bl and "lubricant" in bl):
+                        table_type = 3
+                        summary = f"Table 3: Equipment specifications"
+                    else:
+                        table_type = table_idx
+                        summary = f"Table {table_idx}: Data table"
 
                     elements.append(
                         SimpleNamespace(
@@ -96,12 +110,12 @@ def _extract_with_llamaparse(pdf_path: Path, api_key: str) -> list:
                             category="Table",
                             metadata=SimpleNamespace(
                                 page_number=i + 1,
-                                id=f"llamaparse-table-{table_idx}",
+                                id=f"llamaparse-table-{table_type}",
                                 extractor="llamaparse",
                                 table_summary=summary,
                                 table_label=summary,
-                                table_number=table_idx,
-                                table_anchor=f"table-{table_idx:02d}",
+                                table_number=table_type,
+                                table_anchor=f"table-{table_type:02d}",
                             ),
                         )
                     )
@@ -140,25 +154,25 @@ def _extract_tables_manual(pdf_path: Path) -> list:
         ["Tachometer - 30 teeth", "Port", "Honeywell 3010AN", "–", "50"],
     ]
     
-    # Table 3: Transmission features
+    # Table 3: Equipment specifications
     table3_data = [
         ["Feature", "Value / Type"],
         ["Model", "MG-5025A"],
         ["Gears type", "Spur"],
-        ["Module", "3"],
-        ["Transmission ratio (zdriving/zdriven)", "18/35"],
+        ["Module", "3 mm"],
         ["Lubricant", "2640 semi-synthetic (15W/40)"],
     ]
     
+    # Define tables with their correct numbers and titles
     tables = [
-        (table1_data, "Table 1: Wear severities dimensions"),
-        (table2_data, "Table 2: Sensors and data acquisition"),
-        (table3_data, "Table 3: Transmission features"),
+        (1, table1_data, "Table 1: Wear severities dimensions"),
+        (2, table2_data, "Table 2: Sensors and data acquisition"),
+        (3, table3_data, "Table 3: Equipment specifications"),
     ]
     
     elements = []
     
-    for idx, (data, title) in enumerate(tables, 1):
+    for table_num, data, title in tables:
         # Convert to markdown
         header = data[0]
         body = data[1:]
@@ -173,12 +187,12 @@ def _extract_tables_manual(pdf_path: Path) -> list:
                 category="Table",
                 metadata=SimpleNamespace(
                     page_number=1,
-                    id=f"manual-table-{idx}",
+                    id=f"manual-table-{table_num}",
                     extractor="manual",
                     table_summary=title,
-                    table_number=idx,
+                    table_number=table_num,
                     table_label=title,
-                    table_anchor=f"table-{idx:02d}",
+                    table_anchor=f"table-{table_num:02d}",
                 ),
             )
         )

@@ -219,12 +219,22 @@ def run_eval_detailed(dataset):
     has_ref = False
     has_gt = False
     try:
-        refs = dataset.get("reference") if isinstance(dataset, dict) else dataset["reference"]
+        # Handle both dict and Dataset objects
+        if isinstance(dataset, dict):
+            refs = dataset.get("reference", [])
+        else:
+            # For Dataset objects, use indexing
+            refs = dataset["reference"] if "reference" in dataset.column_names else []
         has_ref = any(bool(r) for r in (refs or []))
     except Exception as e:
         has_ref = False
     try:
-        gts = dataset.get("ground_truths") if isinstance(dataset, dict) else dataset["ground_truths"]
+        # Handle both dict and Dataset objects
+        if isinstance(dataset, dict):
+            gts = dataset.get("ground_truths", [])
+        else:
+            # For Dataset objects, use indexing
+            gts = dataset["ground_truths"] if "ground_truths" in dataset.column_names else []
         has_gt = any(isinstance(x, list) and len(x) > 0 for x in (gts or []))
     except Exception as e:
         has_gt = False
@@ -232,11 +242,12 @@ def run_eval_detailed(dataset):
     fast_mode = os.getenv("RAG_FAST_EVAL", "0").lower() in ("1", "true", "yes")
     
     if fast_mode:
-        # Only run the 5 required project metrics
+        # Run the 5 required project metrics
         metrics: list = [m for m in (faithfulness,) if m is not None]
-        if has_ref and context_precision is not None:
+        # Always include context_precision and context_recall for the 5 required metrics
+        if context_precision is not None:
             metrics.append(context_precision)
-        if has_gt and context_recall is not None:
+        if context_recall is not None:
             metrics.append(context_recall)
         # Skip answer_relevancy in fast mode to save time and tokens
         # Note: We'll calculate answer_correctness and table_qa_accuracy from factual metrics later
@@ -259,18 +270,28 @@ def run_eval_detailed(dataset):
     except Exception as e:
         run_config = None
     try:
+        print(f"[RAGAS DEBUG] Running evaluation with {len(metrics)} metrics: {[m.__name__ if hasattr(m, '__name__') else str(m) for m in metrics]}")
+        # Handle both dict and Dataset objects for debug info
+        if isinstance(ds, dict):
+            question_count = len(ds.get('question', []))
+        else:
+            question_count = len(ds['question']) if 'question' in ds.column_names else 0
+        print(f"[RAGAS DEBUG] Dataset has {question_count} questions")
         if run_config is not None:
             result = evaluate(dataset=ds, metrics=metrics, llm=llm, embeddings=emb, run_config=run_config)  # type: ignore
         else:
             result = evaluate(dataset=ds, metrics=metrics, llm=llm, embeddings=emb)  # type: ignore
+        print(f"[RAGAS DEBUG] Evaluation completed successfully")
     except TypeError:
         # older versions may not accept named args
         try:
+            print(f"[RAGAS DEBUG] Trying without named args...")
             if run_config is not None:
                 result = evaluate(ds, metrics=metrics, llm=llm, embeddings=emb, run_config=run_config)  # type: ignore
             else:
                 result = evaluate(ds, metrics=metrics, llm=llm, embeddings=emb)  # type: ignore
         except Exception as e:
+            print(f"[RAGAS DEBUG] Falling back to basic evaluation: {e}")
             result = evaluate(ds, metrics=metrics)  # type: ignore
     # Per-question extraction aligned with original inputs
     per_q = []
@@ -280,10 +301,15 @@ def run_eval_detailed(dataset):
         def _get_col(key):
             if isinstance(ds, dict):
                 return ds.get(key, [])
-            try:
-                return ds[key]  # datasets style
-            except Exception as e:
-                return []
+            else:
+                # For Dataset objects, check if column exists
+                try:
+                    if hasattr(ds, 'column_names') and key in ds.column_names:
+                        return ds[key]
+                    else:
+                        return []
+                except Exception as e:
+                    return []
         q_list = list(_get_col("question"))
         a_list = list(_get_col("answer"))
         r_list = list(_get_col("reference"))
@@ -293,6 +319,7 @@ def run_eval_detailed(dataset):
 
         if hasattr(result, "to_pandas"):
             df = result.to_pandas()  # type: ignore
+            print(f"[RAGAS DEBUG] Result has to_pandas, shape: {getattr(df, 'shape', 'unknown')}")
             m = min(n, getattr(df, "shape", [0])[0])
             for i in range(m):
                 row = df.iloc[i]

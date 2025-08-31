@@ -103,6 +103,11 @@ def generate_table_answer(llm, top_docs, q, qa, docs, router_info, trace):
         pass
     
     # We keep markdown preview for table context, and the actual image will show in a Gallery component
+    # Ensure proper markdown formatting for tables
+    if table_ctx and "|" in table_ctx:
+        # Add proper spacing around table content for markdown rendering
+        table_ctx = f"\n{table_ctx}\n"
+    
     out = f"{router_info}\n\nTable/Figure context preview:\n{table_ctx}\n\n---\n\n{ans_raw}\n\n(trace: {trace})"
     return out, fig_path
 

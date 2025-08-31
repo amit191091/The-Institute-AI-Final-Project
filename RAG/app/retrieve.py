@@ -39,14 +39,30 @@ def _score_document(doc: Document, q: str, analysis: Dict[str, Any]) -> float:
     
     score = 0.0
     
-    # PRIORITY: Main PDF report gets highest priority
+    # ENHANCED FILE ROUTING: Route questions to appropriate data sources
     file_name = metadata.get("file_name", "").lower()
-    if "gear wear failure.pdf" in file_name:
-        score += 1000.0  # Highest priority for main report
-    elif "database figures and tables.pdf" in file_name:
-        score += 500.0   # Secondary priority for database
+    
+    # Tooth-specific routing
+    if analysis.get("question_type") == "wear_depth_tooth1_question":
+        # Tooth 1 questions → Main report
+        if "gear wear failure.pdf" in file_name:
+            score += 2000.0  # Very high priority for main report
+        elif "database figures and tables.pdf" in file_name:
+            score += 100.0   # Low priority for database
+    elif analysis.get("question_type") == "wear_depth_other_teeth_question":
+        # Tooth 2+ questions → Database file
+        if "database figures and tables.pdf" in file_name:
+            score += 2000.0  # Very high priority for database
+        elif "gear wear failure.pdf" in file_name:
+            score += 100.0   # Low priority for main report
     else:
-        score += 0.0     # Other sources get no priority bonus
+        # General routing (equipment, dates, etc.)
+        if "gear wear failure.pdf" in file_name:
+            score += 1000.0  # High priority for main report
+        elif "database figures and tables.pdf" in file_name:
+            score += 500.0   # Medium priority for database
+        else:
+            score += 0.0     # Other sources get no priority bonus
     
     # Base score from lexical overlap
     score += lexical_overlap(q, content) * 100.0
@@ -218,13 +234,56 @@ def _score_document(doc: Document, q: str, analysis: Dict[str, Any]) -> float:
         if 8 <= page_num <= 12:
             score += 200.0
     
-    # Wear depth questions
-    if analysis.get("question_type") == "wear_depth_question":
+    # Enhanced wear depth questions with tooth-specific routing
+    if analysis.get("question_type") in ["wear_depth_question", "wear_depth_tooth1_question", "wear_depth_other_teeth_question"]:
         from RAG.app.config import settings
-        for case in settings.query_analysis.WEAR_CASES:
-            if case in q_lower and case in content:
-                score += 300.0
-                break
+        
+        # Tooth-specific matching with enhanced table prioritization
+        if analysis.get("question_type") == "wear_depth_tooth1_question":
+            # Look for tooth 1 specific data (W1 case)
+            if "w1" in content.lower() or "tooth 1" in content.lower():
+                score += 500.0
+            # Also check for wear case W1
+            if "w1" in q_lower and "w1" in content:
+                score += 400.0
+            # Prioritize table content heavily for tooth 1
+            if section == "Table" and ("w1" in content.lower() or "tooth 1" in content.lower()):
+                score += 1000.0
+        elif analysis.get("question_type") == "wear_depth_other_teeth_question":
+            # Look for other teeth data (W2, W3, etc.)
+            for i in range(2, 36):
+                if f"w{i}" in q_lower and f"w{i}" in content:
+                    score += 500.0
+                    break
+            # Also look for "tooth" followed by numbers 2-35
+            for i in range(2, 36):
+                if f"tooth {i}" in q_lower and f"tooth {i}" in content.lower():
+                    score += 500.0
+                    break
+            # Prioritize table content heavily for other teeth
+            if section == "Table" and any(f"w{i}" in content.lower() for i in range(2, 36)):
+                score += 1000.0
+        else:
+            # General wear depth questions
+            for case in settings.query_analysis.WEAR_CASES:
+                if case in q_lower and case in content:
+                    score += 300.0
+                    break
+        
+            # SUPER AGGRESSIVE table prioritization for wear depth data
+    if section == "Table":
+        # Massive bonus for tables with wear depth data
+        if "μm" in content or "um" in content:
+            score += 5000.0  # Increased from 800
+        # Massive bonus for tables with wear cases
+        if any(case in content for case in settings.query_analysis.WEAR_CASES):
+            score += 4000.0  # Increased from 600
+        # Bonus for tables with wear-related content
+        if "wear" in content.lower() or "depth" in content.lower():
+            score += 2000.0  # Increased from 400
+        # Additional bonus for tables with numeric wear data
+        if any(f"w{i}" in content.lower() for i in range(1, 36)):
+            score += 3000.0
         
         # For range-based wear queries, give bonus to documents with wear depth data
         if "μm" in q_lower or "um" in q_lower:
@@ -349,14 +408,27 @@ def rerank_candidates(q: str, candidates: List[Document], top_n: int = 8) -> Lis
     if "wear depth" in q.lower():
         candidates = _add_wear_depth_fallback(q, candidates)
     
+    # Analyze query first
+    analysis = query_analyzer(q)
+    
+    # SPECIAL: Direct table lookup for wear depth questions that fail
+    if analysis.get("question_type") in ["wear_depth_tooth1_question", "wear_depth_other_teeth_question"]:
+        # If we don't have enough table candidates, force include wear depth tables
+        table_candidates = [doc for doc in candidates if (doc.metadata or {}).get("section") == "Table"]
+        if len(table_candidates) < 3:  # Not enough table results
+            # Look for wear depth tables in existing candidates
+            wear_depth_tables = [doc for doc in candidates if "μm" in doc.page_content or any(f"w{i}" in doc.page_content.lower() for i in range(1, 36))]
+            # Move wear depth tables to front
+            for table_doc in wear_depth_tables:
+                if table_doc in candidates:
+                    candidates.remove(table_doc)
+                    candidates.insert(0, table_doc)  # Insert at beginning for high priority
+    
     # Apply other fallbacks only if no main PDF results
     if not main_pdf_candidates:
         candidates = _add_speed_fallback(q, candidates)
         candidates = _add_accelerometer_fallback(q, candidates)
         candidates = _add_threshold_fallback(q, candidates)
-    
-    # Analyze query
-    analysis = query_analyzer(q)
     
     # Score all candidates
     scored_docs = [(_score_document(doc, q, analysis), doc) for doc in candidates]

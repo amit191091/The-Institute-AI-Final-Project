@@ -166,15 +166,15 @@ def ingest_documents(paths: List[Path]) -> List[Dict[str, Any]]:
     for path, elements in load_many(paths):
         log.info(f"Processing {path.name}: {len(elements)} elements")
         
-            # Structure chunks for each element
-    chunks = structure_chunks(elements, str(path))
-    
-    # Handle case where structure_chunks returns None
-    if chunks is None:
-        chunks = []
-    
-    # Attach metadata to chunks
-    for chunk in chunks:
+        # Structure chunks for each element
+        chunks = structure_chunks(elements, str(path))
+        
+        # Handle case where structure_chunks returns None
+        if chunks is None:
+            chunks = []
+        
+        # Attach metadata to chunks
+        for chunk in chunks:
             record = attach_metadata(chunk)
             all_records.append(record)
     

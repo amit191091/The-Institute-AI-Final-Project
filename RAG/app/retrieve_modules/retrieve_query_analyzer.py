@@ -35,7 +35,13 @@ def query_analyzer(query: str) -> Dict[str, Any]:
     elif any(word in query_lower for word in ["escalation", "immediate", "urgent", "planning"]):
         question_type = "escalation_question"
     elif any(word in query_lower for word in ["wear depth", "wear cases"] + settings.query_analysis.WEAR_CASES):
-        question_type = "wear_depth_question"
+        # Enhanced wear depth question routing
+        if "tooth 1" in query_lower or "tooth one" in query_lower:
+            question_type = "wear_depth_tooth1_question"  # Main report
+        elif any(f"tooth {i}" in query_lower for i in range(2, 36)) or "tooth two" in query_lower or "tooth three" in query_lower:
+            question_type = "wear_depth_other_teeth_question"  # Database file
+        else:
+            question_type = "wear_depth_question"  # General wear depth
     elif any(word in query_lower for word in ["accelerometer", "sensor", "dytran", "brand of accelerometer"]):
         question_type = "sensor_question"
     elif any(word in query_lower for word in ["tachometer", "honeywell", "teeth", "brand of tachometer"]):
