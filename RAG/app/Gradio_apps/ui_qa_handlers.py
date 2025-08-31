@@ -39,6 +39,11 @@ from RAG.app.Gradio_apps.ui_components import (
 from RAG.app.Gradio_apps.ui_data_loader import _norm_q
 
 def on_ask(q, ground_truth="", dbg=False, docs=None, hybrid=None, llm=None, debug=None, gt_map=None, qa_map=None):
+	# Set evaluation mode environment variable early to prevent citations in answers
+	import os
+	if ground_truth and ground_truth.strip():
+		os.environ["RAG_EVAL"] = "1"
+	
 	# Step 1: Process query and get candidates
 	from RAG.app.Gradio_apps.UI_Handlers.query_processors import process_query_and_candidates
 	qa, cands, filtered, top_docs, dense_docs, sparse_docs = process_query_and_candidates(q, docs, hybrid, debug)

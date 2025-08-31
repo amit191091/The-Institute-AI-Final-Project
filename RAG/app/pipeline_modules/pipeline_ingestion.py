@@ -91,6 +91,15 @@ def discover_input_paths() -> List[Path]:
         '.gitignore'
     }
     
+    # Directories to exclude from processing (contain large irrelevant files)
+    excluded_directories = {
+        'Pictures and Vibrations database',  # Contains 97.6MB of raw vibration data not needed for Q&A
+        '__pycache__',
+        '.git',
+        'node_modules',
+        '.pytest_cache'
+    }
+    
     # Skip temporary Excel files
     def should_skip_file(file_path: Path) -> bool:
         """Check if file should be skipped based on name patterns."""
@@ -117,8 +126,9 @@ def discover_input_paths() -> List[Path]:
         # Search recursively for supported files
         for file_path in search_path.rglob("*"):
             if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
-                # Skip files in certain directories
-                if any(skip_dir in str(file_path) for skip_dir in ['__pycache__', '.git', 'node_modules', '.pytest_cache']):
+                # Skip files in excluded directories
+                if any(excluded_dir in str(file_path) for excluded_dir in excluded_directories):
+                    log.debug(f"Skipping file in excluded directory: {file_path}")
                     continue
                 
                 # Skip excluded files and temporary files

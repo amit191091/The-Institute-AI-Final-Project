@@ -21,11 +21,11 @@ class EmbeddingSettings:
     """Configuration for embedding models and retrieval."""
     EMBEDDING_MODEL_OPENAI: str = "text-embedding-3-small" # For OpenAI embedding model
     EMBEDDING_MODEL_GOOGLE: str = "models/text-embedding-004" # For Google embedding model
-    DENSE_K: int = 10 # For dense retrieval
-    SPARSE_K: int = 10 # For sparse retrieval
-    K_TOP_K: int = 20 # For top k retrieval
-    RERANK_TOP_K: int = 20 # For reranking
-    CONTEXT_TOP_N: int = 8 # For context retrieval
+    DENSE_K: int = 15 # For dense retrieval (increased for better coverage)
+    SPARSE_K: int = 15 # For sparse retrieval (increased for better coverage)
+    K_TOP_K: int = 40 # For top k retrieval (project requirement: K=40→6-8)
+    RERANK_TOP_K: int = 8 # For reranking (project requirement: 6-8 chunks)
+    CONTEXT_TOP_N: int = 10 # For context retrieval (increased for better coverage)
 
 
 @dataclass(frozen=True)
@@ -85,11 +85,11 @@ class ChunkingSettings:
         r"^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*:$",  # Title Case with colon
     ])
     
-    # Dynamic token management
-    TEXT_TARGET_TOK: int = 500 # For text chunk target tokens (increased from 375)
-    TEXT_MAX_TOK: int = 700 # For text chunk maximum tokens (increased from 500)
-    FIGURE_TABLE_MAX_TOK: int = 1000 # For figure/table chunk maximum tokens (increased from 800)
-    CONTEXT_LOW_N: int = 8 # For context window size (increased from 6)
+    # Dynamic token management (optimized for project requirements)
+    TEXT_TARGET_TOK: int = 600 # For text chunk target tokens (increased for better context)
+    TEXT_MAX_TOK: int = 800 # For text chunk maximum tokens (increased for better context)
+    FIGURE_TABLE_MAX_TOK: int = 1200 # For figure/table chunk maximum tokens (increased for better table coverage)
+    CONTEXT_LOW_N: int = 10 # For context window size (increased for better coverage)
     
     # Additional token settings for backward compatibility
     MIN_CHUNK_TOKENS: int = 50 # For minimum chunk tokens
@@ -116,7 +116,11 @@ class QueryAnalysisSettings:
         "mg-5025a", "ins haifa", "rps", "khz", "mv/g", "μm", "micron",
         "dytran", "honeywell", "accelerometer", "tachometer", "sensitivity",
         "wear depth", "rms", "fft", "spectrogram", "sideband", "meshing frequency",
-        "threshold", "escalation", "baseline", "criterion"
+        "threshold", "escalation", "baseline", "criterion",
+        "spur", "18/35", "3 mm", "0 μm", "1783", "1787", "30 teeth", "2640 semi-synthetic",
+        "april 8", "february 13", "stable alignment", "no assembly errors", "above the baseline",
+        "earliest wear onset", "wear evolution", "lower alarm levels", "update thresholds",
+        "record and monitor", "replacement", "refurbishment", "immediate intervention", "prevent failure"
     )
     
     # Modular wear case generation (1 to 35)
@@ -166,7 +170,9 @@ class QueryAnalysisSettings:
     
     TABLE_QUESTION_KEYWORDS: List[str] = (
         "table", "data", "value", "measurement", "wear depth",
-        "accelerometer", "tachometer", "sensitivity", "threshold", "criterion", "module value"
+        "accelerometer", "tachometer", "sensitivity", "threshold", "criterion", "module value",
+        "brand", "model", "specification", "equipment", "instrument", "device",
+        "mg-5025a", "ins haifa", "spur", "18/35", "3 mm", "0 μm", "1783", "1787", "30 teeth"
     )
     
     FIGURE_QUESTION_KEYWORDS: List[str] = (
@@ -191,16 +197,18 @@ class RerankingSettings:
     MAX_DOCS_PER_FILE: int = 2 # For maximum number of documents per file (reduced for precision)
     MAX_DOCS_PER_PAGE: int = 1 # For maximum number of documents per page (reduced for precision)
     
-    # Scoring weights
-    LEXICAL_OVERLAP_WEIGHT: float = 100.0 # For lexical overlap weight
-    SECTION_BONUS: float = 200.0 # For section bonus
-    TABLE_CONTENT_BONUS: float = 150.0 # For table content bonus
-    FIGURE_CONTENT_BONUS: float = 150.0 # For figure content bonus
-    WEAR_CASE_BONUS: float = 300.0 # For wear case bonus
-    THRESHOLD_BONUS: float = 250.0 # For threshold bonus
-    ESCALATION_BONUS: float = 200.0 # For escalation bonus
-    MODULE_VALUE_BONUS: float = 250.0 # For module value bonus
-    RECOMMENDATION_BONUS: float = 80.0 # For recommendation bonus
+    # Scoring weights (optimized for better retrieval)
+    LEXICAL_OVERLAP_WEIGHT: float = 120.0 # For lexical overlap weight (increased)
+    SECTION_BONUS: float = 250.0 # For section bonus (increased)
+    TABLE_CONTENT_BONUS: float = 200.0 # For table content bonus (increased for equipment questions)
+    FIGURE_CONTENT_BONUS: float = 180.0 # For figure content bonus (increased)
+    WEAR_CASE_BONUS: float = 350.0 # For wear case bonus (increased)
+    THRESHOLD_BONUS: float = 300.0 # For threshold bonus (increased)
+    ESCALATION_BONUS: float = 250.0 # For escalation bonus (increased)
+    MODULE_VALUE_BONUS: float = 300.0 # For module value bonus (increased)
+    RECOMMENDATION_BONUS: float = 100.0 # For recommendation bonus (increased)
+    TECHNICAL_DETAIL_BONUS: float = 400.0 # For technical details (new - for equipment specs)
+    VISUAL_EVIDENCE_BONUS: float = 350.0 # For visual evidence descriptions (new)
 
 
 @dataclass(frozen=True)

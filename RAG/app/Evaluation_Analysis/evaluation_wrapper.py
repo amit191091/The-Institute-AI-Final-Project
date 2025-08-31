@@ -139,6 +139,9 @@ def generate_ground_truth(pipeline: PipelineProtocol, num_questions: int = 5) ->
 def evaluate_rag(pipeline: PipelineProtocol) -> str:
     """Evaluate RAG system performance."""
     try:
+        # Set evaluation mode environment variable
+        os.environ["RAG_EVAL"] = "1"
+        
         if not EVAL_AVAILABLE:
             return "Enhanced evaluation modules not available"
         

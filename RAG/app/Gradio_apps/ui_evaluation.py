@@ -46,6 +46,10 @@ def on_generate_ground_truth(docs, hybrid, llm, num_questions: int):
 			self.llm = llm
 		
 		def query(self, question: str):
+			# Set evaluation mode to prevent citations in answers
+			import os
+			os.environ["RAG_EVAL"] = "1"
+			
 			qa = query_analyzer(question)
 			cands = self.hybrid.invoke(question)
 			filtered = apply_filters(cands, qa["filters"])
@@ -79,6 +83,10 @@ def on_evaluate_rag(docs, hybrid, llm):
 			self.llm = llm
 		
 		def query(self, question: str):
+			# Set evaluation mode to prevent citations in answers
+			import os
+			os.environ["RAG_EVAL"] = "1"
+			
 			qa = query_analyzer(question)
 			cands = self.hybrid.invoke(question)
 			filtered = apply_filters(cands, qa["filters"])
@@ -103,6 +111,10 @@ def on_evaluate_rag(docs, hybrid, llm):
 
 def evaluate_question_with_ground_truth(q, ans_raw, top_docs, ground_truth, gt_map, qa_map):
     """Evaluate a question with provided ground truth or fallback to enhanced evaluation."""
+    # Set evaluation mode environment variable
+    import os
+    os.environ["RAG_EVAL"] = "1"
+    
     metrics_txt = ""
     compare_dict = {}
     

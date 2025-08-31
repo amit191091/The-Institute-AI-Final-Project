@@ -150,6 +150,10 @@ def evaluate_with_fallback(q, ans_raw, top_docs, gt_map, qa_map):
 
 def run_evaluation(q, ans_raw, top_docs, ground_truth, gt_map, qa_map, llm):
     """Main evaluation orchestrator."""
+    # Set evaluation mode environment variable
+    import os
+    os.environ["RAG_EVAL"] = "1"
+    
     metrics_txt = ""
     compare_dict = {}
     

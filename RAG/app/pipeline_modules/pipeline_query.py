@@ -211,6 +211,12 @@ def answer_question(docs: List, hybrid_retriever, llm, question: str,
 
 def answer_with_contexts(docs: List, hybrid_retriever, llm, question: str) -> tuple[str, List]:
     """Answer a question and also return the contexts used (top_docs)."""
+    # Set evaluation mode to prevent citations in answers
+    import os
+    if os.getenv("RAG_EVAL", "0").lower() in ("1", "true", "yes"):
+        # Already in evaluation mode, no need to set again
+        pass
+    
     log = get_logger()
     qa = query_analyzer(question)
     q_exec = question  # Use the original question since we don't have canonical anymore
