@@ -119,7 +119,7 @@ UI server options:
 	- Summary — synthesizes concise, cited summary from multi‑context input
 	- Needle — extractive Q/A with citation normalization and optional one‑sentence trimming (`RAG_TRIM_ANSWERS`)
 	- Table — natural value lookup from tables/figures; also covers instrumentation/threshold inventory
-- Orchestrator: optional `agent_orchestrator.run(...)` to plan/retrieve/answer with a trace payload
+- Orchestrator: default `agent_orchestrator.run(...)` to plan/retrieve/answer with a trace payload (disable with `RAG_USE_ORCHESTRATOR=0`)
 
 ## Normalized artifacts and graph
 

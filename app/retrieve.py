@@ -66,6 +66,10 @@ def apply_filters(docs: List[Document], filters: Dict) -> List[Document]:
 		return docs
 	def ok(meta: dict):
 		for k, v in (filters or {}).items():
+			# New: allow scoping by dataset_id or source_document_id
+			if k in ("dataset_id", "source_document_id"):
+				if meta.get(k) != v:
+					return False
 			# 'case_id' in our corpus (e.g., W1, W13) typically lives in table cell text, not metadata.
 			# Ignoring this hard filter avoids over-pruning to zero and lets reranker/lexical handle it.
 			if k == "case_id":

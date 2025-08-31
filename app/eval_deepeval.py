@@ -11,11 +11,19 @@ import json
 from pathlib import Path
 from typing import List, Dict, Any
 from app.logger import trace_func, get_logger
+from deepeval.models import GeminiModel
 
 
-def _has_confident_key() -> bool:
-    key = os.getenv("CONFIDENT_API_KEY") or os.getenv("DEEPEVAL_API_KEY")
-    return bool(key and key.strip())
+
+def _has_any_llm_key() -> bool:
+    """Accept any viable provider key for DeepEval to run.
+    Supports: CONFIDENT_API_KEY, DEEPEVAL_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY
+    """
+    for name in ("CONFIDENT_API_KEY", "DEEPEVAL_API_KEY", "GOOGLE_API_KEY", "OPENAI_API_KEY"):
+        val = os.getenv(name)
+        if val and val.strip():
+            return True
+    return False
 
 
 @trace_func
@@ -27,8 +35,8 @@ def run_eval(dataset: Dict[str, List[Any]]):
     """
     if os.getenv("RAG_DEEPEVAL", "0").lower() not in ("1", "true", "yes"):
         return None, []
-    if not _has_confident_key():
-        get_logger().info("DeepEval skipped: missing CONFIDENT_API_KEY/DEEPEVAL_API_KEY")
+    if not _has_any_llm_key():
+        get_logger().info("DeepEval skipped: no provider API key found (need GOOGLE_API_KEY/OPENAI_API_KEY or CONFIDENT/DEEPEVAL key)")
         return None, []
 
     try:
@@ -39,16 +47,30 @@ def run_eval(dataset: Dict[str, List[Any]]):
         get_logger().warning(f"DeepEval not available: {e}")
         return None, []
 
-    # Respect OpenAI disable switch unless the user explicitly provides a non-OpenAI DEEPEVAL_MODEL
-    openai_allowed = os.getenv("RAG_USE_OPENAI", "0").lower() in ("1", "true", "yes")
+    # Get model name - prefer explicit DEEPEVAL_MODEL, fallback to OpenAI if enabled
     model_name = os.getenv("DEEPEVAL_MODEL")
     if not model_name:
         # If no explicit model, only fall back to OpenAI if allowed and key exists
+        openai_allowed = os.getenv("RAG_USE_OPENAI", "0").lower() in ("1", "true", "yes")
         if openai_allowed and os.getenv("OPENAI_API_KEY"):
             model_name = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
         else:
             get_logger().info("DeepEval skipped: no DEEPEVAL_MODEL and OpenAI disabled or missing OPENAI_API_KEY")
             return None, []
+    # Provider-specific key check
+    lname = (model_name or "").lower()
+    if "gemini" in lname or lname.startswith("google"):
+        _g = os.getenv("GOOGLE_API_KEY")
+        if not (_g and _g.strip()):
+            get_logger().info("DeepEval skipped: model '%s' requires GOOGLE_API_KEY", model_name)
+            return None, []
+    elif "gpt" in lname or "o-" in lname or lname.startswith("gpt-"):
+        _o = os.getenv("OPENAI_API_KEY")
+        if not (_o and _o.strip()):
+            get_logger().info("DeepEval skipped: model '%s' likely requires OPENAI_API_KEY", model_name)
+            return None, []
+
+    get_logger().info(f"DeepEval using model: {model_name}")
 
     # Build per-question evaluation items
     questions: List[str] = list(dataset.get("question", []))

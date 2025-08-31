@@ -10,7 +10,7 @@ Functions:
 Handles common variants for instrumentation keys like sensitivity (mV/g)
 and sampling rate (kS/sec, Hz, kHz).
 """
-from app.logger import trace_func
+from app.logger import trace_func, get_logger
 
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple, Optional
@@ -24,6 +24,48 @@ except Exception:  # pragma: no cover
 
 # Avoid importing external types for annotations to keep this module lightweight.
 # Use Any for document-like objects.
+
+def _normalize_units(text: str) -> str:
+    """Normalize common unit variants for better matching."""
+    if not text:
+        return text
+    
+    # Handle sampling rate units
+    text = re.sub(r'\bkS/sec\b', 'kHz', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bS/sec\b', 'Hz', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bMS/sec\b', 'MHz', text, flags=re.IGNORECASE)
+    
+    # Handle acceleration units
+    text = re.sub(r'\bmV/g\b', 'mV/g', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bg\b', 'g', text, flags=re.IGNORECASE)
+    
+    # Handle micro symbols
+    text = text.replace('μ', 'u').replace('µ', 'u')
+    
+    return text
+
+def _merge_fragmented_headers(rows: List[List[str]]) -> List[str]:
+    """Merge multi-row headers that are split across rows."""
+    if len(rows) < 2:
+        return rows[0] if rows else []
+    
+    logger = get_logger()
+    
+    # Check if we have fragmented headers by looking for empty cells in first row
+    # that are filled in subsequent rows
+    header = rows[0][:]
+    
+    for i in range(1, min(3, len(rows))):  # Check up to 3 rows for headers
+        for j, cell in enumerate(rows[i]):
+            if j < len(header):
+                if not header[j].strip() and cell.strip():
+                    header[j] = cell.strip()
+                elif header[j].strip() and cell.strip() and header[j] != cell:
+                    # Merge with space if both have content
+                    header[j] = f"{header[j]} {cell}".strip()
+    
+    logger.debug(f"HEADER_MERGE: {rows[0]} -> {header}")
+    return header
 
 @trace_func
 def _split_markdown_row(line: str) -> List[str]:
@@ -327,7 +369,7 @@ def build_tables_from_docs(docs: List[Any]) -> List[Tuple[Any, Any]]:
 
 @trace_func
 def natural_table_lookup(question: str, docs: List[Any]) -> Tuple[Optional[str], Optional[Any]]:
-    """General, schema-agnostic lookup:
+    """General, schema-agnostic lookup with enhanced unit normalization and logging.
     - Builds DataFrames from docs.
     - If KV-like: fuzzy match key from question and return paired value.
     - Else (matrix): pick best row by overlap with Q tokens and best column by header similarity; return that cell.
@@ -336,96 +378,165 @@ def natural_table_lookup(question: str, docs: List[Any]) -> Tuple[Optional[str],
     """
     if pd is None:
         return None, None
+    
+    logger = get_logger()
+    logger.debug(f"TABLE_LOOKUP_START: question='{question[:100]}...', docs={len(docs)}")
+    
     tables = build_tables_from_docs(docs)
     if not tables:
+        logger.debug("TABLE_LOOKUP_NO_TABLES: no tables extracted")
         return None, None
-    q_tokens = _tokenize_q(question)
+    
+    logger.debug(f"TABLE_LOOKUP_TABLES: {len(tables)} tables found")
+    
+    # Normalize question for better matching
+    q_normalized = _normalize_units(question.lower())
+    q_tokens = _tokenize_q(q_normalized)
     q_norm = " ".join(q_tokens)
     q_nums = _numeric_tokens(question)
+    
+    logger.debug(f"TABLE_LOOKUP_PARSED: tokens={q_tokens[:5]}, numbers={q_nums}")
 
-    # Pass 1: KV-like tables
-    for df, src in tables:
+    # Pass 1: KV-like tables with enhanced key matching
+    for table_idx, (df, src) in enumerate(tables):
         try:
             if _is_kv_like(df):
-                # Pick key/value columns
+                logger.debug(f"TABLE_LOOKUP_KV: table_{table_idx} - KV mode, shape={df.shape}")
+                
+                # Pick key/value columns with better heuristics
                 cols = list(df.columns)
                 key_col = 0
                 val_col = 1 if len(cols) > 1 else None
-                # Prefer named columns when present
+                
+                # Enhanced column detection
                 for i, c in enumerate(cols):
                     cl = str(c).lower()
-                    if i == 0 and any(x in cl for x in ("feature", "parameter", "name", "key", "attribute")):
+                    # More specific key column detection
+                    if any(x in cl for x in ("parameter", "component", "sensor", "feature", "attribute", "item", "type")):
                         key_col = i
-                    if val_col is None or ("value" in cl):
-                        val_col = i if ("value" in cl) else val_col
-                # Fallback: first two columns
+                    # Value column detection including units
+                    if any(x in cl for x in ("value", "specification", "model", "rate", "frequency", "sensitivity")):
+                        val_col = i
+                
                 if val_col is None:
                     val_col = 1 if len(cols) > 1 else 0
-                # Score keys by token overlap
+                
+                # Enhanced key scoring with unit awareness
                 best_idx, best_score = None, 0.0
                 for i, row in df.iterrows():
-                    key_text = _normalize_name(str(row.iloc[key_col]))
-                    sc = sum(1 for t in q_tokens if t in key_text)
-                    # light unit/number match boost
-                    if q_nums and any(n in str(row.values) for n in q_nums):
-                        sc += 1
+                    key_text = _normalize_units(_normalize_name(str(row.iloc[key_col])))
+                    val_text = _normalize_units(str(row.iloc[val_col]))
+                    
+                    # Base token overlap score
+                    sc = sum(1 for t in q_tokens if t in key_text.lower())
+                    
+                    # Boost for specific instrumentation terms
+                    if any(term in key_text.lower() for term in ["sampling", "rate", "frequency", "accelerometer", "tachometer", "sensor"]):
+                        if any(term in q_normalized for term in ["sampling", "rate", "frequency", "accelerometer", "tachometer", "sensor"]):
+                            sc += 2
+                    
+                    # Number matching boost
+                    if q_nums and any(n in val_text for n in q_nums):
+                        sc += 1.5
+                    
+                    # Unit matching boost
+                    if any(unit in val_text.lower() for unit in ["khz", "hz", "mv/g", "g"]):
+                        if any(unit in q_normalized for unit in ["khz", "hz", "mv/g", "rate", "frequency", "sensitivity"]):
+                            sc += 1
+                    
+                    logger.debug(f"TABLE_LOOKUP_KV_SCORE: row_{i} key='{key_text[:30]}' val='{val_text[:30]}' score={sc}")
+                    
                     if sc > best_score:
                         best_score, best_idx = sc, i
-                if best_idx is not None:
+                
+                if best_idx is not None and best_score > 0:
                     val = str(df.iloc[best_idx, val_col]).strip()
+                    key = str(df.iloc[best_idx, key_col]).strip()
+                    logger.debug(f"TABLE_LOOKUP_KV_MATCH: key='{key}' val='{val}' score={best_score}")
                     if val:
                         return val, src
-        except Exception:
+        except Exception as e:
+            logger.warning(f"TABLE_LOOKUP_KV_ERROR: table_{table_idx} - {e}")
             continue
 
-    # Pass 2: matrix-style tables
-    for df, src in tables:
+    # Pass 2: matrix-style tables with enhanced column matching
+    for table_idx, (df, src) in enumerate(tables):
         try:
             if df is None or df.empty:
                 continue
-            # Reverse lookup if numeric in Q: find matching cell; return sibling from ID-like column
+                
+            logger.debug(f"TABLE_LOOKUP_MATRIX: table_{table_idx} - Matrix mode, shape={df.shape}")
+            
+            # Enhanced reverse lookup for numeric queries
             if q_nums:
+                logger.debug(f"TABLE_LOOKUP_MATRIX_NUMERIC: searching for numbers {q_nums}")
+                
+                # Find ID-like columns more intelligently
                 id_col = None
                 for i, c in enumerate(df.columns):
-                    cl = _normalize_name(c)
-                    if any(tok in cl for tok in ("case", "id", "name", "label")):
-                        id_col = i; break
+                    cl = _normalize_name(c).lower()
+                    if any(tok in cl for tok in ("case", "id", "name", "label", "component", "sensor", "type")):
+                        id_col = i
+                        break
+                
                 for i, row in df.iterrows():
-                    row_vals = [str(x) for x in row.values.tolist()]
-                    if any(any(num in v.lower().replace("μ", "u").replace("µ", "u") for num in q_nums) for v in row_vals):
-                        # Prefer non-numeric, short text answer if possible
-                        ans = None
+                    row_vals = [_normalize_units(str(x)) for x in row.values.tolist()]
+                    
+                    # Check if any query numbers appear in this row
+                    num_matches = []
+                    for num in q_nums:
+                        for j, val in enumerate(row_vals):
+                            if num in val.lower():
+                                num_matches.append((j, val))
+                    
+                    if num_matches:
+                        logger.debug(f"TABLE_LOOKUP_MATRIX_NUMERIC_MATCH: row_{i} matches={num_matches}")
+                        
+                        # Prefer ID column if available
                         if id_col is not None:
                             ans = str(row.iloc[id_col]).strip()
-                        if not ans:
-                            # otherwise return the column with highest header match
-                            col_idx = _best_column_match(df, q_tokens) or 0
+                            if ans and ans != "nan":
+                                logger.debug(f"TABLE_LOOKUP_MATRIX_NUMERIC_RESULT: '{ans}' from id_col")
+                                return ans, src
+                        
+                        # Otherwise find best column match
+                        col_idx = _best_column_match(df, q_tokens)
+                        if col_idx is not None:
                             ans = str(row.iloc[col_idx]).strip()
-                        if ans:
-                            return ans, src
-            # Otherwise, choose best row by overlap and best column by header match
+                            if ans and ans != "nan":
+                                logger.debug(f"TABLE_LOOKUP_MATRIX_NUMERIC_RESULT: '{ans}' from best_col")
+                                return ans, src
+            
+            # Standard matrix lookup
             col_idx = _best_column_match(df, q_tokens)
             if col_idx is None:
-                # Heuristic: if only one numeric column exists, take it
                 col_idx = 0
-                try:
-                    num_counts = [sum(bool(re.search(r"\d", str(x))) for x in df.iloc[:, i]) for i in range(len(df.columns))]
-                    if num_counts:
-                        col_idx = int(max(range(len(num_counts)), key=lambda i: num_counts[i]))
-                except Exception:
-                    col_idx = 0
+                
+            logger.debug(f"TABLE_LOOKUP_MATRIX_COL: selected column {col_idx}")
+            
             best_i, best_s = None, 0.0
             for i, row in df.iterrows():
-                vals = [str(x) for x in row.values.tolist()]
+                vals = [_normalize_units(str(x)) for x in row.values.tolist()]
                 sc = _row_overlap_score(vals, q_tokens)
+                
+                # Boost for instrumentation-related content
+                if any(term in " ".join(vals).lower() for term in ["khz", "hz", "mv/g", "dytran", "honeywell", "accelerometer", "tachometer"]):
+                    if any(term in q_normalized for term in ["rate", "frequency", "sensor", "accelerometer", "tachometer", "sampling"]):
+                        sc += 0.5
+                
                 if sc > best_s:
                     best_s, best_i = sc, i
+            
             if best_i is not None:
                 val = str(df.iloc[best_i, col_idx]).strip()
-                if val:
+                logger.debug(f"TABLE_LOOKUP_MATRIX_RESULT: row_{best_i} col_{col_idx} val='{val}' score={best_s}")
+                if val and val != "nan":
                     return val, src
-        except Exception:
+                    
+        except Exception as e:
+            logger.warning(f"TABLE_LOOKUP_MATRIX_ERROR: table_{table_idx} - {e}")
             continue
 
+    logger.debug("TABLE_LOOKUP_NO_MATCH: no suitable matches found")
     return None, None
 

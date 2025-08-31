@@ -1,11 +1,12 @@
 import gradio as gr
 import pandas as pd
 import json
-from pathlib import Path
 import difflib
 import re
 import html as _html
 import os
+from pathlib import Path
+from langchain.schema import Document
 
 
 from app.agents import answer_needle, answer_summary, answer_table, route_question_ex
@@ -102,6 +103,54 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 	section_values = sorted({(d.metadata or {}).get("section") or "" for d in docs})
 	section_values = [s for s in section_values if s]
 
+	# Helper: load snapshot docs from logs/db_snapshot_full.jsonl and merge with current docs for listing
+	def _load_snapshot_docs() -> list[Document]:
+		out: list[Document] = []
+		try:
+			p = Path("logs")/"db_snapshot_full.jsonl"
+			if not p.exists():
+				return out
+			with open(p, "r", encoding="utf-8") as f:
+				for ln in f:
+					try:
+						rec = json.loads(ln)
+						txt = rec.get("text") or ""
+						md = rec.get("metadata") or {}
+						if not md:
+							md = {
+								"file_name": rec.get("file"),
+								"page": rec.get("page"),
+								"section": rec.get("section"),
+								"anchor": rec.get("anchor"),
+							}
+						out.append(Document(page_content=txt, metadata=md))
+					except Exception:
+						continue
+		except Exception:
+			return []
+		return out
+
+	def _all_docs() -> list[Document]:
+		# Merge in-memory docs with snapshot docs; dedupe by chunk_id when available
+		try:
+			snap_docs = _load_snapshot_docs()
+			merged: list[Document] = []
+			seen: set[str] = set()
+			def _cid(d):
+				try:
+					return str((d.metadata or {}).get("chunk_id") or (d.metadata or {}).get("anchor") or id(d))
+				except Exception:
+					return str(id(d))
+			for d in list(docs) + snap_docs:
+				cid = _cid(d)
+				if cid in seen:
+					continue
+				seen.add(cid)
+				merged.append(d)
+			return merged
+		except Exception:
+			return list(docs)
+
 	def _rows_from_docs(_docs, limit: int = 300):
 		rows = []
 		for d in _docs[:limit]:
@@ -151,7 +200,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		fs = (filter_section or "").strip()
 		qq = (q or "").strip().lower()
 		rows = []
-		for d in docs:
+		for d in _all_docs():
 			md = d.metadata or {}
 			if fs and md.get("section") != fs:
 				continue
@@ -173,6 +222,12 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				prev = (txt[:200])
 			if qq and qq not in (txt.lower() + " " + " ".join(map(str, md.values())).lower()):
 				continue
+			# Include score column to match _rows_to_df header
+			score_val = 0.0
+			try:
+				score_val = round(float(md.get("_score") or 0.0), 4)
+			except Exception:
+				score_val = 0.0
 			rows.append([
 				md.get("file_name"),
 				md.get("page"),
@@ -184,6 +239,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				md.get("table_md_path") or "",
 				md.get("table_csv_path") or "",
 				md.get("image_path") or "",
+				score_val,
 				prev,
 			])
 			if len(rows) >= limit:
@@ -545,6 +601,21 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 
 	def on_ask(q, debug_toggle):
 		qa = query_analyzer(q)
+		# Inject scope filters from selection (if set via dropdown)
+		try:
+			val_json = os.getenv("RAG_SELECTED_SCOPE_JSON", "")
+			if val_json:
+				try:
+					val = json.loads(val_json)
+				except Exception:
+					val = {}
+				if isinstance(val, dict):
+					if val.get("dataset_id"):
+						qa["filters"]["dataset_id"] = val["dataset_id"]
+					if val.get("source_document_id"):
+						qa["filters"]["source_document_id"] = val["source_document_id"]
+		except Exception:
+			pass
 		cands = hybrid.invoke(q)
 		dense_docs = []
 		sparse_docs = []
@@ -795,7 +866,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					fig_doc = _fig_docs[0] if _fig_docs else None
 				# If still nothing (e.g., not in top docs), try a best-effort lookup across all docs
 				if fig_doc is None and want is not None:
-					_all_figs = [d for d in docs if (d.metadata or {}).get("section") == "Figure" and (d.metadata or {}).get("image_path")]
+					_all_figs = [d for d in _all_docs() if (d.metadata or {}).get("section") == "Figure" and (d.metadata or {}).get("image_path")]
 					_pref = [d for d in _all_figs if _matches_want(d)]
 					fig_doc = _pref[0] if _pref else ( _all_figs[0] if _all_figs else None )
 				if fig_doc is not None:
@@ -919,11 +990,31 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		return out, metrics_txt, _acc_upd, _router_upd, _filters_upd, _dense_upd, _sparse_upd, _hybrid_upd, _topdocs_upd, _compare_upd, _reason_upd, fig_update
 
 	# Build a sleeker Blocks UI with tabs
+	# Build dynamic dataset/source doc choices from current docs
+	def _dataset_choices():
+		choices = []
+		seen = set()
+		for d in _all_docs():
+			md = d.metadata or {}
+			ds = md.get("dataset_id")
+			src = md.get("source_document_id")
+			fp = md.get("file_path") or md.get("file_name")
+			if ds or src:
+				key = (ds or "", src or "")
+				if key in seen:
+					continue
+				seen.add(key)
+				label = fp or (ds or src)
+				choices.append({"label": str(label), "value": json.dumps({"dataset_id": ds, "source_document_id": src})})
+		return choices
+
 	with gr.Blocks(title="Hybrid RAG – Failure Reports") as demo:
 		gr.Markdown("## Hybrid RAG – Failure Reports\nRouter + Summary / Needle / Table QA")
 		with gr.Tabs():
 			with gr.Tab("Ask"):
 				q = gr.Textbox(label="Question", placeholder="Ask about figures, tables, procedures, conclusions…")
+				# Optional dataset scoping
+				ds_scope = gr.Dropdown(label="Scope to dataset/document (optional)", choices=[c["label"] for c in _dataset_choices()], value=None)
 				dbg = gr.Checkbox(label="Show retrieval debug", value=False)
 				btn = gr.Button("Ask", variant="primary")
 				ans = gr.Markdown()
@@ -939,16 +1030,53 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					dbg_topdocs = gr.Dataframe(interactive=False)
 					dbg_compare = gr.JSON(label="Answer vs Reference (tokens)")
 					dbg_reason = gr.JSON(label="Reasoning trace")
+				def _on_scope_change(label: str | None):
+					# Store selection label and JSON mapping in env vars for backend to read
+					try:
+						os.environ["RAG_SELECTED_SCOPE_LABEL"] = str(label or "")
+						val_json = ""
+						for choice in _dataset_choices():
+							if choice["label"] == label:
+								val_json = choice.get("value") or ""
+								break
+						if val_json:
+							os.environ["RAG_SELECTED_SCOPE_JSON"] = str(val_json)
+					except Exception:
+						pass
+					return None
+
+				def _ask_with_scope(q_in, debug_toggle):
+					# Build scoped filters if user selected a dataset/document
+					qa = query_analyzer(q_in)
+					label = os.getenv("RAG_SELECTED_SCOPE_LABEL", "")
+					if label:
+						# Find matching choice and parse stored JSON value
+						for choice in _dataset_choices():
+							if choice["label"] == label:
+								try:
+									val = json.loads(choice["value"]) if isinstance(choice.get("value"), str) else (choice.get("value") or {})
+								except Exception:
+									val = {}
+								if val.get("dataset_id"):
+									qa["filters"]["dataset_id"] = val["dataset_id"]
+								if val.get("source_document_id"):
+									qa["filters"]["source_document_id"] = val["source_document_id"]
+								break
+					# Reuse existing ask handler logic by temporarily patching query_analyzer result
+					# Delegate to on_ask but inject filters via environment for simplicity
+					return on_ask(q_in, debug_toggle)
+
+				ds_scope.change(_on_scope_change, inputs=[ds_scope], outputs=[])
 				btn.click(
-					on_ask,
+					_ask_with_scope,
 					inputs=[q, dbg],
 					outputs=[ans, metrics, dbg_acc, dbg_router, dbg_filters, dbg_dense, dbg_sparse, dbg_hybrid, dbg_topdocs, dbg_compare, dbg_reason, fig_preview],
 				)
 
 
 			with gr.Tab("Figures"):
-				# Build a gallery of extracted figures, sorted by figure_number/figure_order
-				fig_docs = [d for d in docs if d.metadata.get("section") == "Figure" and d.metadata.get("image_path")]
+				# Build a gallery of extracted figures, sorted by figure_number/figure_order, across all docs (including snapshot)
+				fig_docs = [d for d in _all_docs() if (d.metadata or {}).get("section") == "Figure" and (d.metadata or {}).get("image_path")]
 				try:
 					def _fig_sort_key(d):
 						md = d.metadata or {}
@@ -972,12 +1100,44 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					fig_docs = sorted(fig_docs, key=_fig_sort_key)
 				except Exception:
 					pass
-				fig_paths = [str(Path(d.metadata.get("image_path"))) for d in fig_docs if d.metadata.get("image_path")]
-				if fig_paths:
-					# Recent Gradio versions preview by default; keep args minimal for compatibility
-					gr.Gallery(value=fig_paths, label="Extracted Figures", columns=4, height=400)
-				else:
-					gr.Markdown("(No extracted figures. Enable RAG_EXTRACT_IMAGES=true and rerun.)")
+				fig_paths = []
+				for d in fig_docs:
+					md = d.metadata or {}
+					ip = md.get("image_path")
+					if not ip:
+						continue
+					try:
+						fig_paths.append(str(Path(str(ip))))
+					except Exception:
+						try:
+							fig_paths.append(str(ip))
+						except Exception:
+							pass
+				gallery = gr.Gallery(value=fig_paths if fig_paths else None, label="Extracted Figures", columns=4, height=400)
+				if not fig_paths:
+					gr.Markdown("(No extracted figures found yet. Click Refresh after ingesting, and ensure images are extracted.)")
+				refresh_figs = gr.Button("Refresh Figures")
+				def _refresh_figs():
+					fdocs = [d for d in _all_docs() if (d.metadata or {}).get("section") == "Figure" and (d.metadata or {}).get("image_path")]
+					try:
+						fdocs = sorted(fdocs, key=_fig_sort_key)
+					except Exception:
+						pass
+					fpaths = []
+					for d in fdocs:
+						md = d.metadata or {}
+						ip = md.get("image_path")
+						if not ip:
+							continue
+						try:
+							fpaths.append(str(Path(str(ip))))
+						except Exception:
+							try:
+								fpaths.append(str(ip))
+							except Exception:
+								pass
+					return gr.update(value=fpaths if fpaths else None)
+				refresh_figs.click(_refresh_figs, inputs=[], outputs=[gallery])
 
 			with gr.Tab("Agent"):
 				gr.Markdown("### Agent trace (tools + observations)\nRuns retrieval via simple tools for visibility.")
@@ -1035,6 +1195,58 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 						return "(planner not available)"
 					return _plan(observations, llm)
 				plan_btn.click(_do_plan, inputs=[obs], outputs=[plan_md])
+
+			with gr.Tab("Ingest"):
+				gr.Markdown("### Ingest new dataset (documents + optional QA/GT)")
+				ds = gr.Textbox(label="Dataset ID", placeholder="e.g., ds-2025-08", value="")
+				files = gr.Files(label="Documents (PDF/DOCX/TXT)", file_count="multiple", type="filepath")
+				qa_up = gr.File(label="QA (JSON/JSONL; optional)")
+				gt_up = gr.File(label="Ground Truth (JSON/JSONL; optional)")
+				do_graph = gr.Checkbox(label="Also update graph", value=False)
+				btn_ingest = gr.Button("Ingest and Update", variant="primary")
+				ingest_status = gr.Markdown()
+
+				def _do_ingest(dataset_id, paths, qa_file, gt_file, update_graph):
+					nonlocal docs, hybrid
+					try:
+						from app.pipeline import ingest_and_upsert
+					except Exception as e:
+						return f"(ingest not available: {e})"
+					dataset_id = (dataset_id or "").strip() or None
+					paths = [str(p) for p in (paths or []) if str(p)]
+					if not paths:
+						return "(no documents selected)"
+					try:
+						new_docs, new_hybrid, _dbg = ingest_and_upsert(paths, dataset_id=dataset_id)
+						docs, hybrid = new_docs, new_hybrid
+					except Exception as e:
+						return f"(ingest failed: {e})"
+					msgs = []
+					try:
+						if gt_file:
+							msgs.append(_load_gt_file(gt_file))
+					except Exception as e:
+						msgs.append(f"(GT load failed: {e})")
+					try:
+						if qa_file:
+							msgs.append(_load_qa_file(qa_file))
+					except Exception as e:
+						msgs.append(f"(QA load failed: {e})")
+					if update_graph and os.getenv("RAG_GRAPH_DB", "1").lower() not in ("0","false","no"):
+						try:
+							from app.graphdb import build_graph_db as _build_graph_db
+							n = _build_graph_db(docs)
+							msgs.append(f"[GraphDB] Upserted ~{n} nodes/edges.")
+						except Exception as e:
+							msgs.append(f"(graph update failed: {e})")
+					msgs.append("Ingest complete. You can now query the new dataset.")
+					return "\n".join(msgs)
+
+				btn_ingest.click(
+					_do_ingest,
+					inputs=[ds, files, qa_up, gt_up, do_graph],
+					outputs=[ingest_status],
+				)
 
 			with gr.Tab("Inspect"):
 				gr.Markdown("### Top indexed docs (sample)")

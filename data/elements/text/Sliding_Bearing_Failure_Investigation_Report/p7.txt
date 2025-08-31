@@ -1,0 +1,49 @@
+• 
+Lack of Alignment Measurement: No alignment measurement was performed 
+prior to departure—only a visual inspection was conducted. The absence of 
+quantitative shaft alignment verification likely contributed to the angular deviation 
+that developed during operation. 
+• 
+Insufficient Baseline Comparison Logic: The IMP flagged elevated vibration as a 
+"watch item" but did not correlate it against historical operational data. This limited 
+the crew’s ability to contextualize the anomaly and respond earlier. 
+Conclusion 
+The failure of the MKB-245 sliding bearing on the starboard propulsion shaft was primarily 
+the result of preload loss in at least one of the bearing mounting bolts. This loss of clamping 
+force likely caused angular shaft deviation, degradation of the hydrodynamic film, and the 
+onset of metal-to-metal contact. While the root cause of bolt loosening remains unclear, the 
+event highlights the importance of mechanical joint integrity and alignment verification. 
+Thanks to the timely detection by the engineering technician and prompt mitigation by the 
+crew, catastrophic damage was avoided. Post-failure analysis, repair, and re-commissioning 
+were conducted methodically and restored full operational capability. Future reliability will 
+depend on implementing the recommended monitoring improvements, adopting more 
+rigorous alignment practices, and maintaining a high level of operational preparedness. 
+There are  
+ 
+Table 1: Predeparture Checklist 
+What to do 
+Check/UnCheck 
+Lubrication System  
+CHECK  
+Interface 
+CHECK  
+Instrumentation and Sensors 
+CHECK 
+Condition Inspection 
+CHECK 
+ 
+Table 2: Reviews during sailing 
+Time 
+Notes 
+05:35 
+Start on 
+06:00 
+No abnormal 
+06:30 
+No abnormal 
+07:00 
+No abnormal 
+07:10 
+High RMS but normal 
+07:30 
+Alert Level 1

@@ -74,11 +74,12 @@ def _chunk_node_id(md: dict) -> str:
 def build_graph_db(docs: Sequence[DocLike]) -> int:
     """Create/merge chunk and entity nodes, with relationships in Neo4j.
 
-    Schema:
-      (:Chunk {id, file, page:int, section, anchor})
-      (:Entity {name, type})
-      (:Chunk)-[:MENTIONS]->(:Entity)
-      (:Entity)-[:CO_OCCUR]->(:Entity)
+        Schema:
+            (:Document {document_id, file_path, ingestion_timestamp})
+            (:Chunk {id, file, page:int, section, anchor})-[:PART_OF]->(:Document)
+            (:Entity {name, type})
+            (:Chunk)-[:MENTIONS]->(:Entity)
+            (:Entity)-[:CO_OCCUR]->(:Entity)
 
     Returns number of nodes/edges upserted (rough estimate).
     """
@@ -90,6 +91,7 @@ def build_graph_db(docs: Sequence[DocLike]) -> int:
     constraint_cypher = [
         "CREATE CONSTRAINT chunk_id IF NOT EXISTS FOR (c:Chunk) REQUIRE c.id IS UNIQUE",
         "CREATE CONSTRAINT entity_name IF NOT EXISTS FOR (e:Entity) REQUIRE e.name IS UNIQUE",
+        "CREATE CONSTRAINT doc_id IF NOT EXISTS FOR (d:Document) REQUIRE d.document_id IS UNIQUE",
     ]
     db = os.getenv("NEO4J_DATABASE") or "neo4j"
     with drv.session(database=db) as s:
@@ -103,13 +105,33 @@ def build_graph_db(docs: Sequence[DocLike]) -> int:
             md = (getattr(d, "metadata", None) or {})
             cid = _chunk_node_id(md)
             file = md.get("file_name"); page = md.get("page"); section = md.get("section"); anchor = md.get("anchor")
+            src_doc_id = md.get("source_document_id") or None
+            file_path = md.get("file_path") or None
             text = getattr(d, "page_content", "") or ""
             ents = _extract_entities(text)
+            # MERGE document provenance node when available
+            if src_doc_id:
+                try:
+                    s.run(
+                        "MERGE (d:Document {document_id:$id}) ON CREATE SET d.file_path=$path, d.ingestion_timestamp=datetime()",
+                        {"id": src_doc_id, "path": file_path or file},
+                    )
+                except Exception:
+                    pass
             # MERGE chunk
             s.run(
                 "MERGE (c:Chunk {id:$id}) SET c.file=$file, c.page=toInteger($page), c.section=$section, c.anchor=$anchor",
                 {"id": cid, "file": file, "page": page, "section": section, "anchor": anchor},
             )
+            # Connect chunk to document when known
+            if src_doc_id:
+                try:
+                    s.run(
+                        "MATCH (c:Chunk {id:$cid}), (d:Document {document_id:$did}) MERGE (c)-[:PART_OF]->(d)",
+                        {"cid": cid, "did": src_doc_id},
+                    )
+                except Exception:
+                    pass
             count += 1
             # MERGE entities and relationships
             for e in ents:

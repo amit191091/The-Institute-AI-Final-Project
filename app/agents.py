@@ -154,6 +154,17 @@ def route_question_ex(q: str) -> Tuple[str, Dict]:
 		trace["matched"].append("summary_keywords")
 		trace["route"] = "summary"
 		return "summary", trace
+	# Protocol/list-style cues: prefer structured extraction via summary/table
+	if any(tok in ql for tok in (
+		"protocol", "protocols", "procedure", "procedures", "guideline", "guidelines", "steps", "checklist", "recommendation", "recommendations"
+	)):
+		trace["matched"].append("list_protocol_keywords")
+		# If table/figure tokens also present, route to table; otherwise summary to extract bullets
+		if any(w in ql for w in ("table", "figure", "fig ", "image", "graph", "plot")):
+			trace["route"] = "table"
+			return "table", trace
+		trace["route"] = "summary"
+		return "summary", trace
 	if any(m in ql for m in ("timeline", "chronology", "when did", "what happened on", "what happend on")) or simp.get("wants_date"):
 		# Prefer table-style (structured) agent for date lookups to keep answers concise & factual
 		trace["matched"].append("timeline_date")
@@ -180,6 +191,13 @@ def route_question(q: str) -> str:
 
 @trace_func
 def render_context(docs: List[Document], max_chars: int = 8000) -> str:
+	# Allow overriding via env; keep a high default to avoid over-truncation
+	import os as _os
+	try:
+		max_chars_env = int(_os.getenv("RAG_MAX_CONTEXT_CHARS", str(max_chars)))
+		max_chars = max_chars_env
+	except Exception:
+		pass
 	out, n = [], 0
 	for d in docs:
 		md = d.metadata or {}
@@ -245,7 +263,14 @@ def answer_needle(llm: LLMCallable, docs: List[Document], question: str) -> str:
 			sentences.extend([s.strip() for s in _re.split(r"(?<=[.!?])\s+", part) if s.strip()])
 		ql = (question or "").lower()
 		best = max(sentences or [ctx], key=lambda s: _ov(ql, s.lower()))
-		ans = best[:400]
+		# Allow long answers by default; clamp only if explicitly configured
+		import os as _os
+		try:
+			max_chars_env = _os.getenv("RAG_MAX_FALLBACK_ANSWER_CHARS", "5000")
+			max_chars = int(max_chars_env)
+		except Exception:
+			max_chars = 5000
+		ans = best if max_chars <= 0 else best[:max_chars]
 
 	# Post-filter: optionally trim answers if enabled; always ensure a citation
 	try:

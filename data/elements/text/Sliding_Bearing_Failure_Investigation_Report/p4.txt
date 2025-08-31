@@ -1,0 +1,40 @@
+exceeded 80°C, and the audible knocking from the bearing housing intensified in both 
+volume and frequency. 
+Controlled Return to Port (07:50–10:15) 
+At 07:50, following confirmation of mechanical degradation, the starboard engine was shut 
+down, and the shaft was mechanically locked by "Shaft Lock Protocol". From this point 
+forward, the shaft remained secured and non-operational. The vessel continued its return to 
+Haifa Naval Base using only the port propulsion system, maintaining reduced speed under 
+controlled navigation, and the speed was 10 knots. At 10:15, the vessel arrived safely at the 
+dock with tugboat assistance. 
+Initial Mechanical Inspection at Shipyard (10:30–12:30) 
+At 10:30, the vessel was lifted at the shipyard platform to allow safe access for inspection 
+and repair operations. The mechanical crew, along with mechanics from the mechanical 
+laboratory, secured the starboard shaft using adjustable support brackets and safety blocks. 
+Lubrication system was fully isolated in preparation for disassembly. At 11:00, work on the 
+bearing housing began. Removal of the upper bearing shell revealed extensive scoring and 
+blue discoloration on the white-metal surface, indicative of localized overheating. Visual 
+inspection identified wiped zones—typical of hydrodynamic film collapse. At 12:30, the 
+lower bearing shell was extracted. The surface displayed spalling and clear evidence of 
+thermal fatigue damage. 
+Laboratory Analysis of the Damaged Bearing (13:00–14:30) 
+At 13:00, the damaged MKB-245 bearing shells were delivered to the Naval Engineering 
+Laboratory. A comprehensive metallurgical investigation included: 
+• 
+SEM (scanning electron microscopy) showing micro-crack formation and fatigue 
+bands. 
+• 
+EDS (energy-dispersive spectroscopy) confirming elevated iron and copper levels 
+in wear zones. 
+• 
+Hardness testing, showing decreased Brinell values in the high-temperature 
+regions. 
+• 
+Cross-sectional micrograph analysis showing shear deformation across grain 
+boundaries. 
+• 
+In addition, Photographic inspection proved to be the earliest and most sensitive 
+method for detecting the onset of wear. 
+• 
+Image-based measurements (e.g., depth, area loss, surface roughness) should be 
+quantified where possible, not just qualitatively assessed

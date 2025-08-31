@@ -127,12 +127,21 @@ def extract_incident(text: str) -> Dict[str, Optional[str]]:
 
 
 @trace_func
-def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | None = None) -> Dict:
+def attach_metadata(
+	chunk: Dict,
+	client_id: str | None = None,
+	case_id: str | None = None,
+	*,
+	dataset_id: str | None = None,
+	source_document_id: str | None = None,
+	file_path: str | None = None,
+) -> Dict:
 	ents = extract_entities(chunk["content"])
 	inc = extract_incident(chunk["content"])
 	date_toks = extract_date_tokens(chunk["content"]) if chunk.get("content") else {"month_tokens": [], "day_tokens": []}
 	metadata = {
 		"file_name": chunk["file_name"],
+		"file_path": file_path or chunk.get("file_path"),
 		"page": chunk.get("page"),
 	# Prefer the explicit section when present (e.g., "Figure", "Table")
 	"section": chunk.get("section") or chunk.get("section_type"),
@@ -141,6 +150,9 @@ def attach_metadata(chunk: Dict, client_id: str | None = None, case_id: str | No
 	"doc_id": chunk.get("doc_id"),
 	"chunk_id": chunk.get("chunk_id"),
 	"content_hash": chunk.get("content_hash"),
+		# Multi-tenancy / scoping
+		"dataset_id": dataset_id or chunk.get("dataset_id"),
+		"source_document_id": source_document_id or chunk.get("source_document_id"),
 		"image_path": chunk.get("image_path"),
 		"extractor": chunk.get("extractor"),
 		"table_number": chunk.get("table_number"),

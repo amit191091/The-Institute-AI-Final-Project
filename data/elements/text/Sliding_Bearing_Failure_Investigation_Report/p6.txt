@@ -1,0 +1,48 @@
+System performance was continuously recorded by the integrated monitoring panel. No 
+warnings, fault indicators, or abnormal trends were observed during the testing period. 
+Crew Debrief and Internal Investigation Summary (20:15–21:15) 
+A technical debrief was held by the chief engineer and failure analysis team: 
+• 
+Timeline Review: 20-minute response between anomaly detection and propulsion 
+reduction. Protocols followed. 
+• 
+Risk Assessment: Continued operation beyond 08:00 could have led to seizure. 
+• 
+Root Cause: Preload loss in mounting bolt caused shaft tilt and lubrication 
+breakdown. Emphasized validating preload under live conditions. 
+• 
+Sensor Gaps: Monitoring system escalated too late. Future designs should integrate 
+vibration, temperature, and acoustic data fusion for early detection. 
+Recommendations 
+• 
+Vibration Monitoring Enhancement: It is recommended to re-evaluate alert 
+thresholds and perform silent system tests to monitor accelerometer output at rest. 
+The difference in baseline DC levels before the failure and during the trial suggests 
+this could improve early fault detection. 
+• 
+Alignment Verification Protocol: Implement mandatory shaft alignment 
+measurements prior to departure using laser or dial indicator tools. Visual 
+inspection alone is insufficient. 
+• 
+Bolt Torque Monitoring Procedures: Establish a tracking protocol for bolt torque 
+history and consider periodic re-torque checks, especially after drydock or major 
+maintenance periods. 
+• 
+Training and Response Drills: The crew’s quick and effective response during the 
+failure scenario was commendable. Continued emphasis on training and emergency 
+simulation drills is essential to maintain high readiness 
+• 
+Establish a wear progression model linking image-based wear depth to vibration 
+features (RMS increase, sideband growth, harmonic distortion). 
+• 
+Use this model to predict the remaining useful life (RUL) of the gear before 
+catastrophic failure. 
+Gaps Identified During Investigation 
+• 
+Delayed Alert Escalation: The monitoring system recorded elevated vibration 
+values but issued alerts only after degradation had significantly progressed. 
+• 
+Unclear Bolt Release Mechanism: Although bolts were torqued per protocol prior 
+to deployment, at least one was found to have lost significant preload. The exact 
+mechanism of preload loss remains undetermined and represents a critical 
+investigative gap.

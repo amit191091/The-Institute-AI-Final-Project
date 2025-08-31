@@ -1,0 +1,6 @@
+|  | What to do |  |  | Check/UnCheck |  |
+| --- | --- | --- | --- | --- | --- |
+| Lubrication System |  |  | CHECK |  |  |
+| Interface |  |  | CHECK |  |  |
+| Instrumentation and Sensors |  |  | CHECK |  |  |
+| Condition Inspection |  |  | CHECK |  |  |

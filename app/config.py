@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+import os
 
 
 @dataclass(frozen=True)
@@ -21,3 +22,8 @@ class Settings:
 
 
 settings = Settings()
+
+# Enable verbose logging for debugging
+if os.getenv("RAG_TRACE", "0").lower() in ("1", "true", "yes"):
+    os.environ["LANGCHAIN_VERBOSE"] = "true"
+    os.environ["LANGCHAIN_CALLBACKS_MANAGER_VERBOSE"] = "true"

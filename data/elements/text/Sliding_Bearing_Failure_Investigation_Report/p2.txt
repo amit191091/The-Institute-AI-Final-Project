@@ -1,0 +1,41 @@
+detected. Shaft alignment was visually assessed for signs of deformation, and both 
+the shaft supports and thrust bearings were confirmed to be securely mounted. The 
+shaft was manually rotated and showed no signs of excessive resistance. 
+Initial Shaft Startup and Departure (05:30–06:15) 
+At 05:35, following full clearance from the Chief Engineer, the engines were started. Main 
+propulsion systems were engaged, with both port and starboard shafts activated. No 
+abnormalities were detected. 
+At 05:50, the vessel departed the naval base, and both shafts were brought up to the 
+nominal 1800 RPM. The starboard shaft, fitted with the sliding bearing under discussion 
+(bearing model: MKB-245 white-metal hydrodynamic bearing, support type, 160 mm 
+diameter journal), operated within normal thermal parameters. The lubricant outlet 
+temperature stabilized at 57.8°C, and the inlet temperature measured 48.5°C, indicating 
+normal heat transfer and lubricant flow. Lubricant pressure remained steady at 72 psi, with 
+minor oscillations attributed to pump cycling. 
+At 06:00, vibration readings from a single axial accelerometer mounted on the bearing 
+housing showed RMS acceleration levels of 0.031 g—consistent with historical baseline 
+values. No abnormal noises were reported, and the propulsion shaft exhibited smooth and 
+balanced rotation. 
+Routine Monitoring at Sea (06:15–07:10) 
+From 06:15 onwards, the on-duty engineering technician conducted hourly system reviews. 
+Logged parameters included: 
+• 
+Lubricant visual inspection: The lubricant was checked for clarity, absence of 
+foreign particles, and no signs of leakage. Lubricant level remained stable. 
+• 
+Temperature monitoring: Inlet and outlet temperatures were recorded at 48.5°C 
+and 57.8°C, respectively, with a manually calculated differential of approximately 
+9.3°C, remaining within the expected operating range. 
+• 
+Vibration monitoring: Real-time vibration data were reviewed via the Integrated 
+Monitoring Panel (IMP). The RMS acceleration measured by the axial accelerometer 
+on the bearing housing showed a gradual increase from the nominal 0.031 g to 
+0.045 g. Although the trend was noted, the increase was too minor to trigger 
+automated alarms. 
+• 
+Visual shaft inspection: The technician confirmed that the shaft was rotating 
+smoothly, with no visible abnormalities or audible irregularities such as knocking or 
+rubbing noises. 
+At 07:10, a subsequent check recorded an RMS vibration level of 0.068 g. While still below 
+the predefined cautionary threshold of 0.080 g, the increase was steeper than typical 
+baseline fluctuations. The IMP flagged the value as a "watch item." Upon reviewing the

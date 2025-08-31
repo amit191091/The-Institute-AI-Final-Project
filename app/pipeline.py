@@ -12,8 +12,11 @@ import math
 import difflib
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import List, Tuple
-from app.logger import trace_func
+from typing import List, Tuple, Sequence
+import warnings
+# Suppress the specific FutureWarning from torch
+warnings.filterwarnings("ignore", category=FutureWarning, message="`encoder_attention_mask` is deprecated and will be removed in version 4.55.0 for `BertSdpaSelfAttention.forward`.")
+from app.logger import trace_func, get_logger
 from langchain.schema import Document
 
 # Prefer a safe .env loader to avoid parse spam; we update os.environ manually
@@ -85,6 +88,11 @@ from app.validate import validate_min_pages
 from app.logger import get_logger, trace_func, trace_here
 from app.eval_ragas import run_eval_detailed, pretty_metrics
 try:
+    # Lightweight metric usable without API keys
+    from app.eval_ragas import overlap_prf1  # type: ignore
+except Exception:  # pragma: no cover
+    overlap_prf1 = None  # type: ignore
+try:
     from app.agent_orchestrator import run as run_orchestrator  # type: ignore
 except Exception:
     run_orchestrator = None  # type: ignore
@@ -93,6 +101,29 @@ try:
 except Exception:  # pragma: no cover
     def run_eval_deepeval(dataset):
         return None, []
+
+@trace_func
+def ingest_and_upsert(paths: Sequence[str | Path], dataset_id: str | None = None):
+    """Incrementally ingest documents and return updated (docs, hybrid, debug).
+
+    - Uses a single persisted Chroma store when RAG_CHROMA_DIR is set; otherwise in-memory.
+    - Attaches dataset_id and source_document_id metadata during ingestion.
+    - Respects existing environment flags for chunking/retrieval.
+    """
+    if dataset_id:
+        try:
+            os.environ["RAG_DATASET_ID"] = str(dataset_id)
+        except Exception:
+            pass
+    norm: List[Path] = []
+    for p in paths or []:
+        try:
+            norm.append(Path(str(p)))
+        except Exception:
+            continue
+    if not norm:
+        raise ValueError("No valid paths provided to ingest_and_upsert")
+    return build_pipeline(norm)
 
 
 @trace_func
@@ -112,13 +143,15 @@ def _clean_run_outputs() -> None:
                 shutil.rmtree(d)
         except Exception:
             pass
-    # Optional: clean Chroma persist dir
+    # Do NOT auto-clean Chroma persist dir; we want a single, growing store for multi-dataset ingestion.
+    # Set RAG_CLEAN_CHROMA=1 explicitly to wipe.
     try:
-        chroma_dir = os.getenv("RAG_CHROMA_DIR")
-        if chroma_dir:
-            d = Path(chroma_dir)
-            if d.exists():
-                shutil.rmtree(d)
+        if os.getenv("RAG_CLEAN_CHROMA", "0").lower() in ("1", "true", "yes"):
+            chroma_dir = os.getenv("RAG_CHROMA_DIR")
+            if chroma_dir:
+                d = Path(chroma_dir)
+                if d.exists():
+                    shutil.rmtree(d)
     except Exception:
         pass
     # Logs: queries.jsonl and logs/elements dumps
@@ -277,6 +310,8 @@ def build_pipeline(paths: List[Path]):
     except Exception:
         pass
     records = []
+    # Dataset/document scoping
+    dataset_id_env = os.getenv("RAG_DATASET_ID") or os.getenv("DATASET_ID") or None
     # ingest
     for pair in loaders.load_many(paths):
         try:
@@ -296,8 +331,29 @@ def build_pipeline(paths: List[Path]):
             pass
         # Structure-aware chunking (semantic+multi by default; see FLAGS above)
         chunks = structure_chunks(elements, str(path))
+        # Compute deterministic source_document_id from normalized absolute path
+        try:
+            apath = str(Path(path).resolve())
+        except Exception:
+            apath = str(path)
+        import hashlib as _hl
+        src_id = _hl.sha256(apath.encode("utf-8", errors="ignore")).hexdigest()[:16]
+        # Resolve dataset_id: prefer explicit env, else default to per-file stem
+        try:
+            dataset_id_val = dataset_id_env or Path(path).stem
+        except Exception:
+            dataset_id_val = dataset_id_env or str(getattr(path, "stem", path))
         for ch in chunks:
-            records.append(attach_metadata(ch, client_id=os.getenv("CLIENT_ID"), case_id=path.stem))
+            records.append(
+                attach_metadata(
+                    ch,
+                    client_id=os.getenv("CLIENT_ID"),
+                    case_id=path.stem,
+                    dataset_id=dataset_id_val,
+                    source_document_id=src_id,
+                    file_path=apath,
+                )
+            )
     # Section histogram after metadata attachment
     sec_hist = {}
     for r in records:
@@ -313,6 +369,16 @@ def build_pipeline(paths: List[Path]):
         log.info("Using normalized docs for indexing: %d", len(docs))
     else:
         docs = to_documents(records)
+    # Normalize file_name for display: prefer basename of file_path
+    try:
+        for d in docs:
+            md = d.metadata or {}
+            fp = md.get("file_path") or md.get("file") or md.get("file_name")
+            if fp:
+                md["file_name"] = Path(str(fp)).name
+                d.metadata = md
+    except Exception:
+        pass
     # Optional: expand table rows into KV mini-docs to improve retrieval of specific values
     try:
         if os.getenv("RAG_EXPAND_TABLE_KV", "1").lower() in ("1", "true", "yes"):
@@ -324,7 +390,14 @@ def build_pipeline(paths: List[Path]):
         Path("logs").mkdir(exist_ok=True)
         snap_path = Path("logs") / "db_snapshot.jsonl"
         full_snap_path = Path("logs") / "db_snapshot_full.jsonl"
-        with open(snap_path, "w", encoding="utf-8") as f, open(full_snap_path, "w", encoding="utf-8") as f_full:
+        # Append mode so multiple ingests accumulate; dedupe is best-effort and can be improved later
+        with open(snap_path, "a", encoding="utf-8") as f, open(full_snap_path, "a", encoding="utf-8") as f_full:
+            # per-source snapshot file (helps compare per document ingests)
+            try:
+                per_src_dir = Path("logs") / "elements"
+                per_src_dir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                per_src_dir = None  # type: ignore
             for d in docs:
                 md = d.metadata or {}
                 txt = d.page_content or ""
@@ -363,6 +436,7 @@ def build_pipeline(paths: List[Path]):
                     preview_str = (txt or "")[:200]
                 rec = {
                     "file": md.get("file_name"),
+                    "file_path": md.get("file_path"),
                     "page": md.get("page"),
                     "section": md.get("section"),
                     "anchor": md.get("anchor"),
@@ -370,6 +444,9 @@ def build_pipeline(paths: List[Path]):
                     "doc_id": md.get("doc_id"),
                     "chunk_id": md.get("chunk_id"),
                     "content_hash": md.get("content_hash"),
+                    # Multi-dataset
+                    "dataset_id": md.get("dataset_id"),
+                    "source_document_id": md.get("source_document_id"),
                     # Table metadata
                     "table_md_path": md.get("table_md_path"),
                     "table_csv_path": md.get("table_csv_path"),
@@ -393,17 +470,30 @@ def build_pipeline(paths: List[Path]):
                 try:
                     full_rec = {
                         "file": md.get("file_name"),
+                        "file_path": md.get("file_path"),
                         "page": md.get("page"),
                         "section": md.get("section") or md.get("section_type"),
                         "anchor": md.get("anchor"),
                         "doc_id": md.get("doc_id"),
                         "chunk_id": md.get("chunk_id"),
                         "content_hash": md.get("content_hash"),
+                        "dataset_id": md.get("dataset_id"),
+                        "source_document_id": md.get("source_document_id"),
                         "metadata": md,  # entire metadata blob for offline inspection
                         "text": txt,     # full chunk text (untruncated)
                         "words": len((txt or "").split()),
                     }
                     f_full.write(json.dumps(full_rec, ensure_ascii=False) + "\n")
+                    # Write per-source file snapshot as well
+                    try:
+                        if per_src_dir is not None:
+                            ds_id = (md.get("dataset_id") or "unknown_ds").strip()
+                            src_id = (md.get("source_document_id") or "unknown_src").strip()
+                            per_src = per_src_dir / f"snap_{ds_id}__{src_id}.jsonl"
+                            with open(per_src, "a", encoding="utf-8") as _ps:
+                                _ps.write(json.dumps(full_rec, ensure_ascii=False) + "\n")
+                    except Exception:
+                        pass
                 except Exception:
                     # Best-effort: if serialization fails, write a minimal fallback
                     try:
@@ -504,14 +594,42 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
     """Answer a user question using the hybrid retriever and route to sub-agents."""
     log = get_logger()
     trace_here("ask")
+    
+    # Generate unique trace ID for this query
+    import uuid
+    trace_id = str(uuid.uuid4())[:8]
+    try:
+        qprev_lim = int(os.getenv("RAG_MAX_QUERY_PREVIEW_CHARS", "500"))
+    except Exception:
+        qprev_lim = 500
+    q_prev = (question or "") if qprev_lim <= 0 else (question or "")[:qprev_lim]
+    log.info(f"QUERY_START: trace_id={trace_id} question='{q_prev}...'")
+    
     qa = query_analyzer(question)
     q_exec = qa.get("canonical") or question
+    
+    log.debug(f"QUERY_ANALYSIS: trace_id={trace_id} canonical='{q_exec}' keywords={qa['keywords']} filters={qa['filters']}")
+    
     try:
         candidates = hybrid.invoke(q_exec)
     except Exception:
-        # Fallback to invoke for older retriever interfaces
         candidates = hybrid.invoke(q_exec)
+    # Optional: scope by filename via env to remove cross-doc noise during focused evals
+    try:
+        scope_file = os.getenv("RAG_FILE_SCOPE", "").strip()
+        if scope_file:
+            strict = os.getenv("RAG_FILE_SCOPE_STRICT", "0").lower() in ("1","true","yes")
+            def _ok(d):
+                md = getattr(d, "metadata", {}) or {}
+                fn = md.get("file_name") or md.get("file_path") or ""
+                return (str(fn).lower().endswith(scope_file.lower()) if strict else (scope_file.lower() in str(fn).lower()))
+            candidates = [d for d in candidates if _ok(d)]
+    except Exception:
+        pass
     candidates = candidates[: settings.K_TOP_K]  # rerank TOP K
+    
+    log.debug(f"RETRIEVAL: trace_id={trace_id} candidates={len(candidates)}")
+    
     filtered = apply_filters(candidates, qa["filters"])  # metadata filters
     try:
         sec = qa["filters"].get("section")
@@ -519,13 +637,27 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
         sec = None
     if sec and not filtered:
         filtered = [d for d in docs if (d.metadata or {}).get("section") == sec]
+    
+    log.debug(f"FILTERING: trace_id={trace_id} filtered={len(filtered)} section_hint={sec}")
+    
     top_docs = rerank_candidates(q_exec, filtered, top_n=settings.CONTEXT_TOP_N)
+    # Fail-closed when no context for factual/table questions
+    if not top_docs and (qa.get("intent", {}).get("needs_facts") or qa.get("filters", {}).get("section") in ("Table","Figure")):
+        log.info(f"AGENT_COMPLETE: trace_id={trace_id} agent=guard answer_length=0 (empty context)")
+        return "Not found in context."
+    
+    log.debug(f"RERANKING: trace_id={trace_id} top_docs={len(top_docs)}")
+    
     # Prefer LLM router when enabled; fall back to heuristic router
     route = route_llm(question)
+    router_source = "llm"
     if route == "DEFAULT":
         route, rtrace = route_question_ex(question)
+        router_source = "heuristic"
     else:
         rtrace = {"matched": ["llm_router"], "route": route, "simplified": qa.get("intent", {})}
+
+    log.info(f"ROUTING: trace_id={trace_id} route={route} router={router_source}")
 
     def _doc_head(d):
         md = getattr(d, "metadata", {}) or {}
@@ -560,15 +692,20 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
         pass
     for i, d in enumerate(top_docs, start=1):
         log.info("ctx[%d] score=%.4f | %s", i, _score(d), _doc_head(d))
+    
     # Orchestrator: prefer orchestrated answer by default (with trace for transparency)
     reasoning_trace = None
     ans = None
+    agent_used = None
+    
     try:
         if run_orchestrator is not None and os.getenv("RAG_USE_ORCHESTRATOR", "1").lower() in ("1","true","yes"):
+            log.debug(f"AGENT_START: trace_id={trace_id} agent=orchestrator")
             reasoning_trace = run_orchestrator(question, docs, hybrid, _LLM(), do_answer=True)
             try:
                 if isinstance(reasoning_trace, dict):
                     ans = reasoning_trace.get("answer") or None
+                    agent_used = "orchestrator"
                     # If orchestrator selected a route, prefer it for logging
                     if reasoning_trace.get("route"):
                         route = reasoning_trace.get("route") or route
@@ -576,21 +713,38 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
                 pass
     except Exception:
         reasoning_trace = None
+    
     # Fallback to route-based agents if orchestrator didn't answer
     if not ans:
+        log.debug(f"AGENT_START: trace_id={trace_id} agent={route}")
         if route == "summary":
             ans = answer_summary(_LLM(), top_docs, question)
+            agent_used = "summary"
         elif route == "table" or route == "graph":  # temporary: route graph to table agent until dedicated graph agent is added
             ans = answer_table(_LLM(), top_docs, question)
+            agent_used = "table"
         else:
             ans = answer_needle(_LLM(), top_docs, question)
+            agent_used = "needle"
+    # Guard against non-cited answers on factual routes
+    try:
+        if agent_used in ("needle","table") and (not ans or ("[" not in ans and "]" not in ans)):
+            ans = "Not found in context."
+    except Exception:
+        pass
+    
+    log.info(f"AGENT_COMPLETE: trace_id={trace_id} agent={agent_used} answer_length={len(ans or '')}")
+    
     try:
         log_dir = Path("logs")
         log_dir.mkdir(exist_ok=True)
         entry = {
             "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "trace_id": trace_id,
             "question": question,
             "route": route,
+            "router_source": router_source,
+            "agent_used": agent_used,
             "router_trace": rtrace,
             "keywords": qa["keywords"],
             "filters": qa["filters"],
@@ -627,6 +781,18 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
         candidates = hybrid.invoke(q_exec)
     except Exception:
         candidates = hybrid.invoke(q_exec)
+    # Optional file scoping to contain noise during specific benchmarks
+    try:
+        scope_file = os.getenv("RAG_FILE_SCOPE", "").strip()
+        if scope_file:
+            strict = os.getenv("RAG_FILE_SCOPE_STRICT", "0").lower() in ("1","true","yes")
+            def _ok(d):
+                md = getattr(d, "metadata", {}) or {}
+                fn = md.get("file_name") or md.get("file_path") or ""
+                return (str(fn).lower().endswith(scope_file.lower()) if strict else (scope_file.lower() in str(fn).lower()))
+            candidates = [d for d in candidates if _ok(d)]
+    except Exception:
+        pass
     candidates = candidates[: settings.K_TOP_K]
     filtered = apply_filters(candidates, qa["filters"])  # type: ignore[index]
     try:
@@ -640,6 +806,13 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
         top_docs = candidates[: settings.CONTEXT_TOP_N] if candidates else []
     if not top_docs:
         top_docs = docs[: settings.CONTEXT_TOP_N]
+    # Hard stop answer when no context for factual/table asks
+    try:
+        qa = query_analyzer(question)
+        if not top_docs and (qa.get("intent", {}).get("needs_facts") or (qa.get("filters", {}) or {}).get("section") in ("Table","Figure")):
+            return "Not found in context.", top_docs, None
+    except Exception:
+        pass
     # Prefer orchestrator for answering when enabled, fallback to route-based agents
     ans = None
     trace = None
@@ -820,6 +993,9 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         pass
     gt_rows = _load_json_or_jsonl(gt_path) if gt_path else []
     gt_by_id, gt_by_q = _index_ground_truth(gt_rows)
+    # Fix for empty questions in ground truth
+    if "" in gt_by_q:
+        del gt_by_q[""]
     try:
         log.info(
             "GT auto-load: Loaded %d ids and %d questions from %s. Sample ids: %s",
@@ -878,6 +1054,28 @@ def run_evaluation(docs, hybrid, llm: _LLM):
             "reference": ref,
             "reasoning_trace": tr,
         }
+        # Heuristic label drift detector: if ref token not dominant in contexts, flag it
+        try:
+            if ref:
+                import re as _re
+                tok = max(_re.findall(r"\b([A-Za-z]{3,}[0-9A-Za-z\-]{0,})\b", str(ref)), key=len, default=None)
+                if tok:
+                    ctx_text = "\n".join(ctxs or [])
+                    hits_ref = len(_re.findall(rf"\b{_re.escape(tok)}\b", ctx_text, _re.I))
+                    # Look for common alternate tokens present in industrial sensors
+                    alt_candidates = ["dytran", "pcb", "352c33", "3053b"]
+                    best_alt = None; best_count = 0
+                    for alt in alt_candidates:
+                        if alt.lower() == str(tok).lower():
+                            continue
+                        c = len(_re.findall(rf"\b{_re.escape(alt)}\b", ctx_text, _re.I))
+                        if c > best_count:
+                            best_count = c; best_alt = alt
+                    if best_alt and best_count > hits_ref:
+                        rec["label_drift"] = True
+                        rec["label_drift_note"] = f"Context favors '{best_alt}' over reference token '{tok}'."
+        except Exception:
+            pass
         rows_out.append(rec)
         try:
             if os.getenv("RAG_TRACE_EVAL", "0").lower() in ("1", "true", "yes"):
@@ -903,11 +1101,90 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         ds["reference"].append(r.get("reference", ""))
         ds["ground_truths"].append(r.get("ground_truths", []))  # type: ignore[index]
         ds["reasoning_trace"].append(r.get("reasoning_trace"))
-    try:
-        summary, per_q = run_eval_detailed(ds)
-    except Exception as e:
-        print(f"RAGAS evaluation failed: {e}")
-        return
+    # --- Run Evaluations ---
+    summary, per_q = {}, []
+    ragas_was_run = False
+    if os.getenv("RAG_SKIP_RAGAS", "0").lower() not in ("1", "true", "yes"):
+        try:
+            summary, per_q = run_eval_detailed(ds)
+            ragas_was_run = True
+        except Exception as e:
+            print(f"RAGAS evaluation failed: {e}")
+            summary, per_q = {}, []
+    else:
+        print("Skipping RAGAS evaluation (RAG_SKIP_RAGAS=1)")
+
+    # Optional: run DeepEval side-by-side
+    de_sum, de_rows = None, []
+    deepeval_was_run = False
+    if os.getenv("RAG_DEEPEVAL", "0").lower() in ("1", "true", "yes"):
+        try:
+            de_sum, de_rows = run_eval_deepeval(ds)
+            if de_sum:
+                deepeval_was_run = True
+                print("\nDeepEval summary:")
+                print(json.dumps(de_sum, indent=2))
+        except Exception as e:
+            log.warning("DeepEval run failed: %s", e)
+
+    # If RAGAS was skipped, use DeepEval results as the main summary
+    if not ragas_was_run and deepeval_was_run:
+        summary = de_sum
+        # Merge DeepEval's per-question details into the main `per_q` structure
+        q_map = {row.get("question"): row for row in per_q}
+        for de_row in de_rows:
+            q = de_row.get("question")
+            if q in q_map:
+                q_map[q].update(de_row)
+            else:
+                # This case is unlikely if dataset is the same, but handle it
+                per_q.append(de_row)
+
+    # Fallback: if both RAGAS and DeepEval were skipped or failed, still emit useful outputs
+    if (not ragas_was_run) and (not deepeval_was_run):
+        try:
+            # Build per-question rows with lightweight overlap metrics (no API calls)
+            ref_list = list(ds.get("reference") or [])
+            ctx_list = list(ds.get("contexts") or [])
+            q_list = list(ds.get("question") or [])
+            a_list = list(ds.get("answer") or [])
+            n = max(len(q_list), len(a_list), len(ref_list))
+            per_q = []
+            for i in range(n):
+                q = q_list[i] if i < len(q_list) else None
+                a = a_list[i] if i < len(a_list) else None
+                ref = ref_list[i] if i < len(ref_list) else None
+                ctxs = ctx_list[i] if i < len(ctx_list) else []
+                row = {"question": q, "answer": a, "reference": ref, "contexts": ctxs}
+                # Compute simple token overlap if helper available
+                try:
+                    if overlap_prf1 is not None:
+                        p, r, f1 = overlap_prf1(str(ref or ""), list(ctxs or []))  # type: ignore[arg-type]
+                        row.update({
+                            "overlap_precision": p,
+                            "overlap_recall": r,
+                            "overlap_f1": f1,
+                        })
+                except Exception:
+                    pass
+                row["note"] = "No eval backend enabled (RAGAS skipped, DeepEval unavailable). Lightweight overlap-only metrics shown."
+                per_q.append(row)
+            # Summary: averages over overlap metrics when present
+            def _mean_safe(vals):
+                nums = [v for v in vals if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
+                return float(sum(nums) / len(nums)) if nums else None
+            summary = {
+                "overlap_precision": _mean_safe([r.get("overlap_precision") for r in per_q]),
+                "overlap_recall": _mean_safe([r.get("overlap_recall") for r in per_q]),
+                "overlap_f1": _mean_safe([r.get("overlap_f1") for r in per_q]),
+                "items": len(per_q),
+                "note": "Evaluation backends disabled; computed token overlap vs contexts only.",
+            }
+        except Exception:
+            # keep empty summary/per_q but still persist files below
+            pass
+
+    # --- Save and Print Final Results ---
     def _nan_to_none(x):
         if isinstance(x, float) and math.isnan(x):
             return None
@@ -916,59 +1193,48 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         if isinstance(x, dict):
             return {k: _nan_to_none(v) for k, v in x.items()}
         return x
+
     out_dir = Path("logs")
     out_dir.mkdir(exist_ok=True)
-    with open(out_dir / "eval_ragas_summary.json", "w", encoding="utf-8") as f:
+    
+    summary_path = out_dir / "eval_summary.json"
+    per_q_path = out_dir / "eval_per_question.jsonl"
+
+    with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2, allow_nan=False)
-    per_q_path = out_dir / "eval_ragas_per_question.jsonl"
+
     with open(per_q_path, "w", encoding="utf-8") as f:
-        for rec in per_q:
-            f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False, allow_nan=False) + "\n")
-        # Footer: averaged metrics across all questions for quick inspection
-        try:
+        if per_q:
+            for rec in per_q:
+                f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False, allow_nan=False) + "\n")
+            
             s = _nan_to_none(summary)
-            footer = {
-                "__summary__": True,
-                "faithfulness": (s.get("faithfulness") if isinstance(s, dict) else None),
-                "answer_relevancy": (s.get("answer_relevancy") if isinstance(s, dict) else None),
-                "context_precision": (s.get("context_precision") if isinstance(s, dict) else None),
-                "context_recall": (s.get("context_recall") if isinstance(s, dict) else None),
-                "table_qa_accuracy": (s.get("table_qa_accuracy") if isinstance(s, dict) else None),
-                # mirror factual fields for convenience
-                "factual_em_rate": (s.get("factual_em_rate") if isinstance(s, dict) else None),
-                "factual_token_f1": (s.get("factual_token_f1") if isinstance(s, dict) else None),
-                "factual_numeric": (s.get("factual_numeric") if isinstance(s, dict) else None),
-                "factual_range": (s.get("factual_range") if isinstance(s, dict) else None),
-                "factual_list_f1": (s.get("factual_list_f1") if isinstance(s, dict) else None),
-                "factual_score": (s.get("factual_score") if isinstance(s, dict) else None),
-            }
-            f.write(json.dumps(footer, ensure_ascii=False, allow_nan=False) + "\n")
-        except Exception:
-            pass
+            if s:
+                if isinstance(s, dict):
+                    footer = {"__summary__": True, **s}
+                else:
+                    footer = {"__summary__": True, "summary": s}
+                f.write(json.dumps(footer, ensure_ascii=False, allow_nan=False) + "\n")
+
     log = get_logger()
-    summ_str = pretty_metrics(summary)
-    print("RAGAS summary:\n" + summ_str)
-    try:
+    print("\n--- Evaluation Summary ---")
+    if summary:
+        summ_str = pretty_metrics(summary)
+        print(summ_str)
         log.info("Evaluation summary (averaged over %d items):\n%s", len(rows_out), summ_str)
-        log.info("Saved summary to %s and per-question to %s", str(out_dir / "eval_ragas_summary.json"), str(per_q_path))
-    except Exception:
-        pass
-    # Optional: run DeepEval side-by-side
-    try:
-        de_sum, de_rows = run_eval_deepeval(ds)
-        if de_sum:
-            print("\nDeepEval summary:")
-            try:
-                print(json.dumps(de_sum, indent=2))
-            except Exception:
-                print(str(de_sum))
-    except Exception as e:
-        try:
-            log.warning("DeepEval run failed: %s", e)
-        except Exception:
-            pass
+    else:
+        print("No evaluation metrics calculated.")
+        log.info("No evaluation metrics calculated.")
+
+    log.info("Saved summary to %s and per-question to %s", str(summary_path), str(per_q_path))
     print("\nPer-question results:")
     try:
+        # Allow very long answers in console; clamp only if explicitly configured
+        max_chars_env = os.getenv("RAG_MAX_PRINT_ANSWER_CHARS", "5000")
+        try:
+            max_chars = int(max_chars_env)
+        except Exception:
+            max_chars = 5000
         for rec in per_q:
             q = rec.get("question", "")
             ans = rec.get("answer", "")
@@ -984,7 +1250,10 @@ def run_evaluation(docs, hybrid, llm: _LLM):
                     return {k: _nan_to_none_local(v) for k, v in x.items()}
                 return x
             print("- Q:", q)
-            print("  A:", (ans or "")[:400])
+            if isinstance(max_chars, int) and max_chars > 0:
+                print("  A:", (ans or "")[:max_chars])
+            else:
+                print("  A:", (ans or ""))
             print("  metrics:", json.dumps(_nan_to_none_local(mets), ensure_ascii=False))
     except Exception:
         pass
@@ -1056,7 +1325,7 @@ def run() -> None:
             emb = _get_embeddings()
             dense_store = None
             try:
-                from langchain_community.vectorstores import Chroma  # type: ignore
+                from langchain_chroma import Chroma  # type: ignore
                 persist_dir = os.getenv("RAG_CHROMA_DIR")
                 collection = os.getenv("RAG_CHROMA_COLLECTION")
                 if persist_dir:
@@ -1081,28 +1350,151 @@ def run() -> None:
             except Exception:
                 pass
             llm = _LLM()
-            # Launch UI directly
+
+            # Optional: evaluation mode even in UI-only reuse flow (skip ingestion/indexing)
+            try:
+                if os.getenv("RAG_EVAL", "").lower() in ("1", "true", "yes"):
+                    run_evaluation(docs, hybrid, llm)
+                    # In headless mode, don't launch UI afterward
+                    if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
+                        return
+            except Exception as e:
+                print(f"[UI-ONLY] Evaluation failed: {e}")
+
+            # Launch UI directly (with resilient port fallback)
             try:
                 ui = build_ui(docs, hybrid, llm, debug=None)
                 share = os.getenv("GRADIO_SHARE", "").lower() in ("1", "true", "yes")
-                port = int(os.getenv("GRADIO_PORT", "7860"))
-                ui.launch(share=share, server_name=os.getenv("GRADIO_SERVER_NAME", "127.0.0.1"), server_port=port, show_error=True)
+                base_server = os.getenv("GRADIO_SERVER_NAME", "127.0.0.1")
+                base_port = int(os.getenv("GRADIO_PORT", "7860"))
+                launched = False
+                last_err = None
+                for i in range(0, 5):  # try up to 5 consecutive ports
+                    try:
+                        port = base_port + i
+                        print(f"[UI-ONLY] Launching UI on http://{base_server}:{port} (try {i+1})")
+                        ui.launch(share=share, server_name=base_server, server_port=port, show_error=True)
+                        launched = True
+                        break
+                    except Exception as e:
+                        last_err = e
+                        continue
+                if not launched:
+                    print(f"UI failed to launch after retries (UI-ONLY): {last_err}")
             except Exception as e:
-                print(f"UI failed to launch (UI-ONLY): {e}")
+                print(f"UI failed to build/launch (UI-ONLY): {e}")
             return
         except Exception as e:
             print(f"[UI-ONLY] Fallback to full pipeline due to error: {e}")
     _clean_run_outputs()
     # Default-enable DeepEval when API key is present unless explicitly disabled
     try:
-        if (os.getenv("CONFIDENT_API_KEY") or os.getenv("DEEPEVAL_API_KEY")) and os.getenv("RAG_DEEPEVAL") is None:
+        if (os.getenv("CONFIDENT_API_KEY") or os.getenv("DEEPEVAL_API_KEY") or os.getenv("OPENAI_API_KEY")) and os.getenv("RAG_DEEPEVAL") is None:
             os.environ.setdefault("RAG_DEEPEVAL", "1")
+        # If DeepEval is enabled and not explicitly retaining RAGAS, skip RAGAS to avoid async/provider conflicts
+        if os.getenv("RAG_DEEPEVAL", "0").lower() in ("1","true","yes") and os.getenv("RAG_KEEP_RAGAS") not in ("1","true","yes"):
+            os.environ.setdefault("RAG_SKIP_RAGAS", "1")
     except Exception:
         pass
     paths = _discover_input_paths()
     if not paths:
-        print("No input files found. Place PDFs/DOCs under data/ or the root PDF.")
-        return
+        # Fallback: reuse existing artifacts and still launch the UI (do not bail out)
+        print("No new input files found. Falling back to UI with existing artifacts (if any).")
+        try:
+            os.environ.setdefault("RAG_CLEAN_RUN", "0")
+        except Exception:
+            pass
+        try:
+            # Load docs from full snapshot for UI context/debug (if present)
+            docs: List[Document] = []
+            snap_full = Path("logs") / "db_snapshot_full.jsonl"
+            if snap_full.exists():
+                with open(snap_full, "r", encoding="utf-8") as f:
+                    for ln in f:
+                        try:
+                            rec = json.loads(ln)
+                            txt = rec.get("text") or ""
+                            md = rec.get("metadata") or {}
+                            if not md:
+                                md = {
+                                    "file_name": rec.get("file"),
+                                    "page": rec.get("page"),
+                                    "section": rec.get("section"),
+                                    "anchor": rec.get("anchor"),
+                                }
+                            docs.append(Document(page_content=txt, metadata=md))
+                        except Exception:
+                            continue
+            else:
+                print("[FALLBACK] Missing logs/db_snapshot_full.jsonl; proceeding with empty docs list.")
+
+            emb = _get_embeddings()
+            dense_store = None
+            try:
+                from langchain_chroma import Chroma  # type: ignore
+                persist_dir = os.getenv("RAG_CHROMA_DIR")
+                collection = os.getenv("RAG_CHROMA_COLLECTION")
+                if persist_dir:
+                    Path(persist_dir).mkdir(parents=True, exist_ok=True)
+                    dense_store = Chroma(embedding_function=emb, persist_directory=persist_dir, collection_name=collection) if collection else Chroma(embedding_function=emb, persist_directory=persist_dir)
+                else:
+                    print("[FALLBACK] RAG_CHROMA_DIR not set; dense retrieval will be in-memory from docs.")
+            except Exception as e:
+                print(f"[FALLBACK] Failed to open persisted Chroma: {e}")
+                dense_store = None
+
+            sparse = build_sparse_retriever(docs, k=settings.SPARSE_K)
+            if dense_store is None:
+                dense_store = build_dense_index(docs, emb)
+            hybrid = build_hybrid_retriever(dense_store, sparse, dense_k=settings.DENSE_K)
+
+            # Optional quick graph render
+            try:
+                G = build_graph(docs)
+                Path("logs").mkdir(exist_ok=True)
+                render_graph_html(G, str(Path("logs") / "graph.html"))
+            except Exception:
+                pass
+            llm = _LLM()
+
+            # Optional evaluation in fallback mode
+            try:
+                if os.getenv("RAG_EVAL", "").lower() in ("1", "true", "yes"):
+                    run_evaluation(docs, hybrid, llm)
+                    if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
+                        return
+            except Exception as e:
+                print(f"[FALLBACK] Evaluation failed: {e}")
+
+            # Launch UI unless headless (with resilient port fallback)
+            if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
+                print("[HEADLESS] Fallback complete. Skipping UI launch.")
+                return
+            try:
+                ui = build_ui(docs, hybrid, llm, debug=None)
+                share = os.getenv("GRADIO_SHARE", "").lower() in ("1", "true", "yes")
+                server = os.getenv("GRADIO_SERVER_NAME", "127.0.0.1")
+                base_port = int(os.getenv("GRADIO_PORT", "7860"))
+                launched = False
+                last_err = None
+                for i in range(0, 5):
+                    try:
+                        port = base_port + i
+                        get_logger().info("Launching UI on http://%s:%s (share=%s) [try=%d]", server, port, share, i+1)
+                        ui.launch(share=share, server_name=server, server_port=port, show_error=True)
+                        launched = True
+                        break
+                    except Exception as e:
+                        last_err = e
+                        continue
+                if not launched:
+                    print(f"UI failed to launch (fallback) after retries: {last_err}")
+            except Exception as e:
+                print(f"UI failed to launch (fallback): {e}")
+            return
+        except Exception as e:
+            print(f"[FALLBACK] Error preparing UI: {e}")
+            return
     # Log core toggles once
     try:
         log = get_logger()
@@ -1151,15 +1543,36 @@ def run() -> None:
         run_evaluation(docs, hybrid, llm)
         if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
             return
-    # Launch Gradio UI (skip in headless mode)
+    # Launch Gradio UI (skip in headless mode). Try a few alternative ports if busy.
     if os.getenv("RAG_HEADLESS", "").lower() in ("1", "true", "yes"):
         print("[HEADLESS] Ingestion complete. Skipping UI launch.")
         return
     try:
         ui = build_ui(docs, hybrid, llm, debug)
         share = os.getenv("GRADIO_SHARE", "").lower() in ("1", "true", "yes")
-        port = int(os.getenv("GRADIO_PORT", "7860"))
-        ui.launch(share=share, server_name=os.getenv("GRADIO_SERVER_NAME", "127.0.0.1"), server_port=port, show_error=True)
+        server = os.getenv("GRADIO_SERVER_NAME", "127.0.0.1")
+        base_port = int(os.getenv("GRADIO_PORT", "7860"))
+        launched = False
+        last_err = None
+        for i in range(0, 5):
+            try:
+                port = base_port + i
+                get_logger().info("Launching UI on http://%s:%s (share=%s) [try=%d]", server, port, share, i+1)
+                ui.launch(share=share, server_name=server, server_port=port, show_error=True)
+                launched = True
+                break
+            except Exception as e:
+                last_err = e
+                continue
+        if not launched:
+            print(f"UI failed to launch after retries: {last_err}")
+            # Last resort: write a minimal static HTML with a message
+            try:
+                Path("logs").mkdir(exist_ok=True)
+                (Path("logs")/"ui_failed.html").write_text("<h1>UI failed to launch</h1><p>See console for details.</p>", encoding="utf-8")
+                print("Wrote logs/ui_failed.html as a fallback notice.")
+            except Exception:
+                pass
     except Exception as e:
         print(f"UI failed to launch: {e}")
         print(ask(docs, hybrid, llm, "Summarize the failure modes described."))
