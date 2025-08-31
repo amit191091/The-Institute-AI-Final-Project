@@ -6,7 +6,24 @@ from typing import Dict, Any, List, Tuple
 
 def _norm_text(s: str) -> str:
     s = (s or "").strip().lower()
-    s = s.replace("μ", "u")  # normalize micro symbol
+    # normalize micro symbol and unicode dashes
+    s = s.replace("μ", "u")
+    s = re.sub(r"[\u2010-\u2015\u2212]", "-", s)
+    # normalize month-name dates to iso-like (yyyy-mm-dd) when possible
+    try:
+        months = {
+            "january": "01", "february": "02", "march": "03", "april": "04", "may": "05", "june": "06",
+            "july": "07", "august": "08", "september": "09", "october": "10", "november": "11", "december": "12",
+        }
+        # patterns like "June 13, 2024" or "June 13 2024"
+        m = re.search(r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?\s*,?\s*(20\d{2})", s)
+        if m:
+            mon = months.get(m.group(1), "01")
+            day = int(m.group(2))
+            year = m.group(3)
+            s = re.sub(m.re, f"{year}-{mon}-{day:02d}", s)
+    except Exception:
+        pass
     # collapse whitespace
     s = re.sub(r"\s+", " ", s)
     return s
@@ -104,18 +121,25 @@ def _compatible(val_a: float, unit_a: str, val_b: float, unit_b: str) -> bool:
 
 
 def numeric_agreement(a: str, b: str) -> float:
-    # Exact numeric equality for matching positions/units; 1.0 if all reference numbers matched in answer
+    # Exact numeric equality for matching positions/units; if reference is unit-less, compare values only
     A = _extract_numbers_with_units(a)
     B = _extract_numbers_with_units(b)
     if not B:
         return 0.0
+    # detect if reference has no units
+    ref_unitless = all((ub == "" for (_, ub) in B))
     matched = 0
     for vb, ub in B:
         ok = False
         for va, ua in A:
-            if _compatible(va, ua, vb, ub) or (ua == ub and abs(va - vb) < 1e-9):
-                ok = True
-                break
+            if ref_unitless:
+                if abs(va - vb) < 1e-9:
+                    ok = True
+                    break
+            else:
+                if _compatible(va, ua, vb, ub) or (ua == ub and abs(va - vb) < 1e-9):
+                    ok = True
+                    break
         matched += 1 if ok else 0
     return matched / len(B)
 

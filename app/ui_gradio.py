@@ -12,6 +12,7 @@ from langchain.schema import Document
 from app.agents import answer_needle, answer_summary, answer_table, route_question_ex
 from app.retrieve import apply_filters, query_analyzer, rerank_candidates
 from app.eval_ragas import run_eval, pretty_metrics
+from app.eval_ragas import run_eval_detailed, append_eval_footer  # batch eval + footer append
 from app.logger import get_logger
 from app.graphdb import run_cypher as _run_cypher  # optional, guarded by try/except in handler
 from app.normalized_loader import load_normalized_docs
@@ -258,6 +259,28 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		s = re.sub(r"\s+", " ", s)
 		return s.strip(".,:;!?-—\u2013\u2014\"'()[]{}")
 
+	def _sanitize_q_text(text: str) -> str:
+		"""Sanitize sbf_v2-style question text.
+		- Drop leading Q:/User:/Question: prefixes
+		- If multi-turn like "Q: ...\nA: ...", keep only before first A:
+		- Collapse whitespace
+		"""
+		try:
+			s = (text or "")
+			if not isinstance(s, str):
+				s = str(s)
+			s = s.strip()
+			# Remove common prefixes
+			s = re.sub(r"^(Q|User|Question)\s*[:：]\s*", "", s, flags=re.I)
+			# Keep only question portion before the first A:
+			parts = re.split(r"\n\s*A\s*[:：]", s, maxsplit=1, flags=re.I)
+			s = parts[0]
+			# Collapse whitespace
+			s = " ".join(s.split())
+			return s
+		except Exception:
+			return str(text or "").strip()
+
 	def _load_gt_file(path: str | dict | object):
 		# Normalize to a path: accept string, dict(File), or object with .name
 		if isinstance(path, dict):
@@ -287,9 +310,26 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 							rows.append(json.loads(line))
 						except Exception:
 							pass
+				# Flatten if the file contained a single JSON array
+				if len(rows) == 1 and isinstance(rows[0], list):
+					rows = rows[0]
+				# Fallback: if nothing parsed line-by-line, try parsing the entire file as JSON
+				if not rows:
+					try:
+						loaded_full = json.load(open(p, "r", encoding="utf-8"))
+						rows = loaded_full if isinstance(loaded_full, list) else [loaded_full]
+					except Exception:
+						rows = []
 				loaded = rows
 			else:
 				loaded = json.load(open(p, "r", encoding="utf-8"))
+
+			# If a dict has a top-level 'questions' list, extract it
+			if isinstance(loaded, dict) and loaded.get("questions"):
+				try:
+					loaded = loaded.get("questions") or []
+				except Exception:
+					pass
 
 			# New fast-path: context_free GT provided as a list of {id, answer/acceptable_answers}
 			# Build by-id answer lists and defer question join until QA is loaded.
@@ -516,8 +556,24 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 							rows.append(json.loads(line))
 						except Exception:
 							pass
+				# Flatten if the file was a single JSON array on one line
+				if len(rows) == 1 and isinstance(rows[0], list):
+					rows = rows[0]
+				# If nothing parsed, try full-file JSON
+				if not rows:
+					try:
+						full = json.load(open(p, "r", encoding="utf-8"))
+						rows = full if isinstance(full, list) else [full]
+					except Exception:
+						rows = []
 			else:
 				rows = json.load(open(p, "r", encoding="utf-8"))
+			# If a dict with a top-level 'questions' list, extract it
+			if isinstance(rows, dict) and rows.get("questions"):
+				try:
+					rows = rows.get("questions") or []
+				except Exception:
+					rows = []
 			# Detect context_free QA: rows with id+question but no answers; join with GT by id
 			is_context_free = False
 			if isinstance(rows, list) and rows and all(isinstance(r, dict) and r.get("id") and r.get("question") for r in rows):
@@ -531,9 +587,11 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				for r in rows:
 					try:
 						_i = str(r.get("id"))
-						_q = str(r.get("question"))
+						_q = _sanitize_q_text(r.get("question"))
 						if _i and _q:
-							by_id_q[_i] = _q
+							# Skip too-short questions (<3 tokens)
+							if len(_q.split()) >= 3:
+								by_id_q[_i] = _q
 					except Exception:
 						pass
 				qa_map["by_id"] = by_id_q
@@ -561,9 +619,9 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				for r in rows or []:
 					if not isinstance(r, dict):
 						continue
-					q = r.get("question") or r.get("q")
+					q = _sanitize_q_text(str(r.get("question") or r.get("q") or ""))
 					a = r.get("answer") or r.get("reference")
-					if q and a:
+					if q and a and len(str(q).split()) >= 3:
 						m[str(q)] = str(a)
 			qa_map["__loaded__"] = True
 			qa_map["map"] = m
@@ -782,6 +840,27 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		try:
 			if isinstance(reasoning_trace, dict) and reasoning_trace.get("route"):
 				r = reasoning_trace.get("route") or r
+			# Propagate domain_hint to filters when present to reduce cross-file mixing
+			if isinstance(rtrace, dict) and rtrace.get("domain_hint"):
+				try:
+					dom = rtrace.get("domain_hint")
+					# Light-weight heuristic: if domain is 'gear', prefer wear/gear file; if 'materials', prefer materials file.
+					# We approximate via filename contains keyword.
+					def _ok_by_domain(d):
+						md = d.metadata or {}
+						name = str(md.get("file_name") or "").lower()
+						if dom == "gear":
+							return any(k in name for k in ("gear", "wear"))
+						if dom == "materials":
+							return any(k in name for k in ("material", "cuticle", "exocuticle", "endocuticle"))
+						return True
+					_pref = [d for d in top_docs if _ok_by_domain(d)]
+					if _pref:
+						# Keep only preferred-domain docs if they represent majority
+						if len(_pref) >= max(1, int(0.6 * len(top_docs))):
+							top_docs = _pref
+				except Exception:
+					pass
 		except Exception:
 			pass
 		router_info = _render_router_info(r, top_docs) + f" | Agent: {r} | Rules: {', '.join(rtrace.get('matched', []))}"
@@ -796,6 +875,43 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 		_dbg_sparse_md = "Sparse (top≈10):\n\n" + _fmt_docs(sparse_docs)
 		_dbg_hybrid_md = "Hybrid candidates (pre-filter):\n\n" + _fmt_docs(cands)
 		_dbg_top_df = _rows_to_df(_rows_from_docs(top_docs))
+		# Precompute figure path for navigation-style questions, even if route is needle
+		fig_path = None
+		try:
+			if isinstance(rtrace, dict) and rtrace.get("wants_figure"):
+				want = None
+				if qa and qa.get("filters") and qa["filters"].get("figure_number"):
+					try:
+						want = int(str(qa["filters"]["figure_number"]).strip())
+					except Exception:
+						want = None
+				def _matches_want(d):
+					if want is None:
+						return False
+					md = d.metadata or {}
+					fn = md.get("figure_number")
+					if fn is not None and str(fn).strip().isdigit() and int(str(fn)) == want:
+						return True
+					import re as _re
+					lab = str(md.get("figure_label") or md.get("caption") or "")
+					return bool(_re.match(rf"^\s*figure\s*{want}\\b", lab, _re.I))
+				_fig_docs = [d for d in top_docs if (d.metadata or {}).get("section") == "Figure" and (d.metadata or {}).get("image_path")]
+				fig_doc = None
+				if want is not None and _fig_docs:
+					pref = [d for d in _fig_docs if _matches_want(d)]
+					fig_doc = pref[0] if pref else (_fig_docs[0] if _fig_docs else None)
+				else:
+					fig_doc = _fig_docs[0] if _fig_docs else None
+				if fig_doc is None and want is not None:
+					_all_figs = [d for d in _all_docs() if (d.metadata or {}).get("section") == "Figure" and (d.metadata or {}).get("image_path")]
+					_pref = [d for d in _all_figs if _matches_want(d)]
+					fig_doc = _pref[0] if _pref else (_all_figs[0] if _all_figs else None)
+				if fig_doc is not None:
+					p = Path(str(fig_doc.metadata.get("image_path")))
+					if p.exists():
+						fig_path = str(p)
+		except Exception:
+			pass
 		ans_raw = ans_from_orch
 		if r == "summary":
 			if not ans_raw:
@@ -1443,6 +1559,140 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					return gr.update(value=_rows_to_df(rows))
 				refresh.click(_on_refresh, inputs=[sec_dd, qbox], outputs=[df])
 				# initial load handled via value above
+
+			with gr.Tab("Eval"):
+				gr.Markdown("### Run batch eval on QA/GT files and append per-question results to logs")
+				qa_eval = gr.File(label="QA file (.json/.jsonl)")
+				gt_eval = gr.File(label="Ground Truth file (.json/.jsonl)")
+				run_eval_btn = gr.Button("Run Eval (append logs)", variant="primary")
+				eval_status = gr.Markdown()
+
+				def _answer_for_eval(q_text: str):
+					# Headless answering for evaluation; mirrors on_ask logic but returns raw answer + top_docs
+					qa = query_analyzer(q_text)
+					# Inject scope if selected
+					try:
+						val_json = os.getenv("RAG_SELECTED_SCOPE_JSON", "")
+						if val_json:
+							val = json.loads(val_json)
+							if isinstance(val, dict):
+								if val.get("dataset_id"):
+									qa["filters"]["dataset_id"] = val["dataset_id"]
+								if val.get("source_document_id"):
+									qa["filters"]["source_document_id"] = val["source_document_id"]
+					except Exception:
+						pass
+					cands = hybrid.invoke(q_text)
+					filtered = apply_filters(cands, qa.get("filters", {}))
+					if not filtered:
+						filtered = cands
+					top_docs = rerank_candidates(q_text, filtered, top_n=8)
+					try:
+						from app.reranker_ce import rerank as ce_rerank
+						if ce_rerank is not None:
+							top_docs = ce_rerank(q_text, top_docs, top_n=8)
+					except Exception:
+						pass
+					if not top_docs:
+						top_docs = (cands or [])[:8] or docs[:8]
+					# Try orchestrator first
+					ans_raw = None
+					try:
+						if run_orchestrator is not None and os.getenv("RAG_USE_ORCHESTRATOR", "1").lower() in ("1","true","yes"):
+							trace = run_orchestrator(q_text, docs, hybrid, llm, do_answer=True)
+							ans_raw = (trace.get("answer") if isinstance(trace, dict) else None)
+					except Exception:
+						ans_raw = None
+					# Fallback to router-based agents
+					if not ans_raw:
+						route, _ = route_question_ex(q_text)
+						if route == "summary":
+							ans_raw = answer_summary(llm, top_docs, q_text)
+						elif route == "table":
+							ans_raw = answer_table(llm, top_docs, q_text)
+						else:
+							ans_raw = answer_needle(llm, top_docs, q_text)
+					return ans_raw or "", [d.page_content for d in (top_docs or [])]
+
+				def _run_eval_and_append(qa_file, gt_file):
+					# Load files using robust loaders
+					msgs = []
+					try:
+						if gt_file:
+							msgs.append(_load_gt_file(gt_file))
+					except Exception as e:
+						msgs.append(f"(GT load failed: {e})")
+					try:
+						if qa_file:
+							msgs.append(_load_qa_file(qa_file))
+					except Exception as e:
+						msgs.append(f"(QA load failed: {e})")
+					# Build question set
+					questions: list[str] = []
+					# Prefer QA map keys (with references)
+					qa_m = qa_map.get("map") or {}
+					if isinstance(qa_m, dict) and qa_m:
+						questions = list(qa_m.keys())
+					elif isinstance(qa_map.get("by_id"), dict) and isinstance(gt_map.get("by_id"), dict):
+						# Join ids present in both
+						for _id, _q in (qa_map.get("by_id") or {}).items():
+							if str(_id) in (gt_map.get("by_id") or {}):
+								questions.append(str(_q))
+					elif isinstance(gt_map.get("map"), dict) and gt_map.get("map"):
+						questions = list((gt_map.get("map") or {}).keys())
+					questions = [q for q in questions if q]
+					if not questions:
+						return "(no questions found in QA/GT files)"
+					# Answer each question and build dataset
+					Q, A, R, C = [], [], [], []
+					for q in questions:
+						ans, ctxs = _answer_for_eval(q)
+						Q.append(q)
+						A.append(ans)
+						# Reference preference: QA map -> GT map -> empty
+						ref = None
+						try:
+							ref = (qa_map.get("map") or {}).get(q)
+							if isinstance(ref, list):
+								ref = ref[0] if ref else None
+						except Exception:
+							ref = None
+						if not ref:
+							try:
+								gts = (gt_map.get("map") or {}).get(q)
+								if isinstance(gts, list) and gts:
+									ref = gts[0]
+							except Exception:
+								ref = None
+						R.append(ref or "")
+						C.append(ctxs)
+					# Run detailed eval
+					dataset = {"question": Q, "answer": A, "reference": R, "contexts": C}
+					try:
+						summary, per_q = run_eval_detailed(dataset)
+					except Exception as e:
+						return f"(evaluation failed: {e})"
+					# Append per-question to logs
+					try:
+						Path("logs").mkdir(exist_ok=True)
+						outp = Path("logs")/"eval_per_question.jsonl"
+						with open(outp, "a", encoding="utf-8") as f:
+							for rec in per_q or []:
+								# add source hint
+								rec2 = dict(rec)
+								rec2["source"] = {
+									"qa": (qa_file.get("name") if isinstance(qa_file, dict) else getattr(qa_file, "name", None)),
+									"gt": (gt_file.get("name") if isinstance(gt_file, dict) else getattr(gt_file, "name", None)),
+								}
+								f.write(json.dumps(rec2, ensure_ascii=False) + "\n")
+						# Footer with summary
+						append_eval_footer(str(outp), summary)
+						msg = "\n".join(msgs + ["Per-question results appended to logs/eval_per_question.jsonl", "", pretty_metrics(summary)])
+						return msg
+					except Exception as e:
+						return f"(failed to append results: {e})"
+
+				run_eval_btn.click(_run_eval_and_append, inputs=[qa_eval, gt_eval], outputs=[eval_status])
 
 	return demo
 

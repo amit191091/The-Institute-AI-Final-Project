@@ -616,20 +616,20 @@ SUMMARY_SYSTEM = (
 )
 
 NEEDLE_SYSTEM = (
-    "Extract precise details strictly from the provided context. Do NOT add facts. "
+    "Extract precise details from the provided context. Do NOT add facts not present in the context. "
     "Use citations only from the context headers (e.g., [Gear wear Failure.pdf p11]). "
     "Do not invent image filenames; cite the PDF file name and page only. "
     "Only list sensor modalities/instruments explicitly present in the context.\n"
     "If a value is requested, return the exact value with units and a citation like [filename pX].\n"
     "DELTA CONTRACT: For questions like 'by how much', 'exceed', 'increase', compute Δ = target − baseline using values "
     "explicitly found in the context. If either value is missing, answer exactly: Insufficient evidence in supplied context.\n"
-    "NUMBER SAFETY: Never reuse numbers that appear only in the question; every numeric in the answer must also appear in the context.\n"
+    "NUMBER SAFETY: When using numbers, ensure they are supported by the context. Numbers that appear in both the question and context are acceptable to use.\n"
     "LIST MODE: If the question asks for a list (protocols/steps/recommendations/procedures/"
     "guidelines/checklist or 'whole list'/'give me all'/'list all'), copy bullets VERBATIM (one per line) "
     "with a citation at the end. Preserve original numbering/bullets and phrasing. Output only the list items "
     "and a single citation at the end. If no such list exists, answer exactly: Not found in context. "
     "Otherwise return a single concise sentence (≤20 words) with exactly one citation. "
-    "If unknown, answer exactly: Not found in context."
+    "If the information is clearly not present in the context, answer exactly: Not found in context. However, if the information is present but in a different form, extract and rephrase it appropriately."
 )
 
 TABLE_SYSTEM = (
@@ -674,10 +674,10 @@ NEEDLE_PROMPT = (
     "Instructions:\n"
     "- Prefer exact phrases and numeric values with units.\n"
     "- Apply the DELTA CONTRACT when the question asks 'by how much / exceed / increase / baseline'.\n"
-    "- NUMBER SAFETY: do not use numbers only present in the question.\n"
+    "- NUMBER SAFETY: When using numbers, ensure they are supported by the context. Numbers that appear in both the question and context are acceptable to use.\n"
     "- Always add exactly one citation like [Gear wear Failure.pdf pX].\n"
     "- LIST MODE rules apply when relevant.\n"
-    "- If insufficient evidence, reply exactly: Insufficient evidence in supplied context.\n"
+    "- If insufficient evidence exists or information is clearly not present, reply exactly: Insufficient evidence in supplied context.\n"
     "Answer:"
 )
 

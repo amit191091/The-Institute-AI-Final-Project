@@ -186,8 +186,8 @@ def build_hybrid_retriever(dense_store, sparse_retriever, dense_k: int = 10):
 	print("this is me on the hybrid retriver")
 	dense = dense_store.as_retriever(search_kwargs={"k": dense_k})
 	try:
-		sw = float(os.getenv("RAG_SPARSE_WEIGHT", "0.7"))
-		dw = float(os.getenv("RAG_DENSE_WEIGHT", "0.3"))
+		sw = float(os.getenv("RAG_SPARSE_WEIGHT", "0.6"))
+		dw = float(os.getenv("RAG_DENSE_WEIGHT", "0.4"))
 		total = (sw + dw) or 1.0
 		sw, dw = sw / total, dw / total
 		print(f"this is me on the hybrid retriver sw {sw} dw {dw}")
@@ -234,6 +234,15 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 	has_rms = ("rms" in ql)
 	has_rps = (" rps " in ql) or ("rps" in ql)
 	ai_image_task = any(w in ql for w in ("ai", "image", "vision", "task", "detection", "segmentation"))
+	# Domain hint detection (gear vs materials) to bias sources; avoids introducing new flags
+	dom_hint: str | None = None
+	try:
+		if re.search(r"\b(rps|rms|wear|w\d{1,2}|gear|mesh)\b", ql, re.I):
+			dom_hint = "gear"
+		if re.search(r"\b(cuticle|exocuticle|endocuticle|lamellae|pincer|tubules|conditioning|anneal)\b", ql, re.I):
+			dom_hint = "materials"
+	except Exception:
+		dom_hint = None
 	# Section preference based on query intent
 	sec_pref = None
 	if "table" in ql:
@@ -390,12 +399,25 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 					fig_text_adj -= 0.06
 		except Exception:
 			pass
+		# Domain-aware filename boost
+		domain_boost = 0.0
+		try:
+			if dom_hint:
+				name = str((md.get("file_name") or md.get("file_path") or "")).lower()
+				if dom_hint == "gear":
+					if any(k in name for k in ("gear", "wear", "gear_wear")):
+						domain_boost += 0.12
+				elif dom_hint == "materials":
+					if any(k in name for k in ("material", "cuticle", "exocuticle", "endocuticle")):
+						domain_boost += 0.12
+		except Exception:
+			domain_boost = 0.0
 
-		score = (base + meta_boost + sec_boost + src_boost + date_boost + tokens_boost + number_bonus + num_boost + signal_boost + fig_text_adj) * _len_penalty(len(d.page_content), (md.get("section") == "Figure" or md.get("section_type") == "Figure"))
+		score = (base + meta_boost + sec_boost + src_boost + date_boost + tokens_boost + number_bonus + num_boost + signal_boost + fig_text_adj + domain_boost) * _len_penalty(len(d.page_content), (md.get("section") == "Figure" or md.get("section_type") == "Figure"))
 		# Attach transient score for UI/debug (do not persist to vectorstore)
 		try:
 			md_dbg = dict(md)
-			md_dbg["_score"] = round(float((base + meta_boost + sec_boost + src_boost + date_boost + tokens_boost + number_bonus + num_boost + signal_boost + fig_text_adj) * _len_penalty(len(d.page_content), (md.get("section") == "Figure" or md.get("section_type") == "Figure"))), 4)
+			md_dbg["_score"] = round(float((base + meta_boost + sec_boost + src_boost + date_boost + tokens_boost + number_bonus + num_boost + signal_boost + fig_text_adj + domain_boost) * _len_penalty(len(d.page_content), (md.get("section") == "Figure" or md.get("section_type") == "Figure"))), 4)
 			d.metadata = md_dbg
 		except Exception:
 			pass
@@ -438,6 +460,27 @@ def rerank_candidates(query: str, candidates: List[Document], top_n: int = 8) ->
 			for i, d in enumerate(unique[:top_n], start=1):
 				md = d.metadata or {}
 				log.debug("RERANK[%d]: %s p%s %s score=%.4f", i, md.get("file_name"), md.get("page"), md.get("section"), (md.get("_score") or 0.0))
+	except Exception:
+		pass
+
+	# Dominant-file gating: if one source clearly dominates the top results, keep a single-source context
+	try:
+		if unique:
+			counts: dict[str, int] = {}
+			for d in unique:
+				fn = str((d.metadata or {}).get("file_name") or "")
+				counts[fn] = counts.get(fn, 0) + 1
+			# pick the file with max count (ignore empty name)
+			dom_file = None
+			dom_count = 0
+			for fn, c in counts.items():
+				if fn and c > dom_count:
+					dom_file, dom_count = fn, c
+			if dom_file:
+				total = len(unique)
+				# gate if majority is from one file
+				if dom_count >= max(3, int(0.6 * total)):
+					unique = [d for d in unique if str((d.metadata or {}).get("file_name") or "") == dom_file]
 	except Exception:
 		pass
 	# Optional precision pruning by score threshold

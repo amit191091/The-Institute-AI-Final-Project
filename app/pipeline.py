@@ -12,7 +12,7 @@ import math
 import difflib
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import List, Tuple, Sequence
+from typing import List, Tuple, Sequence, Dict, Any
 import warnings
 # Suppress the specific FutureWarning from torch
 warnings.filterwarnings("ignore", category=FutureWarning, message="`encoder_attention_mask` is deprecated and will be removed in version 4.55.0 for `BertSdpaSelfAttention.forward`.")
@@ -101,6 +101,18 @@ try:
 except Exception:  # pragma: no cover
     def run_eval_deepeval(dataset):
         return None, []
+try:
+    # Manual factual evaluation (LLM-as-judge)
+    from app.eval_manual import (
+        run_manual_evaluation,
+        EvaluationThresholds,
+        pretty_manual_metrics as pretty_manual_metrics_manual,
+    )  # type: ignore
+except Exception:  # pragma: no cover
+    run_manual_evaluation = None  # type: ignore
+    EvaluationThresholds = None  # type: ignore
+    def pretty_manual_metrics_manual(summary: Dict[str, Any]) -> str:  # type: ignore
+        return ""
 
 @trace_func
 def ingest_and_upsert(paths: Sequence[str | Path], dataset_id: str | None = None):
@@ -1103,6 +1115,29 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         ds["reasoning_trace"].append(r.get("reasoning_trace"))
     # --- Run Evaluations ---
     summary, per_q = {}, []
+
+    # Manual evaluation (preferred when enabled)
+    manual_summary, manual_rows = None, []
+    manual_enabled = os.getenv("RAG_MANUAL_EVAL", "1").lower() in ("1", "true", "yes")
+    if manual_enabled and run_manual_evaluation is not None and EvaluationThresholds is not None:
+        try:
+            # thresholds from env or defaults
+            def _f(name: str, default: float) -> float:
+                try:
+                    return float(os.getenv(name, str(default)))
+                except Exception:
+                    return default
+            thresholds = EvaluationThresholds(
+                context_precision=_f("MANUAL_THRESH_CONTEXT_PRECISION", 0.75),
+                context_recall=_f("MANUAL_THRESH_CONTEXT_RECALL", 0.70),
+                faithfulness=_f("MANUAL_THRESH_FAITHFULNESS", 0.85),
+                table_qa_accuracy=_f("MANUAL_THRESH_TABLE_QA", 0.90),
+                answer_correctness=_f("MANUAL_THRESH_ANSWER_CORRECTNESS", 0.80),
+            )
+            manual_summary, manual_rows = run_manual_evaluation(ds, thresholds)
+        except Exception as e:
+            get_logger().warning("Manual evaluation failed: %s", e)
+            manual_summary, manual_rows = None, []
     ragas_was_run = False
     if os.getenv("RAG_SKIP_RAGAS", "0").lower() not in ("1", "true", "yes"):
         try:
@@ -1184,6 +1219,11 @@ def run_evaluation(docs, hybrid, llm: _LLM):
             # keep empty summary/per_q but still persist files below
             pass
 
+    # Prefer manual results when available and enabled
+    use_manual = bool(manual_rows) and isinstance(manual_summary, dict) and ("error" not in (manual_summary or {}))
+    final_summary = manual_summary if use_manual else summary
+    final_per_q = manual_rows if use_manual else per_q
+
     # --- Save and Print Final Results ---
     def _nan_to_none(x):
         if isinstance(x, float) and math.isnan(x):
@@ -1201,14 +1241,14 @@ def run_evaluation(docs, hybrid, llm: _LLM):
     per_q_path = out_dir / "eval_per_question.jsonl"
 
     with open(summary_path, "w", encoding="utf-8") as f:
-        json.dump(_nan_to_none(summary), f, ensure_ascii=False, indent=2, allow_nan=False)
+        json.dump(_nan_to_none(final_summary), f, ensure_ascii=False, indent=2, allow_nan=False)
 
     with open(per_q_path, "w", encoding="utf-8") as f:
-        if per_q:
-            for rec in per_q:
+        if final_per_q:
+            for rec in final_per_q:
                 f.write(json.dumps(_nan_to_none(rec), ensure_ascii=False, allow_nan=False) + "\n")
-            
-            s = _nan_to_none(summary)
+
+            s = _nan_to_none(final_summary)
             if s:
                 if isinstance(s, dict):
                     footer = {"__summary__": True, **s}
@@ -1216,10 +1256,23 @@ def run_evaluation(docs, hybrid, llm: _LLM):
                     footer = {"__summary__": True, "summary": s}
                 f.write(json.dumps(footer, ensure_ascii=False, allow_nan=False) + "\n")
 
+    # Also persist manual outputs separately when available
+    try:
+        if use_manual:
+            man_sum = out_dir / "eval_manual_summary.json"
+            man_rows = out_dir / "eval_manual_detailed.jsonl"
+            with open(man_sum, "w", encoding="utf-8") as mf:
+                json.dump(_nan_to_none(manual_summary), mf, ensure_ascii=False, indent=2, allow_nan=False)
+            with open(man_rows, "w", encoding="utf-8") as mf:
+                for rec in manual_rows:
+                    mf.write(json.dumps(_nan_to_none(rec), ensure_ascii=False, allow_nan=False) + "\n")
+    except Exception:
+        pass
+
     log = get_logger()
     print("\n--- Evaluation Summary ---")
-    if summary:
-        summ_str = pretty_metrics(summary)
+    if final_summary:
+        summ_str = pretty_manual_metrics_manual(final_summary) if use_manual else pretty_metrics(final_summary)
         print(summ_str)
         log.info("Evaluation summary (averaged over %d items):\n%s", len(rows_out), summ_str)
     else:
@@ -1235,7 +1288,7 @@ def run_evaluation(docs, hybrid, llm: _LLM):
             max_chars = int(max_chars_env)
         except Exception:
             max_chars = 5000
-        for rec in per_q:
+        for rec in final_per_q:
             q = rec.get("question", "")
             ans = rec.get("answer", "")
             mets = {k: v for k, v in rec.items() if k not in ("question", "answer", "contexts", "ground_truths")}

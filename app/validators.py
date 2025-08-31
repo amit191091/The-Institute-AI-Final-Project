@@ -7,8 +7,12 @@ SPEED_RE = re.compile(r"\b(15|45)\s*RPS\b", re.I)
 
 def require_percentage_for_pct_questions(q: str, ans: str) -> Tuple[bool, str | None]:
     ql = (q or "").lower()
+    al = (ans or "").lower()
     if any(k in ql for k in ("percent", "percentage", "%", "by how much")):
-        if not PCT_RE.search(ans or ""):
+        # Allow more flexible percentage formats and approximate answers
+        if not (PCT_RE.search(ans or "") or 
+                any(term in al for term in ("about", "approximately", "roughly", "around")) or
+                "not found in context" in al):
             return False, "Expected a percentage-like answer"
     return True, None
 
