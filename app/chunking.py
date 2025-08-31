@@ -397,7 +397,7 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 			analysis = _analyze_table_markdown(md or as_text)
 			# If a full label exists, include at the top for clarity
 			label_hdr = f"LABEL: {table_label}\n" if (table_label and str(table_label).strip()) else ""
-			content = f"[TABLE]\n{label_hdr}SUMMARY:\n{distilled}\n{(analysis + '\n') if analysis else ''}MARKDOWN:\n{md or as_text}\nRAW:\n{as_text}"
+			content = f"[TABLE]\n{label_hdr}SUMMARY:\n{distilled}\n{(analysis + chr(10)) if analysis else ''}MARKDOWN:\n{md or as_text}\nRAW:\n{as_text}"
 			tok = approx_token_len(content)
 			if tok > 800:
 				content = truncate_to_tokens(content, 800)

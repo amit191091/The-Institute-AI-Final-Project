@@ -1,0 +1,1679 @@
+2025-08-31 20:29:09,903 | INFO | FLAGS: HEADLESS=1 EVAL=1 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 20:29:09,903 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 20:29:09,904 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 20:29:09,904 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 20:29:09,905 | INFO | toggles: pdfplumber=True, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 20:29:11,197 | INFO | pdfplumber: extracted 3 elements
+2025-08-31 20:29:11,198 | INFO | camelot: extracted 0 elements
+2025-08-31 20:29:11,198 | INFO | tabula: extracted 0 elements
+2025-08-31 20:29:11,199 | INFO | llamaparse: extracted 0 elements
+2025-08-31 20:29:11,926 | INFO | pymupdf: extracted 4 images
+2025-08-31 20:29:11,985 | INFO | text: extracted 13 page-text elements
+2025-08-31 20:29:12,049 | INFO | Gear wear Failure.pdf: tables=3 via ['pdfplumber'] | images=4
+2025-08-31 20:29:12,050 | INFO | Gear wear Failure.pdf: Table 1 (pdfplumber) -> | Case |  | Wear depth |  |  | Wear depth |  | Wear depth | ...
+2025-08-31 20:29:12,050 | INFO | Gear wear Failure.pdf: Table 2 (pdfplumber) -> | Sensor |  | Direction and |  | Brand |  | Sensitivity |  |...
+2025-08-31 20:29:12,050 | INFO | Gear wear Failure.pdf: Table 3 (pdfplumber) -> |  | Feature |  |  | Value / Type |  |...
+2025-08-31 20:29:12,050 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 20:29:12,051 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 20:29:12,051 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 20:29:12,051 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 20:29:12,067 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 20:29:49,606 | INFO | Chunking summary: total=30 text=7 table=3 figure=4 other=16 avg_tokens≈294.1
+2025-08-31 20:29:49,619 | INFO | Section histogram: [('Text', 7), ('Analysis', 6), ('Conclusion', 4), ('Figure', 4), ('Timeline', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 20:29:49,631 | INFO | Ingestion complete: 1 files -> 30 chunks -> 31 documents (tables=3, figures=4)
+2025-08-31 20:29:54,841 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 20:29:54,842 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 20:29:54,842 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 20:29:54,842 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 20:29:55,720 | INFO | EVAL files: QA=data\gear_wear_qa_context_free.jsonl (exists=True) | GT=<none> (exists=False)
+2025-08-31 20:29:55,720 | INFO | QA auto-load: Loaded 46 QA items from data\gear_wear_qa_context_free.jsonl
+2025-08-31 20:29:55,721 | INFO | GT auto-load: Loaded 0 ids and 0 questions from <none>. Sample ids: 
+2025-08-31 20:30:05,871 | INFO | EVAL Q[1]: On what date was the first onset of wear detected by visual inspection?
+2025-08-31 20:30:12,464 | INFO | EVAL Q[2]: On what date did the system reach the failure stage?
+2025-08-31 20:30:19,886 | INFO | EVAL Q[3]: Between which dates did the severe wear stage occur?
+2025-08-31 20:30:27,195 | INFO | EVAL Q[4]: When did moderate wear begin?
+2025-08-31 20:30:34,736 | INFO | EVAL Q[5]: Until what date did the healthy baseline extend with no abnormal indications?
+2025-08-31 20:30:41,335 | INFO | EVAL Q[6]: What is the model of the marine reduction gearbox investigated?
+2025-08-31 20:30:49,895 | INFO | EVAL Q[7]: Which vessel's propulsion train was monitored?
+2025-08-31 20:30:56,145 | INFO | EVAL Q[8]: What two steady speeds were used for data acquisition (in RPS)?
+2025-08-31 20:30:59,145 | INFO | EVAL Q[9]: What was the sampling rate per record?
+2025-08-31 20:31:04,547 | INFO | EVAL Q[10]: What was the duration of each time record?
+2025-08-31 20:31:13,214 | INFO | EVAL Q[11]: Which lubricant and viscosity grade were in service?
+2025-08-31 20:31:15,944 | INFO | EVAL Q[12]: Name the accelerometer model used on the shafts.
+2025-08-31 20:31:19,951 | INFO | EVAL Q[13]: Which brand and model were used for the tachometer?
+2025-08-31 20:31:22,688 | INFO | EVAL Q[14]: How many teeth did the tachometer gear have?
+2025-08-31 20:31:28,100 | INFO | EVAL Q[15]: What is the gear type and module size?
+2025-08-31 20:31:31,210 | INFO | EVAL Q[16]: What is the driving/driven transmission ratio?
+2025-08-31 20:31:34,902 | INFO | EVAL Q[17]: Which monitoring method provided the earliest reliable indicator of wear onset?
+2025-08-31 20:31:39,127 | INFO | EVAL Q[18]: Name two spectral characteristics of the healthy baseline.
+2025-08-31 20:31:43,135 | INFO | EVAL Q[19]: What two vibration-domain signs accompanied early flank wear during mild wear?
+2025-08-31 20:31:46,161 | INFO | EVAL Q[20]: At 15 RPS during early wear, what high-frequency behavior was observed?
+2025-08-31 20:31:48,915 | INFO | EVAL Q[21]: By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?
+2025-08-31 20:31:52,583 | INFO | EVAL Q[22]: List two hallmark spectral changes that defined the moderate wear stage.
+2025-08-31 20:31:55,814 | INFO | EVAL Q[23]: During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?
+2025-08-31 20:31:59,786 | INFO | EVAL Q[24]: Name three combined indicators that characterized the severe wear stage.
+2025-08-31 20:32:03,511 | INFO | EVAL Q[25]: What physical tooth-surface changes typified the transition into severe wear?
+2025-08-31 20:32:07,916 | INFO | EVAL Q[26]: Why can RMS energy drop at the moment of failure despite catastrophic damage?
+2025-08-31 20:32:12,230 | INFO | EVAL Q[27]: Which metric should frequency-domain monitoring emphasize for earlier detection?
+2025-08-31 20:32:17,118 | INFO | EVAL Q[28]: What is the recommended action at the severe wear stage?
+2025-08-31 20:32:22,531 | INFO | EVAL Q[29]: What is the recommended action at the moderate wear stage?
+2025-08-31 20:32:29,914 | INFO | EVAL Q[30]: Which two data sources should be synchronized into a single diagnostic report?
+2025-08-31 20:32:32,378 | INFO | EVAL Q[31]: Name one AI-driven image task suggested to support objective assessments.
+2025-08-31 20:32:34,414 | INFO | EVAL Q[32]: What is the wear depth for case W1 (in μm)?
+2025-08-31 20:32:36,299 | INFO | EVAL Q[33]: What is the wear depth for case W13 (in μm)?
+2025-08-31 20:32:38,358 | INFO | EVAL Q[34]: What is the wear depth for case W22 (in μm)?
+2025-08-31 20:32:40,165 | INFO | EVAL Q[35]: What is the wear depth for case W24 (in μm)?
+2025-08-31 20:32:42,055 | INFO | EVAL Q[36]: What is the wear depth for case W25 (in μm)?
+2025-08-31 20:32:44,860 | INFO | EVAL Q[37]: What is the wear depth for case W31 (in μm)?
+2025-08-31 20:32:47,080 | INFO | EVAL Q[38]: What is the wear depth for case W33 (in μm)?
+2025-08-31 20:32:49,126 | INFO | EVAL Q[39]: What is the wear depth for case W35 (in μm)?
+2025-08-31 20:32:54,389 | INFO | EVAL Q[40]: Which wear case corresponds to 294 μm?
+2025-08-31 20:33:00,218 | INFO | EVAL Q[41]: Which wear case corresponds to 466 μm?
+2025-08-31 20:33:05,817 | INFO | EVAL Q[42]: Which wear case corresponds to 744 μm?
+2025-08-31 20:33:11,266 | INFO | EVAL Q[43]: Which wear case corresponds to 579 μm?
+2025-08-31 20:33:17,622 | INFO | EVAL Q[44]: List the health stages in chronological order.
+2025-08-31 20:33:24,078 | INFO | EVAL Q[45]: At which two speeds were both baseline and severe-wear measurements acquired?
+2025-08-31 20:33:27,772 | INFO | EVAL Q[46]: Name the two primary sensor modalities used to document wear progression.
+2025-08-31 20:34:26,687 | INFO | Evaluation summary (averaged over 46 items):
+Faithfulness: 0.543
+Answer relevancy: 0.708
+Context precision: n/a
+Context recall: n/a
+Table QA accuracy: 0.000
+Factual score: 0.000
+Factual EM rate: 0.000
+Factual token F1: 0.000
+Factual numeric: 0.000
+Factual range: 0.000
+Factual list F1: 0.000
+Overlap precision (heuristic): 0.000
+Overlap recall (heuristic): 0.000
+Overlap F1 (heuristic): 0.000
+2025-08-31 20:34:26,687 | INFO | Saved summary to logs\eval_ragas_summary.json and per-question to logs\eval_ragas_per_question.jsonl
+2025-08-31 20:34:26,688 | INFO | DeepEval skipped: missing CONFIDENT_API_KEY/DEEPEVAL_API_KEY
+2025-08-31 20:45:33,427 | INFO | FLAGS: HEADLESS=0 EVAL=1 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 20:45:33,428 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 20:45:33,428 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 20:45:33,428 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 20:45:33,429 | INFO | toggles: pdfplumber=True, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 20:45:35,896 | INFO | pdfplumber: extracted 3 elements
+2025-08-31 20:45:35,933 | INFO | camelot: extracted 0 elements
+2025-08-31 20:45:35,967 | INFO | tabula: extracted 0 elements
+2025-08-31 20:45:36,012 | INFO | llamaparse: extracted 0 elements
+2025-08-31 20:45:36,694 | INFO | pymupdf: extracted 4 images
+2025-08-31 20:45:36,763 | INFO | text: extracted 13 page-text elements
+2025-08-31 20:45:36,834 | INFO | Gear wear Failure.pdf: tables=3 via ['pdfplumber'] | images=4
+2025-08-31 20:45:36,834 | INFO | Gear wear Failure.pdf: Table 1 (pdfplumber) -> | Case |  | Wear depth |  |  | Wear depth |  | Wear depth | ...
+2025-08-31 20:45:36,836 | INFO | Gear wear Failure.pdf: Table 2 (pdfplumber) -> | Sensor |  | Direction and |  | Brand |  | Sensitivity |  |...
+2025-08-31 20:45:36,836 | INFO | Gear wear Failure.pdf: Table 3 (pdfplumber) -> |  | Feature |  |  | Value / Type |  |...
+2025-08-31 20:45:36,837 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 20:45:36,838 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 20:45:36,838 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 20:45:36,838 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 20:45:36,863 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 20:45:37,199 | INFO | Chunking summary: total=32 text=7 table=3 figure=4 other=18 avg_tokens≈307.0
+2025-08-31 20:45:37,213 | INFO | Section histogram: [('Analysis', 7), ('Text', 7), ('Timeline', 5), ('Conclusion', 4), ('Figure', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 20:45:37,222 | INFO | Ingestion complete: 1 files -> 32 chunks -> 33 documents (tables=3, figures=4)
+2025-08-31 20:45:43,299 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 20:45:43,299 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 20:45:43,299 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 20:45:43,300 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 20:45:43,340 | INFO | EVAL files: QA=data\gear_wear_qa_context_free.jsonl (exists=True) | GT=<none> (exists=False)
+2025-08-31 20:45:43,343 | INFO | QA auto-load: Loaded 46 QA items from data\gear_wear_qa_context_free.jsonl
+2025-08-31 20:45:43,343 | INFO | GT auto-load: Loaded 0 ids and 0 questions from <none>. Sample ids: 
+2025-08-31 20:45:46,071 | INFO | EVAL Q[1]: On what date was the first onset of wear detected by visual inspection?
+2025-08-31 20:45:49,118 | INFO | EVAL Q[2]: On what date did the system reach the failure stage?
+2025-08-31 20:45:51,324 | INFO | EVAL Q[3]: Between which dates did the severe wear stage occur?
+2025-08-31 20:45:54,019 | INFO | EVAL Q[4]: When did moderate wear begin?
+2025-08-31 20:45:56,504 | INFO | EVAL Q[5]: Until what date did the healthy baseline extend with no abnormal indications?
+2025-08-31 20:45:58,933 | INFO | EVAL Q[6]: What is the model of the marine reduction gearbox investigated?
+2025-08-31 20:46:01,604 | INFO | EVAL Q[7]: Which vessel's propulsion train was monitored?
+2025-08-31 20:46:03,188 | INFO | EVAL Q[8]: What two steady speeds were used for data acquisition (in RPS)?
+2025-08-31 20:46:05,546 | INFO | EVAL Q[9]: What was the sampling rate per record?
+2025-08-31 20:46:07,654 | INFO | EVAL Q[10]: What was the duration of each time record?
+2025-08-31 20:46:10,106 | INFO | EVAL Q[11]: Which lubricant and viscosity grade were in service?
+2025-08-31 20:46:12,121 | INFO | EVAL Q[12]: Name the accelerometer model used on the shafts.
+2025-08-31 20:46:14,092 | INFO | EVAL Q[13]: Which brand and model were used for the tachometer?
+2025-08-31 20:46:16,210 | INFO | EVAL Q[14]: How many teeth did the tachometer gear have?
+2025-08-31 20:46:19,029 | INFO | EVAL Q[15]: What is the gear type and module size?
+2025-08-31 20:46:21,042 | INFO | EVAL Q[16]: What is the driving/driven transmission ratio?
+2025-08-31 20:46:23,441 | INFO | EVAL Q[17]: Which monitoring method provided the earliest reliable indicator of wear onset?
+2025-08-31 20:46:26,077 | INFO | EVAL Q[18]: Name two spectral characteristics of the healthy baseline.
+2025-08-31 20:46:28,329 | INFO | EVAL Q[19]: What two vibration-domain signs accompanied early flank wear during mild wear?
+2025-08-31 20:46:30,589 | INFO | EVAL Q[20]: At 15 RPS during early wear, what high-frequency behavior was observed?
+2025-08-31 20:46:32,397 | INFO | EVAL Q[21]: By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?
+2025-08-31 20:46:35,324 | INFO | EVAL Q[22]: List two hallmark spectral changes that defined the moderate wear stage.
+2025-08-31 20:46:36,692 | INFO | EVAL Q[23]: During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?
+2025-08-31 20:46:39,397 | INFO | EVAL Q[24]: Name three combined indicators that characterized the severe wear stage.
+2025-08-31 20:46:42,067 | INFO | EVAL Q[25]: What physical tooth-surface changes typified the transition into severe wear?
+2025-08-31 20:46:45,073 | INFO | EVAL Q[26]: Why can RMS energy drop at the moment of failure despite catastrophic damage?
+2025-08-31 20:46:47,389 | INFO | EVAL Q[27]: Which metric should frequency-domain monitoring emphasize for earlier detection?
+2025-08-31 20:46:49,739 | INFO | EVAL Q[28]: What is the recommended action at the severe wear stage?
+2025-08-31 20:46:52,653 | INFO | EVAL Q[29]: What is the recommended action at the moderate wear stage?
+2025-08-31 20:46:54,871 | INFO | EVAL Q[30]: Which two data sources should be synchronized into a single diagnostic report?
+2025-08-31 20:46:57,710 | INFO | EVAL Q[31]: Name one AI-driven image task suggested to support objective assessments.
+2025-08-31 20:46:59,648 | INFO | EVAL Q[32]: What is the wear depth for case W1 (in μm)?
+2025-08-31 20:47:01,127 | INFO | EVAL Q[33]: What is the wear depth for case W13 (in μm)?
+2025-08-31 20:47:02,963 | INFO | EVAL Q[34]: What is the wear depth for case W22 (in μm)?
+2025-08-31 20:47:04,596 | INFO | EVAL Q[35]: What is the wear depth for case W24 (in μm)?
+2025-08-31 20:47:06,847 | INFO | EVAL Q[36]: What is the wear depth for case W25 (in μm)?
+2025-08-31 20:47:09,541 | INFO | EVAL Q[37]: What is the wear depth for case W31 (in μm)?
+2025-08-31 20:47:10,881 | INFO | EVAL Q[38]: What is the wear depth for case W33 (in μm)?
+2025-08-31 20:47:12,488 | INFO | EVAL Q[39]: What is the wear depth for case W35 (in μm)?
+2025-08-31 20:47:14,703 | INFO | EVAL Q[40]: Which wear case corresponds to 294 μm?
+2025-08-31 20:47:17,899 | INFO | EVAL Q[41]: Which wear case corresponds to 466 μm?
+2025-08-31 20:47:20,180 | INFO | EVAL Q[42]: Which wear case corresponds to 744 μm?
+2025-08-31 20:47:22,477 | INFO | EVAL Q[43]: Which wear case corresponds to 579 μm?
+2025-08-31 20:47:25,052 | INFO | EVAL Q[44]: List the health stages in chronological order.
+2025-08-31 20:47:26,665 | INFO | EVAL Q[45]: At which two speeds were both baseline and severe-wear measurements acquired?
+2025-08-31 20:47:28,205 | INFO | EVAL Q[46]: Name the two primary sensor modalities used to document wear progression.
+2025-08-31 20:48:25,388 | INFO | Evaluation summary (averaged over 46 items):
+Faithfulness: 0.547
+Answer relevancy: 0.685
+Context precision: n/a
+Context recall: n/a
+Table QA accuracy: 0.000
+Factual score: 0.000
+Factual EM rate: 0.000
+Factual token F1: 0.000
+Factual numeric: 0.000
+Factual range: 0.000
+Factual list F1: 0.000
+Overlap precision (heuristic): 0.000
+Overlap recall (heuristic): 0.000
+Overlap F1 (heuristic): 0.000
+2025-08-31 20:48:25,388 | INFO | Saved summary to logs\eval_ragas_summary.json and per-question to logs\eval_ragas_per_question.jsonl
+2025-08-31 20:48:25,388 | INFO | DeepEval skipped: missing CONFIDENT_API_KEY/DEEPEVAL_API_KEY
+2025-08-31 20:48:25,419 | INFO | QA auto-load: Loaded 46 QA ids from data\gear_wear_qa_context_free.jsonl (waiting for GT to join answers)
+2025-08-31 20:51:05,724 | INFO | Q: What is the transmission ratio?
+2025-08-31 20:51:05,724 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p11 Table] | Agent: table | Rules: table_figure_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p11]
+(table files: [markdown](data/elements/Gear wear Failure-table-03.md) | [csv](data/elements/Gear wear Failure-table-03.csv))
+
+|  | Feature |  |  | Value / Type |  |
+| --- | --- | --- | --- | --- | --- |
+| Model |  |  | MG-5025A |  |  |
+| Gears type |  |  | Spur |  |  |
+| Module |  |  | 3 mm |  |  |
+| Transmission ratio (𝑧 /𝑧 ) 𝑑𝑟𝑖𝑣𝑖𝑛𝑔 𝑑𝑟𝑖𝑣𝑒𝑛 |  |  | 18/35 |  |  |
+| Lubricant |  |  | 2640 semi-synthetic (15W/40) |  |  |
+
+---
+
+The transmission ratio is 18/35 [Gear wear Failure.pdf p11 table].
+
+(trace: Keywords: ['What', 'is', 'the', 'transmission', 'ratio'] | Filters: {'section': 'Table'})
+2025-08-31 20:51:05,724 | INFO | Metrics:
+Faithfulness: 0.500
+Answer relevancy: 0.951
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.179
+Overlap recall (heuristic): 0.417
+Overlap F1 (heuristic): 0.250
+2025-08-31 20:57:26,571 | INFO | FLAGS: HEADLESS=0 EVAL=0 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 20:57:26,573 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 20:57:26,573 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 20:57:26,573 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 20:57:26,573 | INFO | toggles: pdfplumber=True, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 20:57:28,038 | INFO | pdfplumber: extracted 3 elements
+2025-08-31 20:57:28,038 | INFO | camelot: extracted 0 elements
+2025-08-31 20:57:28,038 | INFO | tabula: extracted 0 elements
+2025-08-31 20:57:28,038 | INFO | llamaparse: extracted 0 elements
+2025-08-31 20:57:28,439 | INFO | pymupdf: extracted 4 images
+2025-08-31 20:57:28,475 | INFO | text: extracted 13 page-text elements
+2025-08-31 20:57:28,540 | INFO | Gear wear Failure.pdf: tables=3 via ['pdfplumber'] | images=4
+2025-08-31 20:57:28,541 | INFO | Gear wear Failure.pdf: Table 1 (pdfplumber) -> | Case |  | Wear depth |  |  | Wear depth |  | Wear depth | ...
+2025-08-31 20:57:28,541 | INFO | Gear wear Failure.pdf: Table 2 (pdfplumber) -> | Sensor |  | Direction and |  | Brand |  | Sensitivity |  |...
+2025-08-31 20:57:28,541 | INFO | Gear wear Failure.pdf: Table 3 (pdfplumber) -> |  | Feature |  |  | Value / Type |  |...
+2025-08-31 20:57:28,542 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 20:57:28,542 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 20:57:28,542 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 20:57:28,542 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 20:57:28,556 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 20:57:28,734 | INFO | Chunking summary: total=32 text=7 table=3 figure=4 other=18 avg_tokens≈307.0
+2025-08-31 20:57:28,745 | INFO | Section histogram: [('Analysis', 7), ('Text', 7), ('Timeline', 5), ('Conclusion', 4), ('Figure', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 20:57:28,750 | INFO | Ingestion complete: 1 files -> 32 chunks -> 33 documents (tables=3, figures=4)
+2025-08-31 20:57:31,648 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 20:57:31,648 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 20:57:31,648 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 20:57:31,649 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 20:57:31,687 | INFO | QA auto-load: Loaded 46 QA ids from data\gear_wear_qa_context_free.jsonl (waiting for GT to join answers)
+2025-08-31 21:00:03,565 | INFO | Q: what is the transmission ratio?
+2025-08-31 21:00:03,566 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p11 Table] | Agent: table | Rules: table_figure_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p11]
+(table files: [markdown](data/elements/Gear wear Failure-table-03.md) | [csv](data/elements/Gear wear Failure-table-03.csv))
+
+|  | Feature |  |  | Value / Type |  |
+| --- | --- | --- | --- | --- | --- |
+| Model |  |  | MG-5025A |  |  |
+| Gears type |  |  | Spur |  |  |
+| Module |  |  | 3 mm |  |  |
+| Transmission ratio (𝑧 /𝑧 ) 𝑑𝑟𝑖𝑣𝑖𝑛𝑔 𝑑𝑟𝑖𝑣𝑒𝑛 |  |  | 18/35 |  |  |
+| Lubricant |  |  | 2640 semi-synthetic (15W/40) |  |  |
+
+---
+
+The transmission ratio is 18/35 [Gear wear Failure.pdf p11 table].
+
+(trace: Keywords: ['what', 'is', 'the', 'transmission', 'ratio'] | Filters: {'section': 'Table'})
+2025-08-31 21:00:03,567 | INFO | Metrics:
+Faithfulness: 0.500
+Answer relevancy: 0.942
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.179
+Overlap recall (heuristic): 0.417
+Overlap F1 (heuristic): 0.250
+2025-08-31 21:00:34,198 | INFO | Q: What is the wear depth at W1?
+2025-08-31 21:00:34,198 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p11 Table] | Agent: table | Rules: table_figure_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p11]
+(table files: [markdown](data/elements/Gear wear Failure-table-01.md) | [csv](data/elements/Gear wear Failure-table-01.csv))
+
+| Case |  | Wear depth |  |  | Wear depth |  | Wear depth |  | Wear depth |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  |  |  | Case |  | Case |  | Case |  |
+|  |  | [μm] |  |  | [μm] |  | [μm] |  | [μm] |
+|  |  |  |  |  |  |  |  |  |  |
+| Healthy | 0 |  |  | W9 | 276 | W18 | 450 | W27 | 684 |
+| W1 | 40 |  |  | W10 | 294 | W19 | 466 | W28 | 720 |
+| W2 | 81 |  |  | W11 | 305 | W20 | 488 | W29 | 744 |
+| W3 | 115 |  |  | W12 | 323 | W21 | 510 | W30 | 769 |
+| W4 | 159 |  |  | W13 | 344 | W22 | 524 | W31 | 797 |
+| W5 | 175 |  |  | W14 | 378 | W23 | 557 | W32 | 825 |
+| W6 | 195 |  |  | W15 | 400 | W24 | 579 | W33 | 853 |
+| W7 | 227 |  |  | W16 | 417 | W25 | 608 | W34 | 890 |
+| W8 | 256 |  |  | W17 | 436 | W26 | 637 | W35 | 932 |
+
+---
+
+(𝑧 [Gear wear Failure.pdf p11 table]
+
+(trace: Keywords: ['What', 'is', 'the', 'wear', 'depth', 'at', 'W1'] | Filters: {'section': 'Table', 'case_id': 'W1'})
+2025-08-31 21:00:34,199 | INFO | Metrics:
+Faithfulness: 0.333
+Answer relevancy: 0.000
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.024
+Overlap recall (heuristic): 0.333
+Overlap F1 (heuristic): 0.045
+2025-08-31 21:01:16,256 | INFO | Q: What is presented in Figure 1?
+2025-08-31 21:01:16,256 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p12 Figure] | Agent: table | Rules: table_figure_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p12]
+[FIGURE]
+CAPTION:
+Figure 1: Context: Face view of the drive gear tooth at all health status.
+Page: 12
+Figure 1
+SUMMARY:
+[FIGURE]
+Context: Face view of the drive gear tooth at all health status.
+
+---
+
+A face view of the drive gear tooth at all health statuses is presented in Figure 1 [Gear wear Failure.pdf… [Gear wear Failure.pdf p12 figure]
+
+(trace: Keywords: ['What', 'is', 'presented', 'in', 'Figure', '1'] | Filters: {'section': 'Figure', 'figure_number': '1'})
+2025-08-31 21:01:16,256 | INFO | Metrics:
+Faithfulness: 1.000
+Answer relevancy: 0.846
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.647
+Overlap recall (heuristic): 0.579
+Overlap F1 (heuristic): 0.611
+2025-08-31 21:11:44,163 | INFO | FLAGS: HEADLESS=0 EVAL=0 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 21:11:44,164 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 21:11:44,164 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 21:11:44,164 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 21:11:44,164 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 21:11:44,164 | INFO | clean_table: extracted 3 elements
+2025-08-31 21:11:44,164 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 21:11:44,165 | INFO | camelot: extracted 0 elements
+2025-08-31 21:11:44,165 | INFO | tabula: extracted 0 elements
+2025-08-31 21:11:44,165 | INFO | llamaparse: extracted 0 elements
+2025-08-31 21:11:44,478 | INFO | pymupdf: extracted 4 images
+2025-08-31 21:11:44,531 | INFO | text: extracted 13 page-text elements
+2025-08-31 21:11:44,578 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 21:11:44,578 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 21:11:44,578 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 21:11:44,579 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 21:11:44,579 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:11:44,579 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:11:44,579 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:11:44,579 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:11:44,594 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 21:12:19,636 | INFO | Chunking summary: total=30 text=7 table=3 figure=4 other=16 avg_tokens≈285.4
+2025-08-31 21:12:19,654 | INFO | Section histogram: [('Text', 7), ('Analysis', 6), ('Conclusion', 4), ('Figure', 4), ('Timeline', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 21:12:19,662 | INFO | Ingestion complete: 1 files -> 30 chunks -> 47 documents (tables=3, figures=4)
+2025-08-31 21:12:24,764 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:12:24,764 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:12:24,764 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:12:24,765 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:12:25,690 | INFO | QA auto-load: Loaded 46 QA ids from data\gear_wear_qa_context_free.jsonl (waiting for GT to join answers)
+2025-08-31 21:13:05,413 | INFO | Q: What is the transmission ratio?
+2025-08-31 21:13:05,414 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 TableCell] | Agent: table | Rules: table_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-03.md) | [csv](data/elements/Gear wear Failure-table-03.csv))
+
+| Feature | Value / Type |
+| --- | --- |
+| Model | MG-5025A |
+| Gears type | Spur |
+| Module | 3 |
+| Transmission ratio (zdriving/zdriven) | 18/35 |
+| Lubricant | 2640 semi-synthetic (15W/40) |
+
+---
+
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-02.md) | [csv](data/elements/Gear wear Failure-table-02.csv))
+
+| Sensor | Direction and Position | Brand | Sensitivity [mV/g] | Sampling Rate [kS/sec] |
+| --- | --- | --- | --- | --- |
+| Accelerometer | Gravitational Starboard Shaft | Dytran 3053B 1783 | 9.47 | 50 |
+| Accelerometer | Gravitational Port Shaft | Dytran 3053B 1787 | 9.35 | 50 |
+| Tachometer - 30 teeth | Starboard | Honeywell 3010AN | – | 50 |
+| Tachometer - 30 teeth | Port | Honeywell 3010AN | – | 50 |
+
+---
+
+The transmission ratio is 18/35 [Gear wear Failure.pdf p1 table].
+
+(trace: Keywords: ['What', 'is', 'the', 'transmission', 'ratio'] | Filters: {'section': 'Table'})
+2025-08-31 21:13:05,414 | INFO | Metrics:
+Faithfulness: 0.500
+Answer relevancy: 0.951
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.079
+Overlap recall (heuristic): 0.417
+Overlap F1 (heuristic): 0.133
+2025-08-31 21:14:14,734 | INFO | Q: What is the Starboard Shaft Accelerometer sensitivity?
+2025-08-31 21:14:14,734 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 TableCell] | Agent: table | Rules: table_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-02.md) | [csv](data/elements/Gear wear Failure-table-02.csv))
+
+| Sensor | Direction and Position | Brand | Sensitivity [mV/g] | Sampling Rate [kS/sec] |
+| --- | --- | --- | --- | --- |
+| Accelerometer | Gravitational Starboard Shaft | Dytran 3053B 1783 | 9.47 | 50 |
+| Accelerometer | Gravitational Port Shaft | Dytran 3053B 1787 | 9.35 | 50 |
+| Tachometer - 30 teeth | Starboard | Honeywell 3010AN | – | 50 |
+| Tachometer - 30 teeth | Port | Honeywell 3010AN | – | 50 |
+
+---
+
+Not found in context.
+
+(trace: Keywords: ['What', 'is', 'the', 'Starboard', 'Shaft', 'Accelerometer', 'sensitivity'] | Filters: {'section': 'Table'})
+2025-08-31 21:14:14,735 | INFO | Metrics:
+Faithfulness: 0.000
+Answer relevancy: 0.000
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.000
+Overlap recall (heuristic): 0.000
+Overlap F1 (heuristic): 0.000
+2025-08-31 21:17:41,271 | INFO | FLAGS: HEADLESS=0 EVAL=0 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 21:17:41,272 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 21:17:41,272 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 21:17:41,273 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 21:17:41,273 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 21:17:41,274 | INFO | clean_table: extracted 3 elements
+2025-08-31 21:17:41,274 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 21:17:41,275 | INFO | camelot: extracted 0 elements
+2025-08-31 21:17:41,275 | INFO | tabula: extracted 0 elements
+2025-08-31 21:17:41,276 | INFO | llamaparse: extracted 0 elements
+2025-08-31 21:17:41,627 | INFO | pymupdf: extracted 4 images
+2025-08-31 21:17:41,686 | INFO | text: extracted 13 page-text elements
+2025-08-31 21:17:41,752 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 21:17:41,753 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 21:17:41,753 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 21:17:41,753 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 21:17:41,753 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:17:41,753 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:17:41,754 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:17:41,754 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:17:41,767 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 21:18:18,240 | INFO | Chunking summary: total=30 text=7 table=3 figure=4 other=16 avg_tokens≈285.4
+2025-08-31 21:18:18,250 | INFO | Section histogram: [('Text', 7), ('Analysis', 6), ('Conclusion', 4), ('Figure', 4), ('Timeline', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 21:18:18,256 | INFO | Ingestion complete: 1 files -> 30 chunks -> 47 documents (tables=3, figures=4)
+2025-08-31 21:18:21,130 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:18:21,130 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:18:21,130 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:18:21,130 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:18:21,818 | INFO | QA auto-load: Loaded 46 QA ids from data\gear_wear_qa_context_free.jsonl (waiting for GT to join answers)
+2025-08-31 21:18:49,177 | INFO | Q: What is the transmission ratio?
+2025-08-31 21:18:49,179 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 TableCell] | Agent: table | Rules: table_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-03.md) | [csv](data/elements/Gear wear Failure-table-03.csv))
+
+| Feature | Value / Type |
+| --- | --- |
+| Model | MG-5025A |
+| Gears type | Spur |
+| Module | 3 |
+| Transmission ratio (zdriving/zdriven) | 18/35 |
+| Lubricant | 2640 semi-synthetic (15W/40) |
+
+---
+
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-02.md) | [csv](data/elements/Gear wear Failure-table-02.csv))
+
+| Sensor | Direction and Position | Brand | Sensitivity [mV/g] | Sampling Rate [kS/sec] |
+| --- | --- | --- | --- | --- |
+| Accelerometer | Gravitational Starboard Shaft | Dytran 3053B 1783 | 9.47 | 50 |
+| Accelerometer | Gravitational Port Shaft | Dytran 3053B 1787 | 9.35 | 50 |
+| Tachometer - 30 teeth | Starboard | Honeywell 3010AN | – | 50 |
+| Tachometer - 30 teeth | Port | Honeywell 3010AN | – | 50 |
+
+---
+
+The transmission ratio is 18/35 [Gear wear Failure.pdf p1 table].
+
+(trace: Keywords: ['What', 'is', 'the', 'transmission', 'ratio'] | Filters: {'section': 'Table'})
+2025-08-31 21:18:49,180 | INFO | Metrics:
+Faithfulness: 0.500
+Answer relevancy: 0.951
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.079
+Overlap recall (heuristic): 0.417
+Overlap F1 (heuristic): 0.133
+2025-08-31 21:19:31,014 | INFO | Q: What is the starport accelerometer sensitivity?
+2025-08-31 21:19:31,015 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 TableCell] | Agent: table | Rules: table_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-02.md) | [csv](data/elements/Gear wear Failure-table-02.csv))
+
+| Sensor | Direction and Position | Brand | Sensitivity [mV/g] | Sampling Rate [kS/sec] |
+| --- | --- | --- | --- | --- |
+| Accelerometer | Gravitational Starboard Shaft | Dytran 3053B 1783 | 9.47 | 50 |
+| Accelerometer | Gravitational Port Shaft | Dytran 3053B 1787 | 9.35 | 50 |
+| Tachometer - 30 teeth | Starboard | Honeywell 3010AN | – | 50 |
+| Tachometer - 30 teeth | Port | Honeywell 3010AN | – | 50 |
+
+---
+
+Not found in context.
+
+(trace: Keywords: ['What', 'is', 'the', 'starport', 'accelerometer', 'sensitivity'] | Filters: {'section': 'Table'})
+2025-08-31 21:19:31,015 | INFO | Metrics:
+Faithfulness: 0.000
+Answer relevancy: 0.000
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.000
+Overlap recall (heuristic): 0.000
+Overlap F1 (heuristic): 0.000
+2025-08-31 21:20:45,283 | INFO | Q: What is the Starboard accelerometer sensitivity?
+2025-08-31 21:20:45,284 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 TableCell] | Agent: table | Rules: table_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-02.md) | [csv](data/elements/Gear wear Failure-table-02.csv))
+
+| Sensor | Direction and Position | Brand | Sensitivity [mV/g] | Sampling Rate [kS/sec] |
+| --- | --- | --- | --- | --- |
+| Accelerometer | Gravitational Starboard Shaft | Dytran 3053B 1783 | 9.47 | 50 |
+| Accelerometer | Gravitational Port Shaft | Dytran 3053B 1787 | 9.35 | 50 |
+| Tachometer - 30 teeth | Starboard | Honeywell 3010AN | – | 50 |
+| Tachometer - 30 teeth | Port | Honeywell 3010AN | – | 50 |
+
+---
+
+Not found in context.
+
+(trace: Keywords: ['What', 'is', 'the', 'Starboard', 'accelerometer', 'sensitivity'] | Filters: {'section': 'Table'})
+2025-08-31 21:20:45,284 | INFO | Metrics:
+Faithfulness: 0.000
+Answer relevancy: 0.000
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.000
+Overlap recall (heuristic): 0.000
+Overlap F1 (heuristic): 0.000
+2025-08-31 21:21:22,897 | INFO | Q: What is the Starboard shaft accelerometer sensitivity?
+2025-08-31 21:21:22,898 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 TableCell] | Agent: table | Rules: table_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-02.md) | [csv](data/elements/Gear wear Failure-table-02.csv))
+
+| Sensor | Direction and Position | Brand | Sensitivity [mV/g] | Sampling Rate [kS/sec] |
+| --- | --- | --- | --- | --- |
+| Accelerometer | Gravitational Starboard Shaft | Dytran 3053B 1783 | 9.47 | 50 |
+| Accelerometer | Gravitational Port Shaft | Dytran 3053B 1787 | 9.35 | 50 |
+| Tachometer - 30 teeth | Starboard | Honeywell 3010AN | – | 50 |
+| Tachometer - 30 teeth | Port | Honeywell 3010AN | – | 50 |
+
+---
+
+Not found in context.
+
+(trace: Keywords: ['What', 'is', 'the', 'Starboard', 'shaft', 'accelerometer', 'sensitivity'] | Filters: {'section': 'Table'})
+2025-08-31 21:21:22,898 | INFO | Metrics:
+Faithfulness: 0.000
+Answer relevancy: 0.000
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.000
+Overlap recall (heuristic): 0.000
+Overlap F1 (heuristic): 0.000
+2025-08-31 21:32:13,296 | INFO | FLAGS: HEADLESS=0 EVAL=0 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 21:32:13,296 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 21:32:13,296 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 21:32:13,297 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 21:32:13,297 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 21:32:13,297 | INFO | clean_table: extracted 3 elements
+2025-08-31 21:32:13,298 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 21:32:13,298 | INFO | camelot: extracted 0 elements
+2025-08-31 21:32:13,298 | INFO | tabula: extracted 0 elements
+2025-08-31 21:32:13,298 | INFO | llamaparse: extracted 0 elements
+2025-08-31 21:32:13,558 | INFO | pymupdf: extracted 4 images
+2025-08-31 21:32:13,609 | INFO | text: extracted 13 page-text elements
+2025-08-31 21:32:13,663 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 21:32:13,664 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 21:32:13,664 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 21:32:13,664 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 21:32:13,665 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:32:13,665 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:32:13,665 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:32:13,665 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:32:13,684 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 21:32:48,336 | INFO | Chunking summary: total=30 text=7 table=3 figure=4 other=16 avg_tokens≈285.4
+2025-08-31 21:32:48,367 | INFO | Section histogram: [('Text', 7), ('Analysis', 6), ('Conclusion', 4), ('Figure', 4), ('Timeline', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 21:32:48,381 | INFO | Ingestion complete: 1 files -> 30 chunks -> 47 documents (tables=3, figures=4)
+2025-08-31 21:32:54,846 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:32:54,846 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:32:54,847 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:32:54,847 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:32:56,467 | INFO | QA auto-load: Loaded 46 QA ids from data\gear_wear_qa_context_free.jsonl (waiting for GT to join answers)
+2025-08-31 21:33:25,149 | INFO | Q: What is the transmission ratio?
+2025-08-31 21:33:25,151 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 TableCell] | Agent: table | Rules: table_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-03.md) | [csv](data/elements/Gear wear Failure-table-03.csv))
+
+| Feature | Value / Type |
+| --- | --- |
+| Model | MG-5025A |
+| Gears type | Spur |
+| Module | 3 |
+| Transmission ratio (zdriving/zdriven) | 18/35 |
+| Lubricant | 2640 semi-synthetic (15W/40) |
+
+---
+
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-02.md) | [csv](data/elements/Gear wear Failure-table-02.csv))
+
+| Sensor | Direction and Position | Brand | Sensitivity [mV/g] | Sampling Rate [kS/sec] |
+| --- | --- | --- | --- | --- |
+| Accelerometer | Gravitational Starboard Shaft | Dytran 3053B 1783 | 9.47 | 50 |
+| Accelerometer | Gravitational Port Shaft | Dytran 3053B 1787 | 9.35 | 50 |
+| Tachometer - 30 teeth | Starboard | Honeywell 3010AN | – | 50 |
+| Tachometer - 30 teeth | Port | Honeywell 3010AN | – | 50 |
+
+---
+
+The transmission ratio is 18/35 [Gear wear Failure.pdf p1 table].
+
+(trace: Keywords: ['What', 'is', 'the', 'transmission', 'ratio'] | Filters: {'section': 'Table'})
+2025-08-31 21:33:25,153 | INFO | Metrics:
+Faithfulness: 0.500
+Answer relevancy: 0.951
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.079
+Overlap recall (heuristic): 0.417
+Overlap F1 (heuristic): 0.133
+2025-08-31 21:35:18,967 | INFO | FLAGS: HEADLESS=0 EVAL=0 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 21:35:18,967 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 21:35:18,968 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 21:35:18,968 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 21:35:18,969 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 21:35:18,970 | INFO | clean_table: extracted 3 elements
+2025-08-31 21:35:18,970 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 21:35:18,971 | INFO | camelot: extracted 0 elements
+2025-08-31 21:35:18,971 | INFO | tabula: extracted 0 elements
+2025-08-31 21:35:18,971 | INFO | llamaparse: extracted 0 elements
+2025-08-31 21:35:19,500 | INFO | pymupdf: extracted 4 images
+2025-08-31 21:35:19,600 | INFO | text: extracted 13 page-text elements
+2025-08-31 21:35:19,702 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 21:35:19,703 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 21:35:19,704 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 21:35:19,705 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 21:35:19,706 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:35:19,707 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:35:19,707 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:35:19,708 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:35:19,733 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 21:35:57,418 | INFO | Chunking summary: total=30 text=7 table=3 figure=4 other=16 avg_tokens≈285.4
+2025-08-31 21:35:57,435 | INFO | Section histogram: [('Text', 7), ('Analysis', 6), ('Conclusion', 4), ('Figure', 4), ('Timeline', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 21:35:57,447 | INFO | Ingestion complete: 1 files -> 30 chunks -> 47 documents (tables=3, figures=4)
+2025-08-31 21:36:01,604 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:36:01,605 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:36:01,605 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:36:01,605 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:36:02,492 | INFO | QA auto-load: Loaded 46 QA ids from data\gear_wear_qa_context_free.jsonl (waiting for GT to join answers)
+2025-08-31 21:37:27,286 | INFO | Q: What is the transmission ratio?
+2025-08-31 21:37:27,287 | INFO | Answer: Route: table | Top contexts: [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 Table]; [Gear wear Failure.pdf p1 TableCell] | Agent: table | Rules: table_keywords
+
+Table/Figure context preview:
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-03.md) | [csv](data/elements/Gear wear Failure-table-03.csv))
+
+| Feature | Value / Type |
+| --- | --- |
+| Model | MG-5025A |
+| Gears type | Spur |
+| Module | 3 |
+| Transmission ratio (zdriving/zdriven) | 18/35 |
+| Lubricant | 2640 semi-synthetic (15W/40) |
+
+---
+
+[Gear wear Failure.pdf p1]
+(table files: [markdown](data/elements/Gear wear Failure-table-02.md) | [csv](data/elements/Gear wear Failure-table-02.csv))
+
+| Sensor | Direction and Position | Brand | Sensitivity [mV/g] | Sampling Rate [kS/sec] |
+| --- | --- | --- | --- | --- |
+| Accelerometer | Gravitational Starboard Shaft | Dytran 3053B 1783 | 9.47 | 50 |
+| Accelerometer | Gravitational Port Shaft | Dytran 3053B 1787 | 9.35 | 50 |
+| Tachometer - 30 teeth | Starboard | Honeywell 3010AN | – | 50 |
+| Tachometer - 30 teeth | Port | Honeywell 3010AN | – | 50 |
+
+---
+
+The transmission ratio is 18/35 [Gear wear Failure.pdf p1 table].
+
+(trace: Keywords: ['What', 'is', 'the', 'transmission', 'ratio'] | Filters: {'section': 'Table'})
+2025-08-31 21:37:27,287 | INFO | Metrics:
+Faithfulness: 0.500
+Answer relevancy: 0.951
+Context precision: 1.000
+Context recall: n/a
+Overlap precision (heuristic): 0.079
+Overlap recall (heuristic): 0.417
+Overlap F1 (heuristic): 0.133
+2025-08-31 21:38:43,080 | INFO | FLAGS: HEADLESS=0 EVAL=1 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 21:38:43,080 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 21:38:43,081 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 21:38:43,081 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 21:38:43,081 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 21:38:43,082 | INFO | clean_table: extracted 3 elements
+2025-08-31 21:38:43,082 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 21:38:43,082 | INFO | camelot: extracted 0 elements
+2025-08-31 21:38:43,082 | INFO | tabula: extracted 0 elements
+2025-08-31 21:38:43,082 | INFO | llamaparse: extracted 0 elements
+2025-08-31 21:38:43,345 | INFO | pymupdf: extracted 4 images
+2025-08-31 21:38:43,396 | INFO | text: extracted 13 page-text elements
+2025-08-31 21:38:43,634 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 21:38:43,645 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 21:38:43,645 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 21:38:43,646 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 21:38:43,646 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:38:43,646 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:38:43,646 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:38:43,646 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:38:43,662 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 21:39:16,112 | INFO | Chunking summary: total=30 text=7 table=3 figure=4 other=16 avg_tokens≈285.4
+2025-08-31 21:39:16,123 | INFO | Section histogram: [('Text', 7), ('Analysis', 6), ('Conclusion', 4), ('Figure', 4), ('Timeline', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 21:39:16,130 | INFO | Ingestion complete: 1 files -> 30 chunks -> 47 documents (tables=3, figures=4)
+2025-08-31 21:39:19,580 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:39:19,580 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:39:19,580 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:39:19,580 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:39:20,359 | INFO | EVAL files: QA=data\gear_wear_qa_context_free.jsonl (exists=True) | GT=data\gear_wear_QA_groundtruth.json (exists=True)
+2025-08-31 21:39:20,361 | INFO | QA auto-load: Loaded 46 QA items from data\gear_wear_qa_context_free.jsonl
+2025-08-31 21:39:20,361 | INFO | GT debug: gt_path=data\gear_wear_QA_groundtruth.json, gt_rows type=<class 'list'>, gt_rows len=46
+2025-08-31 21:39:20,362 | INFO | GT debug: first row keys=['question', 'ground_truths']
+2025-08-31 21:39:20,362 | INFO | GT auto-load: Loaded 0 ids and 46 questions from data\gear_wear_QA_groundtruth.json. Sample ids: 
+2025-08-31 21:39:29,217 | INFO | EVAL Q[1]: On what date was the first onset of wear detected by visual inspection?
+2025-08-31 21:39:33,862 | INFO | EVAL Q[2]: On what date did the system reach the failure stage?
+2025-08-31 21:39:41,394 | INFO | EVAL Q[3]: Between which dates did the severe wear stage occur?
+2025-08-31 21:39:47,961 | INFO | EVAL Q[4]: When did moderate wear begin?
+2025-08-31 21:39:54,903 | INFO | EVAL Q[5]: Until what date did the healthy baseline extend with no abnormal indications?
+2025-08-31 21:40:01,002 | INFO | EVAL Q[6]: What is the model of the marine reduction gearbox investigated?
+2025-08-31 21:40:07,592 | INFO | EVAL Q[7]: Which vessel's propulsion train was monitored?
+2025-08-31 21:40:12,433 | INFO | EVAL Q[8]: What two steady speeds were used for data acquisition (in RPS)?
+2025-08-31 21:40:15,085 | INFO | EVAL Q[9]: What was the sampling rate per record?
+2025-08-31 21:40:21,110 | INFO | EVAL Q[10]: What was the duration of each time record?
+2025-08-31 21:40:26,100 | INFO | EVAL Q[11]: Which lubricant and viscosity grade were in service?
+2025-08-31 21:40:29,114 | INFO | EVAL Q[12]: Name the accelerometer model used on the shafts.
+2025-08-31 21:40:32,679 | INFO | EVAL Q[13]: Which brand and model were used for the tachometer?
+2025-08-31 21:40:35,444 | INFO | EVAL Q[14]: How many teeth did the tachometer gear have?
+2025-08-31 21:40:40,153 | INFO | EVAL Q[15]: What is the gear type and module size?
+2025-08-31 21:40:42,899 | INFO | EVAL Q[16]: What is the driving/driven transmission ratio?
+2025-08-31 21:40:47,617 | INFO | EVAL Q[17]: Which monitoring method provided the earliest reliable indicator of wear onset?
+2025-08-31 21:40:51,908 | INFO | EVAL Q[18]: Name two spectral characteristics of the healthy baseline.
+2025-08-31 21:40:55,980 | INFO | EVAL Q[19]: What two vibration-domain signs accompanied early flank wear during mild wear?
+2025-08-31 21:40:59,275 | INFO | EVAL Q[20]: At 15 RPS during early wear, what high-frequency behavior was observed?
+2025-08-31 21:41:03,323 | INFO | EVAL Q[21]: By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?
+2025-08-31 21:41:08,648 | INFO | EVAL Q[22]: List two hallmark spectral changes that defined the moderate wear stage.
+2025-08-31 21:41:11,567 | INFO | EVAL Q[23]: During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?
+2025-08-31 21:41:16,396 | INFO | EVAL Q[24]: Name three combined indicators that characterized the severe wear stage.
+2025-08-31 21:41:21,950 | INFO | EVAL Q[25]: What physical tooth-surface changes typified the transition into severe wear?
+2025-08-31 21:41:30,298 | INFO | EVAL Q[26]: Why can RMS energy drop at the moment of failure despite catastrophic damage?
+2025-08-31 21:41:34,901 | INFO | EVAL Q[27]: Which metric should frequency-domain monitoring emphasize for earlier detection?
+2025-08-31 21:41:40,694 | INFO | EVAL Q[28]: What is the recommended action at the severe wear stage?
+2025-08-31 21:41:46,815 | INFO | EVAL Q[29]: What is the recommended action at the moderate wear stage?
+2025-08-31 21:41:53,937 | INFO | EVAL Q[30]: Which two data sources should be synchronized into a single diagnostic report?
+2025-08-31 21:41:56,687 | INFO | EVAL Q[31]: Name one AI-driven image task suggested to support objective assessments.
+2025-08-31 21:42:00,193 | INFO | EVAL Q[32]: What is the wear depth for case W1 (in μm)?
+2025-08-31 21:42:02,858 | INFO | EVAL Q[33]: What is the wear depth for case W13 (in μm)?
+2025-08-31 21:42:06,590 | INFO | EVAL Q[34]: What is the wear depth for case W22 (in μm)?
+2025-08-31 21:42:09,659 | INFO | EVAL Q[35]: What is the wear depth for case W24 (in μm)?
+2025-08-31 21:42:12,633 | INFO | EVAL Q[36]: What is the wear depth for case W25 (in μm)?
+2025-08-31 21:42:15,544 | INFO | EVAL Q[37]: What is the wear depth for case W31 (in μm)?
+2025-08-31 21:42:18,217 | INFO | EVAL Q[38]: What is the wear depth for case W33 (in μm)?
+2025-08-31 21:42:20,799 | INFO | EVAL Q[39]: What is the wear depth for case W35 (in μm)?
+2025-08-31 21:42:26,723 | INFO | EVAL Q[40]: Which wear case corresponds to 294 μm?
+2025-08-31 21:42:32,074 | INFO | EVAL Q[41]: Which wear case corresponds to 466 μm?
+2025-08-31 21:42:37,394 | INFO | EVAL Q[42]: Which wear case corresponds to 744 μm?
+2025-08-31 21:42:42,865 | INFO | EVAL Q[43]: Which wear case corresponds to 579 μm?
+2025-08-31 21:42:49,994 | INFO | EVAL Q[44]: List the health stages in chronological order.
+2025-08-31 21:42:53,037 | INFO | EVAL Q[45]: At which two speeds were both baseline and severe-wear measurements acquired?
+2025-08-31 21:42:55,332 | INFO | EVAL Q[46]: Name the two primary sensor modalities used to document wear progression.
+2025-08-31 21:53:54,444 | INFO | FLAGS: HEADLESS=0 EVAL=1 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 21:53:54,444 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 21:53:54,444 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 21:53:54,445 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 21:53:54,445 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 21:53:54,445 | INFO | clean_table: extracted 3 elements
+2025-08-31 21:53:54,445 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 21:53:54,445 | INFO | camelot: extracted 0 elements
+2025-08-31 21:53:54,445 | INFO | tabula: extracted 0 elements
+2025-08-31 21:53:54,446 | INFO | llamaparse: extracted 0 elements
+2025-08-31 21:53:54,713 | INFO | pymupdf: extracted 4 images
+2025-08-31 21:53:54,779 | INFO | text: extracted 13 page-text elements
+2025-08-31 21:53:54,838 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 21:53:54,840 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 21:53:54,840 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 21:53:54,842 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 21:53:54,842 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:53:54,843 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:53:54,843 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:53:54,843 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:53:54,859 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 21:54:33,939 | INFO | Chunking summary: total=30 text=7 table=3 figure=4 other=16 avg_tokens≈285.4
+2025-08-31 21:54:33,977 | INFO | Section histogram: [('Text', 7), ('Analysis', 6), ('Conclusion', 4), ('Figure', 4), ('Timeline', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 21:54:34,015 | INFO | Ingestion complete: 1 files -> 30 chunks -> 47 documents (tables=3, figures=4)
+2025-08-31 21:54:41,330 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 21:54:41,331 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 21:54:41,331 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 21:54:41,331 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 21:54:42,459 | INFO | EVAL files: QA=data\gear_wear_qa_context_free.jsonl (exists=True) | GT=data\gear_wear_QA_groundtruth.json (exists=True)
+2025-08-31 21:54:42,460 | INFO | QA auto-load: Loaded 46 QA items from data\gear_wear_qa_context_free.jsonl
+2025-08-31 21:54:42,462 | INFO | GT debug: gt_path=data\gear_wear_QA_groundtruth.json, gt_rows type=<class 'list'>, gt_rows len=46
+2025-08-31 21:54:42,462 | INFO | GT debug: first row keys=['question', 'ground_truths']
+2025-08-31 21:54:42,463 | INFO | GT auto-load: Loaded 0 ids and 46 questions from data\gear_wear_QA_groundtruth.json. Sample ids: 
+2025-08-31 21:54:52,774 | INFO | GT exact match: on what date was the first onset of wear detected by visual inspection -> ['April 9, 2023']
+2025-08-31 21:54:52,775 | INFO | EVAL_TRACE[1]: qid=gwf-v2-001 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 21:54:52,776 | INFO | EVAL Q[1]: On what date was the first onset of wear detected by visual inspection?
+2025-08-31 21:54:57,334 | INFO | GT exact match: on what date did the system reach the failure stage -> ['June 15, 2023']
+2025-08-31 21:54:57,335 | INFO | EVAL_TRACE[2]: qid=gwf-v2-002 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 21:54:57,335 | INFO | EVAL Q[2]: On what date did the system reach the failure stage?
+2025-08-31 21:55:04,246 | INFO | GT exact match: between which dates did the severe wear stage occur -> ['From May 14 to June 11']
+2025-08-31 21:55:04,247 | INFO | EVAL_TRACE[3]: qid=gwf-v2-003 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 21:55:04,248 | INFO | EVAL Q[3]: Between which dates did the severe wear stage occur?
+2025-08-31 21:55:11,046 | INFO | GT exact match: when did moderate wear begin -> ['April 23, 2023']
+2025-08-31 21:55:11,047 | INFO | EVAL_TRACE[4]: qid=gwf-v2-004 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 21:55:11,047 | INFO | EVAL Q[4]: When did moderate wear begin?
+2025-08-31 21:55:18,038 | INFO | GT exact match: until what date did the healthy baseline extend with no abnormal indications -> ['Until April 8, 2023']
+2025-08-31 21:55:18,040 | INFO | EVAL_TRACE[5]: qid=gwf-v2-005 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 21:55:18,041 | INFO | EVAL Q[5]: Until what date did the healthy baseline extend with no abnormal indications?
+2025-08-31 21:55:23,319 | INFO | GT exact match: what is the model of the marine reduction gearbox investigated -> ['MG-5025A']
+2025-08-31 21:55:23,320 | INFO | EVAL_TRACE[6]: qid=gwf-v2-006 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 21:55:23,321 | INFO | EVAL Q[6]: What is the model of the marine reduction gearbox investigated?
+2025-08-31 21:55:30,529 | INFO | GT exact match: which vessel's propulsion train was monitored -> ['INS Haifa']
+2025-08-31 21:55:30,529 | INFO | EVAL_TRACE[7]: qid=gwf-v2-007 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 21:55:30,529 | INFO | EVAL Q[7]: Which vessel's propulsion train was monitored?
+2025-08-31 21:55:36,316 | INFO | GT exact match: what two steady speeds were used for data acquisition (in rps -> ['45 RPS and 15 RPS']
+2025-08-31 21:55:36,317 | INFO | EVAL_TRACE[8]: qid=gwf-v2-008 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 21:55:36,317 | INFO | EVAL Q[8]: What two steady speeds were used for data acquisition (in RPS)?
+2025-08-31 21:55:39,784 | INFO | GT exact match: what was the sampling rate per record -> ['50 kHz']
+2025-08-31 21:55:39,785 | INFO | EVAL_TRACE[9]: qid=gwf-v2-009 | gt_found=True | gt_count=1 | ctx_len=3
+2025-08-31 21:55:39,786 | INFO | EVAL Q[9]: What was the sampling rate per record?
+2025-08-31 21:55:46,406 | INFO | GT exact match: what was the duration of each time record -> ['60 seconds']
+2025-08-31 21:55:46,407 | INFO | EVAL_TRACE[10]: qid=gwf-v2-010 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 21:55:46,407 | INFO | EVAL Q[10]: What was the duration of each time record?
+2025-08-31 21:55:52,006 | INFO | GT no fuzzy match: which lubricant and viscosity grade were in service (best_score=0.533, threshold=0.75)
+2025-08-31 21:55:52,009 | INFO | EVAL_TRACE[11]: qid=gwf-v2-011 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:55:52,009 | INFO | EVAL Q[11]: Which lubricant and viscosity grade were in service?
+2025-08-31 21:55:55,091 | INFO | GT no fuzzy match: name the accelerometer model used on the shafts (best_score=0.524, threshold=0.75)
+2025-08-31 21:55:55,092 | INFO | EVAL_TRACE[12]: qid=gwf-v2-012 | gt_found=False | gt_count=0 | ctx_len=2
+2025-08-31 21:55:55,093 | INFO | EVAL Q[12]: Name the accelerometer model used on the shafts.
+2025-08-31 21:55:58,891 | INFO | GT no fuzzy match: which brand and model were used for the tachometer (best_score=0.562, threshold=0.75)
+2025-08-31 21:55:58,893 | INFO | EVAL_TRACE[13]: qid=gwf-v2-013 | gt_found=False | gt_count=0 | ctx_len=4
+2025-08-31 21:55:58,894 | INFO | EVAL Q[13]: Which brand and model were used for the tachometer?
+2025-08-31 21:56:02,183 | INFO | GT no fuzzy match: how many teeth did the tachometer gear have (best_score=0.516, threshold=0.75)
+2025-08-31 21:56:02,184 | INFO | EVAL_TRACE[14]: qid=gwf-v2-014 | gt_found=False | gt_count=0 | ctx_len=3
+2025-08-31 21:56:02,185 | INFO | EVAL Q[14]: How many teeth did the tachometer gear have?
+2025-08-31 21:56:08,053 | INFO | GT fuzzy match: what is the gear type and module size -> ['3 mm'] (score=0.758)
+2025-08-31 21:56:08,055 | INFO | EVAL_TRACE[15]: qid=gwf-v2-015 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 21:56:08,055 | INFO | EVAL Q[15]: What is the gear type and module size?
+2025-08-31 21:56:11,200 | INFO | GT no fuzzy match: what is the driving/driven transmission ratio (best_score=0.659, threshold=0.75)
+2025-08-31 21:56:11,201 | INFO | EVAL_TRACE[16]: qid=gwf-v2-016 | gt_found=False | gt_count=0 | ctx_len=2
+2025-08-31 21:56:11,202 | INFO | EVAL Q[16]: What is the driving/driven transmission ratio?
+2025-08-31 21:56:15,513 | INFO | GT no fuzzy match: which monitoring method provided the earliest reliable indicator of wear onset (best_score=0.556, threshold=0.75)
+2025-08-31 21:56:15,514 | INFO | EVAL_TRACE[17]: qid=gwf-v2-017 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:56:15,515 | INFO | EVAL Q[17]: Which monitoring method provided the earliest reliable indicator of wear onset?
+2025-08-31 21:56:20,114 | INFO | GT no fuzzy match: name two spectral characteristics of the healthy baseline (best_score=0.434, threshold=0.75)
+2025-08-31 21:56:20,114 | INFO | EVAL_TRACE[18]: qid=gwf-v2-018 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:56:20,115 | INFO | EVAL Q[18]: Name two spectral characteristics of the healthy baseline.
+2025-08-31 21:56:25,406 | INFO | GT no fuzzy match: what two vibration-domain signs accompanied early flank wear during mild wear (best_score=0.485, threshold=0.75)
+2025-08-31 21:56:25,407 | INFO | EVAL_TRACE[19]: qid=gwf-v2-019 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:56:25,409 | INFO | EVAL Q[19]: What two vibration-domain signs accompanied early flank wear during mild wear?
+2025-08-31 21:56:29,472 | INFO | GT no fuzzy match: at 15 rps during early wear, what high-frequency behavior was observed (best_score=0.385, threshold=0.75)
+2025-08-31 21:56:29,474 | INFO | EVAL_TRACE[20]: qid=gwf-v2-020 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:56:29,475 | INFO | EVAL Q[20]: At 15 RPS during early wear, what high-frequency behavior was observed?
+2025-08-31 21:56:33,012 | INFO | GT no fuzzy match: by approximately how much did rms rise above april 9 levels at 45 rps during moderate wear (best_score=0.397, threshold=0.75)
+2025-08-31 21:56:33,013 | INFO | EVAL_TRACE[21]: qid=gwf-v2-021 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:56:33,013 | INFO | EVAL Q[21]: By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?
+2025-08-31 21:56:38,385 | INFO | GT no fuzzy match: list two hallmark spectral changes that defined the moderate wear stage (best_score=0.634, threshold=0.75)
+2025-08-31 21:56:38,386 | INFO | EVAL_TRACE[22]: qid=gwf-v2-022 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:56:38,386 | INFO | EVAL Q[22]: List two hallmark spectral changes that defined the moderate wear stage.
+2025-08-31 21:56:42,019 | INFO | GT no fuzzy match: during severe wear at 45 rps, by how much did rms exceed the april 9 baseline (best_score=0.353, threshold=0.75)
+2025-08-31 21:56:42,020 | INFO | EVAL_TRACE[23]: qid=gwf-v2-023 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:56:42,020 | INFO | EVAL Q[23]: During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?
+2025-08-31 21:56:47,283 | INFO | GT no fuzzy match: name three combined indicators that characterized the severe wear stage (best_score=0.541, threshold=0.75)
+2025-08-31 21:56:47,283 | INFO | EVAL_TRACE[24]: qid=gwf-v2-024 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:56:47,284 | INFO | EVAL Q[24]: Name three combined indicators that characterized the severe wear stage.
+2025-08-31 21:56:52,520 | INFO | GT no fuzzy match: what physical tooth-surface changes typified the transition into severe wear (best_score=0.524, threshold=0.75)
+2025-08-31 21:56:52,523 | INFO | EVAL_TRACE[25]: qid=gwf-v2-025 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:56:52,524 | INFO | EVAL Q[25]: What physical tooth-surface changes typified the transition into severe wear?
+2025-08-31 21:56:58,044 | INFO | GT no fuzzy match: why can rms energy drop at the moment of failure despite catastrophic damage (best_score=0.457, threshold=0.75)
+2025-08-31 21:56:58,046 | INFO | EVAL_TRACE[26]: qid=gwf-v2-026 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:56:58,046 | INFO | EVAL Q[26]: Why can RMS energy drop at the moment of failure despite catastrophic damage?
+2025-08-31 21:57:02,786 | INFO | GT no fuzzy match: which metric should frequency-domain monitoring emphasize for earlier detection (best_score=0.535, threshold=0.75)
+2025-08-31 21:57:02,788 | INFO | EVAL_TRACE[27]: qid=gwf-v2-027 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:57:02,789 | INFO | EVAL Q[27]: Which metric should frequency-domain monitoring emphasize for earlier detection?
+2025-08-31 21:57:07,423 | INFO | GT no fuzzy match: what is the recommended action at the severe wear stage (best_score=0.673, threshold=0.75)
+2025-08-31 21:57:07,423 | INFO | EVAL_TRACE[28]: qid=gwf-v2-028 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:57:07,424 | INFO | EVAL Q[28]: What is the recommended action at the severe wear stage?
+2025-08-31 21:57:14,827 | INFO | GT no fuzzy match: what is the recommended action at the moderate wear stage (best_score=0.679, threshold=0.75)
+2025-08-31 21:57:14,828 | INFO | EVAL_TRACE[29]: qid=gwf-v2-029 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:57:14,829 | INFO | EVAL Q[29]: What is the recommended action at the moderate wear stage?
+2025-08-31 21:57:21,945 | INFO | GT no fuzzy match: which two data sources should be synchronized into a single diagnostic report (best_score=0.453, threshold=0.75)
+2025-08-31 21:57:21,945 | INFO | EVAL_TRACE[30]: qid=gwf-v2-030 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:57:21,946 | INFO | EVAL Q[30]: Which two data sources should be synchronized into a single diagnostic report?
+2025-08-31 21:57:24,385 | INFO | GT no fuzzy match: name one ai-driven image task suggested to support objective assessments (best_score=0.465, threshold=0.75)
+2025-08-31 21:57:24,385 | INFO | EVAL_TRACE[31]: qid=gwf-v2-031 | gt_found=False | gt_count=0 | ctx_len=1
+2025-08-31 21:57:24,386 | INFO | EVAL Q[31]: Name one AI-driven image task suggested to support objective assessments.
+2025-08-31 21:57:28,213 | INFO | GT fuzzy match: what is the wear depth for case w1 (in μm -> ['40 μm'] (score=0.800)
+2025-08-31 21:57:28,213 | INFO | EVAL_TRACE[32]: qid=gwf-v2-032 | gt_found=True | gt_count=1 | ctx_len=7
+2025-08-31 21:57:28,213 | INFO | EVAL Q[32]: What is the wear depth for case W1 (in μm)?
+2025-08-31 21:57:31,647 | INFO | GT fuzzy match: what is the wear depth for case w13 (in μm -> ['344 μm'] (score=0.805)
+2025-08-31 21:57:31,648 | INFO | EVAL_TRACE[33]: qid=gwf-v2-033 | gt_found=True | gt_count=1 | ctx_len=6
+2025-08-31 21:57:31,648 | INFO | EVAL Q[33]: What is the wear depth for case W13 (in μm)?
+2025-08-31 21:57:35,492 | INFO | GT fuzzy match: what is the wear depth for case w22 (in μm -> ['488 μm'] (score=0.779)
+2025-08-31 21:57:35,493 | INFO | EVAL_TRACE[34]: qid=gwf-v2-034 | gt_found=True | gt_count=1 | ctx_len=6
+2025-08-31 21:57:35,493 | INFO | EVAL Q[34]: What is the wear depth for case W22 (in μm)?
+2025-08-31 21:57:39,558 | INFO | GT fuzzy match: what is the wear depth for case w24 (in μm -> ['488 μm'] (score=0.779)
+2025-08-31 21:57:39,559 | INFO | EVAL_TRACE[35]: qid=gwf-v2-035 | gt_found=True | gt_count=1 | ctx_len=7
+2025-08-31 21:57:39,559 | INFO | EVAL Q[35]: What is the wear depth for case W24 (in μm)?
+2025-08-31 21:57:43,521 | INFO | GT fuzzy match: what is the wear depth for case w25 (in μm -> ['488 μm'] (score=0.779)
+2025-08-31 21:57:43,523 | INFO | EVAL_TRACE[36]: qid=gwf-v2-036 | gt_found=True | gt_count=1 | ctx_len=7
+2025-08-31 21:57:43,524 | INFO | EVAL Q[36]: What is the wear depth for case W25 (in μm)?
+2025-08-31 21:57:47,141 | INFO | GT fuzzy match: what is the wear depth for case w31 (in μm -> ['40 μm'] (score=0.789)
+2025-08-31 21:57:47,142 | INFO | EVAL_TRACE[37]: qid=gwf-v2-037 | gt_found=True | gt_count=1 | ctx_len=7
+2025-08-31 21:57:47,142 | INFO | EVAL Q[37]: What is the wear depth for case W31 (in μm)?
+2025-08-31 21:57:50,402 | INFO | GT fuzzy match: what is the wear depth for case w33 (in μm -> ['344 μm'] (score=0.779)
+2025-08-31 21:57:50,403 | INFO | EVAL_TRACE[38]: qid=gwf-v2-038 | gt_found=True | gt_count=1 | ctx_len=5
+2025-08-31 21:57:50,403 | INFO | EVAL Q[38]: What is the wear depth for case W33 (in μm)?
+2025-08-31 21:57:53,612 | INFO | GT fuzzy match: what is the wear depth for case w35 (in μm -> ['344 μm'] (score=0.779)
+2025-08-31 21:57:53,612 | INFO | EVAL_TRACE[39]: qid=gwf-v2-039 | gt_found=True | gt_count=1 | ctx_len=5
+2025-08-31 21:57:53,612 | INFO | EVAL Q[39]: What is the wear depth for case W35 (in μm)?
+2025-08-31 21:58:00,512 | INFO | GT no fuzzy match: which wear case corresponds to 294 μm (best_score=0.425, threshold=0.75)
+2025-08-31 21:58:00,513 | INFO | EVAL_TRACE[40]: qid=gwf-v2-040 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:58:00,513 | INFO | EVAL Q[40]: Which wear case corresponds to 294 μm?
+2025-08-31 21:58:07,234 | INFO | GT no fuzzy match: which wear case corresponds to 466 μm (best_score=0.425, threshold=0.75)
+2025-08-31 21:58:07,235 | INFO | EVAL_TRACE[41]: qid=gwf-v2-041 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:58:07,235 | INFO | EVAL Q[41]: Which wear case corresponds to 466 μm?
+2025-08-31 21:58:13,382 | INFO | GT no fuzzy match: which wear case corresponds to 744 μm (best_score=0.425, threshold=0.75)
+2025-08-31 21:58:13,383 | INFO | EVAL_TRACE[42]: qid=gwf-v2-042 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:58:13,383 | INFO | EVAL Q[42]: Which wear case corresponds to 744 μm?
+2025-08-31 21:58:19,706 | INFO | GT no fuzzy match: which wear case corresponds to 579 μm (best_score=0.425, threshold=0.75)
+2025-08-31 21:58:19,707 | INFO | EVAL_TRACE[43]: qid=gwf-v2-043 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:58:19,708 | INFO | EVAL Q[43]: Which wear case corresponds to 579 μm?
+2025-08-31 21:58:27,281 | INFO | GT no fuzzy match: list the health stages in chronological order (best_score=0.460, threshold=0.75)
+2025-08-31 21:58:27,281 | INFO | EVAL_TRACE[44]: qid=gwf-v2-044 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:58:27,281 | INFO | EVAL Q[44]: List the health stages in chronological order.
+2025-08-31 21:58:30,843 | INFO | GT no fuzzy match: at which two speeds were both baseline and severe-wear measurements acquired (best_score=0.496, threshold=0.75)
+2025-08-31 21:58:30,844 | INFO | EVAL_TRACE[45]: qid=gwf-v2-045 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 21:58:30,844 | INFO | EVAL Q[45]: At which two speeds were both baseline and severe-wear measurements acquired?
+2025-08-31 21:58:33,798 | INFO | GT no fuzzy match: name the two primary sensor modalities used to document wear progression (best_score=0.451, threshold=0.75)
+2025-08-31 21:58:33,799 | INFO | EVAL_TRACE[46]: qid=gwf-v2-046 | gt_found=False | gt_count=0 | ctx_len=1
+2025-08-31 21:58:33,799 | INFO | EVAL Q[46]: Name the two primary sensor modalities used to document wear progression.
+2025-08-31 22:16:27,479 | INFO | FLAGS: HEADLESS=1 EVAL=1 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 22:16:27,480 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 22:16:27,480 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 22:16:27,480 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 22:16:27,480 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 22:16:27,481 | INFO | clean_table: extracted 3 elements
+2025-08-31 22:16:27,481 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 22:16:27,481 | INFO | camelot: extracted 0 elements
+2025-08-31 22:16:27,481 | INFO | tabula: extracted 0 elements
+2025-08-31 22:16:27,482 | INFO | llamaparse: extracted 0 elements
+2025-08-31 22:16:28,025 | INFO | pymupdf: extracted 4 images
+2025-08-31 22:16:28,083 | INFO | text: extracted 13 page-text elements
+2025-08-31 22:16:28,157 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 22:16:28,159 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 22:16:28,161 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 22:16:28,161 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 22:16:28,161 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 22:16:28,161 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 22:16:28,161 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 22:16:28,161 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 22:16:28,182 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 22:17:04,434 | INFO | Chunking summary: total=30 text=7 table=3 figure=4 other=16 avg_tokens≈285.4
+2025-08-31 22:17:04,457 | INFO | Section histogram: [('Text', 7), ('Analysis', 6), ('Conclusion', 4), ('Figure', 4), ('Timeline', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 22:17:04,515 | INFO | Ingestion complete: 1 files -> 30 chunks -> 47 documents (tables=3, figures=4)
+2025-08-31 22:17:09,518 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 22:17:09,519 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 22:17:09,519 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 22:17:09,519 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 22:17:10,451 | INFO | EVAL files: QA=data\gear_wear_qa_context_free.jsonl (exists=True) | GT=data\gear_wear_QA_groundtruth.json (exists=True)
+2025-08-31 22:17:10,453 | INFO | QA auto-load: Loaded 46 QA items from data\gear_wear_qa_context_free.jsonl
+2025-08-31 22:17:10,456 | INFO | GT debug: gt_path=data\gear_wear_QA_groundtruth.json, gt_rows type=<class 'list'>, gt_rows len=51
+2025-08-31 22:17:10,457 | INFO | GT debug: first row keys=['question', 'ground_truths']
+2025-08-31 22:17:10,460 | INFO | GT auto-load: Loaded 0 ids and 51 questions from data\gear_wear_QA_groundtruth.json. Sample ids: 
+2025-08-31 22:17:20,865 | INFO | GT exact match: on what date was the first onset of wear detected by visual inspection -> ['April 9, 2023 [Gear wear Failure.pdf p9 Conclusion]']
+2025-08-31 22:17:20,866 | INFO | EVAL_TRACE[1]: qid=gwf-v2-001 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:17:20,866 | INFO | EVAL Q[1]: On what date was the first onset of wear detected by visual inspection?
+2025-08-31 22:17:25,225 | INFO | GT exact match: on what date did the system reach the failure stage -> ['June 15, 2023 [Gear wear Failure.pdf p10 Timeline]']
+2025-08-31 22:17:25,226 | INFO | EVAL_TRACE[2]: qid=gwf-v2-002 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:17:25,227 | INFO | EVAL Q[2]: On what date did the system reach the failure stage?
+2025-08-31 22:17:32,586 | INFO | GT exact match: between which dates did the severe wear stage occur -> ['From May 14 to June 11 [Gear wear Failure.pdf p3 Timeline]']
+2025-08-31 22:17:32,588 | INFO | EVAL_TRACE[3]: qid=gwf-v2-003 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:17:32,588 | INFO | EVAL Q[3]: Between which dates did the severe wear stage occur?
+2025-08-31 22:17:43,277 | INFO | GT exact match: when did moderate wear begin -> ['April 23, 2023 [Gear wear Failure.pdf p3 Timeline]']
+2025-08-31 22:17:43,277 | INFO | EVAL_TRACE[4]: qid=gwf-v2-004 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:17:43,278 | INFO | EVAL Q[4]: When did moderate wear begin?
+2025-08-31 22:17:52,925 | INFO | GT exact match: until what date did the healthy baseline extend with no abnormal indications -> ['Until April 8, 2023 [Gear wear Failure.pdf p3 Timeline]']
+2025-08-31 22:17:52,932 | INFO | EVAL_TRACE[5]: qid=gwf-v2-005 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:17:52,932 | INFO | EVAL Q[5]: Until what date did the healthy baseline extend with no abnormal indications?
+2025-08-31 22:17:59,200 | INFO | GT exact match: what is the model of the marine reduction gearbox investigated -> ['MG-5025A [Gear wear Failure.pdf p1 Summary]']
+2025-08-31 22:17:59,201 | INFO | EVAL_TRACE[6]: qid=gwf-v2-006 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:17:59,201 | INFO | EVAL Q[6]: What is the model of the marine reduction gearbox investigated?
+2025-08-31 22:18:07,142 | INFO | GT exact match: which vessel's propulsion train was monitored -> ['INS Haifa [Gear wear Failure.pdf p1 Summary]']
+2025-08-31 22:18:07,143 | INFO | EVAL_TRACE[7]: qid=gwf-v2-007 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:18:07,144 | INFO | EVAL Q[7]: Which vessel's propulsion train was monitored?
+2025-08-31 22:18:12,868 | INFO | GT exact match: what two steady speeds were used for data acquisition (in rps -> ['45 RPS and 15 RPS [Gear wear Failure.pdf p1 Summary]']
+2025-08-31 22:18:12,869 | INFO | EVAL_TRACE[8]: qid=gwf-v2-008 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:18:12,869 | INFO | EVAL Q[8]: What two steady speeds were used for data acquisition (in RPS)?
+2025-08-31 22:18:16,927 | INFO | GT exact match: what was the sampling rate per record -> ['50 kHz [Gear wear Failure.pdf p2 Table]']
+2025-08-31 22:18:16,928 | INFO | EVAL_TRACE[9]: qid=gwf-v2-009 | gt_found=True | gt_count=1 | ctx_len=3
+2025-08-31 22:18:16,928 | INFO | EVAL Q[9]: What was the sampling rate per record?
+2025-08-31 22:18:24,002 | INFO | GT exact match: what was the duration of each time record -> ['60 seconds [Gear wear Failure.pdf p2 Analysis]']
+2025-08-31 22:18:24,003 | INFO | EVAL_TRACE[10]: qid=gwf-v2-010 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:18:24,004 | INFO | EVAL Q[10]: What was the duration of each time record?
+2025-08-31 22:18:29,607 | INFO | GT exact match: which lubricant and viscosity grade were in service -> ['2640 semi-synthetic (15W/40) [Gear wear Failure.pdf p1 Summary]']
+2025-08-31 22:18:29,609 | INFO | EVAL_TRACE[11]: qid=gwf-v2-011 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:18:29,610 | INFO | EVAL Q[11]: Which lubricant and viscosity grade were in service?
+2025-08-31 22:18:32,551 | INFO | GT exact match: name the accelerometer model used on the shafts -> ['Dytran 3053B [Gear wear Failure.pdf p2 Table]']
+2025-08-31 22:18:32,552 | INFO | EVAL_TRACE[12]: qid=gwf-v2-012 | gt_found=True | gt_count=1 | ctx_len=2
+2025-08-31 22:18:32,552 | INFO | EVAL Q[12]: Name the accelerometer model used on the shafts.
+2025-08-31 22:18:36,711 | INFO | GT exact match: which brand and model were used for the tachometer -> ['Honeywell 3010AN [Gear wear Failure.pdf p2 Table]']
+2025-08-31 22:18:36,712 | INFO | EVAL_TRACE[13]: qid=gwf-v2-013 | gt_found=True | gt_count=1 | ctx_len=4
+2025-08-31 22:18:36,712 | INFO | EVAL Q[13]: Which brand and model were used for the tachometer?
+2025-08-31 22:18:40,211 | INFO | GT exact match: how many teeth did the tachometer gear have -> ['30 teeth [Gear wear Failure.pdf p2 Table]']
+2025-08-31 22:18:40,212 | INFO | EVAL_TRACE[14]: qid=gwf-v2-014 | gt_found=True | gt_count=1 | ctx_len=3
+2025-08-31 22:18:40,212 | INFO | EVAL Q[14]: How many teeth did the tachometer gear have?
+2025-08-31 22:18:44,859 | INFO | GT fuzzy match: what is the gear type and module size -> ['Spur gear type with a module size of 3 mm [Gear wear Failure.pdf p11 Table]'] (score=0.896)
+2025-08-31 22:18:44,860 | INFO | EVAL_TRACE[15]: qid=gwf-v2-015 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:18:44,861 | INFO | EVAL Q[15]: What is the gear type and module size?
+2025-08-31 22:18:47,531 | INFO | GT exact match: what is the driving/driven transmission ratio -> ['18/35 [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:18:47,532 | INFO | EVAL_TRACE[16]: qid=gwf-v2-016 | gt_found=True | gt_count=1 | ctx_len=2
+2025-08-31 22:18:47,532 | INFO | EVAL Q[16]: What is the driving/driven transmission ratio?
+2025-08-31 22:18:51,228 | INFO | GT exact match: which monitoring method provided the earliest reliable indicator of wear onset -> ['Photographic inspection [Gear wear Failure.pdf p10 Timeline]']
+2025-08-31 22:18:51,229 | INFO | EVAL_TRACE[17]: qid=gwf-v2-017 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:18:51,230 | INFO | EVAL Q[17]: Which monitoring method provided the earliest reliable indicator of wear onset?
+2025-08-31 22:18:55,717 | INFO | GT exact match: name two spectral characteristics of the healthy baseline -> ['Peaks were sharp and of low amplitude, with minimal broadband energy and no sidebands around the Gear Mesh Frequencies [Gear wear Failure.pdf p2 Analysis]']
+2025-08-31 22:18:55,718 | INFO | EVAL_TRACE[18]: qid=gwf-v2-018 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:18:55,719 | INFO | EVAL Q[18]: Name two spectral characteristics of the healthy baseline.
+2025-08-31 22:19:00,160 | INFO | GT exact match: what two vibration-domain signs accompanied early flank wear during mild wear -> ['A small but persistent RMS elevation and nascent sideband activity with a slight broadband rise [Gear wear Failure.pdf p3 Timeline]']
+2025-08-31 22:19:00,161 | INFO | EVAL_TRACE[19]: qid=gwf-v2-019 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:00,162 | INFO | EVAL Q[19]: What two vibration-domain signs accompanied early flank wear during mild wear?
+2025-08-31 22:19:04,062 | INFO | GT exact match: at 15 rps during early wear, what high-frequency behavior was observed -> ['High-frequency energy remained relatively stable with minimal broadband growth [Gear wear Failure.pdf p4 Text]']
+2025-08-31 22:19:04,062 | INFO | EVAL_TRACE[20]: qid=gwf-v2-020 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:04,062 | INFO | EVAL Q[20]: At 15 RPS during early wear, what high-frequency behavior was observed?
+2025-08-31 22:19:07,646 | INFO | GT exact match: by approximately how much did rms rise above april 9 levels at 45 rps during moderate wear -> ['Approximately 15-20% above baseline levels [Gear wear Failure.pdf p7 Analysis]']
+2025-08-31 22:19:07,646 | INFO | EVAL_TRACE[21]: qid=gwf-v2-021 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:07,646 | INFO | EVAL Q[21]: By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?
+2025-08-31 22:19:12,195 | INFO | GT exact match: list two hallmark spectral changes that defined the moderate wear stage -> ['RMS values exhibited a sustained upward trend, and spectral data revealed emerging sidebands around the meshing frequency [Gear wear Failure.pdf p7 Analysis]']
+2025-08-31 22:19:12,196 | INFO | EVAL_TRACE[22]: qid=gwf-v2-022 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:12,197 | INFO | EVAL Q[22]: List two hallmark spectral changes that defined the moderate wear stage.
+2025-08-31 22:19:15,748 | INFO | GT exact match: during severe wear at 45 rps, by how much did rms exceed the april 9 baseline -> ['RMS exceeded the April 9 baseline by approximately 40-50% [Gear wear Failure.pdf p7 Analysis]']
+2025-08-31 22:19:15,748 | INFO | EVAL_TRACE[23]: qid=gwf-v2-023 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:15,749 | INFO | EVAL Q[23]: During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?
+2025-08-31 22:19:20,084 | INFO | GT exact match: name three combined indicators that characterized the severe wear stage -> ['Vibration signatures characterized by large RMS growth, dense sidebands, and impulsive transients [Gear wear Failure.pdf p5 Text]']
+2025-08-31 22:19:20,085 | INFO | EVAL_TRACE[24]: qid=gwf-v2-024 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:20,085 | INFO | EVAL Q[24]: Name three combined indicators that characterized the severe wear stage.
+2025-08-31 22:19:24,728 | INFO | GT exact match: what physical tooth-surface changes typified the transition into severe wear -> ['A transition into severe wear was marked by sharp-edged scars and material loss across large sections of the tooth flank [Gear wear Failure.pdf p4 Text]']
+2025-08-31 22:19:24,728 | INFO | EVAL_TRACE[25]: qid=gwf-v2-025 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:24,729 | INFO | EVAL Q[25]: What physical tooth-surface changes typified the transition into severe wear?
+2025-08-31 22:19:30,276 | INFO | GT exact match: why can rms energy drop at the moment of failure despite catastrophic damage -> ['The RMS energy drop at the moment of failure occurs due to the loss of dynamic stiffness and engagement efficiency [Gear wear Failure.pdf p6 Analysis]']
+2025-08-31 22:19:30,276 | INFO | EVAL_TRACE[26]: qid=gwf-v2-026 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:30,277 | INFO | EVAL Q[26]: Why can RMS energy drop at the moment of failure despite catastrophic damage?
+2025-08-31 22:19:35,063 | INFO | GT exact match: which metric should frequency-domain monitoring emphasize for earlier detection -> ['Frequency-domain monitoring should emphasize sidebands around the gear meshing frequency for earlier detection [Gear wear Failure.pdf p8 Conclusion]']
+2025-08-31 22:19:35,064 | INFO | EVAL_TRACE[27]: qid=gwf-v2-027 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:35,065 | INFO | EVAL Q[27]: Which metric should frequency-domain monitoring emphasize for earlier detection?
+2025-08-31 22:19:39,617 | INFO | GT exact match: what is the recommended action at the severe wear stage -> ['Proactive thresholds and predictive modeling must guide intervention well before the transition into severe wear [Gear wear Failure.pdf p9 Conclusion]']
+2025-08-31 22:19:39,618 | INFO | EVAL_TRACE[28]: qid=gwf-v2-028 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:39,619 | INFO | EVAL Q[28]: What is the recommended action at the severe wear stage?
+2025-08-31 22:19:46,095 | INFO | GT exact match: what is the recommended action at the moderate wear stage -> ['RMS monitoring thresholds should be updated based on the observed patterns, with lower alarm levels to flag deviations earlier [Gear wear Failure.pdf p8 Conclusion]']
+2025-08-31 22:19:46,095 | INFO | EVAL_TRACE[29]: qid=gwf-v2-029 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:46,096 | INFO | EVAL Q[29]: What is the recommended action at the moderate wear stage?
+2025-08-31 22:19:52,398 | INFO | GT exact match: which two data sources should be synchronized into a single diagnostic report -> ['A single diagnostic report should synchronize image data and vibration signals [Gear wear Failure.pdf p9 Conclusion]']
+2025-08-31 22:19:52,398 | INFO | EVAL_TRACE[30]: qid=gwf-v2-030 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:19:52,399 | INFO | EVAL Q[30]: Which two data sources should be synchronized into a single diagnostic report?
+2025-08-31 22:19:55,010 | INFO | GT exact match: name one ai-driven image task suggested to support objective assessments -> ['AI-driven feature extraction (crack detection, pitting quantification) [Gear wear Failure.pdf p12 Figure]']
+2025-08-31 22:19:55,012 | INFO | EVAL_TRACE[31]: qid=gwf-v2-031 | gt_found=True | gt_count=1 | ctx_len=1
+2025-08-31 22:19:55,012 | INFO | EVAL Q[31]: Name one AI-driven image task suggested to support objective assessments.
+2025-08-31 22:19:58,828 | INFO | GT exact match: what is the wear depth for case w1 (in μm -> ['40 μm [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:19:58,828 | INFO | EVAL_TRACE[32]: qid=gwf-v2-032 | gt_found=True | gt_count=1 | ctx_len=7
+2025-08-31 22:19:58,829 | INFO | EVAL Q[32]: What is the wear depth for case W1 (in μm)?
+2025-08-31 22:20:02,112 | INFO | GT exact match: what is the wear depth for case w13 (in μm -> ['344 μm [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:20:02,112 | INFO | EVAL_TRACE[33]: qid=gwf-v2-033 | gt_found=True | gt_count=1 | ctx_len=6
+2025-08-31 22:20:02,112 | INFO | EVAL Q[33]: What is the wear depth for case W13 (in μm)?
+2025-08-31 22:20:05,346 | INFO | GT exact match: what is the wear depth for case w22 (in μm -> ['524 μm [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:20:05,346 | INFO | EVAL_TRACE[34]: qid=gwf-v2-034 | gt_found=True | gt_count=1 | ctx_len=6
+2025-08-31 22:20:05,346 | INFO | EVAL Q[34]: What is the wear depth for case W22 (in μm)?
+2025-08-31 22:20:09,395 | INFO | GT exact match: what is the wear depth for case w24 (in μm -> ['579 μm [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:20:09,395 | INFO | EVAL_TRACE[35]: qid=gwf-v2-035 | gt_found=True | gt_count=1 | ctx_len=7
+2025-08-31 22:20:09,395 | INFO | EVAL Q[35]: What is the wear depth for case W24 (in μm)?
+2025-08-31 22:20:12,906 | INFO | GT exact match: what is the wear depth for case w25 (in μm -> ['608 μm [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:20:12,908 | INFO | EVAL_TRACE[36]: qid=gwf-v2-036 | gt_found=True | gt_count=1 | ctx_len=7
+2025-08-31 22:20:12,908 | INFO | EVAL Q[36]: What is the wear depth for case W25 (in μm)?
+2025-08-31 22:20:17,577 | INFO | GT exact match: what is the wear depth for case w31 (in μm -> ['797 μm [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:20:17,578 | INFO | EVAL_TRACE[37]: qid=gwf-v2-037 | gt_found=True | gt_count=1 | ctx_len=7
+2025-08-31 22:20:17,578 | INFO | EVAL Q[37]: What is the wear depth for case W31 (in μm)?
+2025-08-31 22:20:21,051 | INFO | GT exact match: what is the wear depth for case w33 (in μm -> ['853 μm [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:20:21,052 | INFO | EVAL_TRACE[38]: qid=gwf-v2-038 | gt_found=True | gt_count=1 | ctx_len=5
+2025-08-31 22:20:21,052 | INFO | EVAL Q[38]: What is the wear depth for case W33 (in μm)?
+2025-08-31 22:20:24,117 | INFO | GT exact match: what is the wear depth for case w35 (in μm -> ['932 μm [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:20:24,118 | INFO | EVAL_TRACE[39]: qid=gwf-v2-039 | gt_found=True | gt_count=1 | ctx_len=5
+2025-08-31 22:20:24,118 | INFO | EVAL Q[39]: What is the wear depth for case W35 (in μm)?
+2025-08-31 22:20:30,626 | INFO | GT exact match: which wear case corresponds to 294 μm -> ['W10 [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:20:30,626 | INFO | EVAL_TRACE[40]: qid=gwf-v2-040 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:20:30,626 | INFO | EVAL Q[40]: Which wear case corresponds to 294 μm?
+2025-08-31 22:20:37,213 | INFO | GT exact match: which wear case corresponds to 466 μm -> ['W20 [Gear wear Failure.pdf p11 Table]']
+2025-08-31 22:20:37,214 | INFO | EVAL_TRACE[41]: qid=gwf-v2-041 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:20:37,214 | INFO | EVAL Q[41]: Which wear case corresponds to 466 μm?
+2025-08-31 22:20:44,064 | INFO | GT fuzzy match: which wear case corresponds to 744 μm -> ['W10 [Gear wear Failure.pdf p11 Table]'] (score=0.946)
+2025-08-31 22:20:44,065 | INFO | EVAL_TRACE[42]: qid=gwf-v2-042 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:20:44,065 | INFO | EVAL Q[42]: Which wear case corresponds to 744 μm?
+2025-08-31 22:20:51,730 | INFO | GT fuzzy match: which wear case corresponds to 579 μm -> ['W10 [Gear wear Failure.pdf p11 Table]'] (score=0.946)
+2025-08-31 22:20:51,731 | INFO | EVAL_TRACE[43]: qid=gwf-v2-043 | gt_found=True | gt_count=1 | ctx_len=8
+2025-08-31 22:20:51,731 | INFO | EVAL Q[43]: Which wear case corresponds to 579 μm?
+2025-08-31 22:20:59,207 | INFO | GT no fuzzy match: list the health stages in chronological order (best_score=0.419, threshold=0.6)
+2025-08-31 22:20:59,209 | INFO | EVAL_TRACE[44]: qid=gwf-v2-044 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 22:20:59,210 | INFO | EVAL Q[44]: List the health stages in chronological order.
+2025-08-31 22:21:03,394 | INFO | GT no fuzzy match: at which two speeds were both baseline and severe-wear measurements acquired (best_score=0.496, threshold=0.6)
+2025-08-31 22:21:03,394 | INFO | EVAL_TRACE[45]: qid=gwf-v2-045 | gt_found=False | gt_count=0 | ctx_len=8
+2025-08-31 22:21:03,394 | INFO | EVAL Q[45]: At which two speeds were both baseline and severe-wear measurements acquired?
+2025-08-31 22:21:06,401 | INFO | GT no fuzzy match: name the two primary sensor modalities used to document wear progression (best_score=0.451, threshold=0.6)
+2025-08-31 22:21:06,402 | INFO | EVAL_TRACE[46]: qid=gwf-v2-046 | gt_found=False | gt_count=0 | ctx_len=1
+2025-08-31 22:21:06,402 | INFO | EVAL Q[46]: Name the two primary sensor modalities used to document wear progression.
+2025-08-31 22:35:30,328 | INFO | FLAGS: HEADLESS=0 EVAL=1 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 22:35:30,328 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 22:35:30,328 | INFO | FLAGS[retrieval]: DENSE_K=3 SPARSE_K=3 CONTEXT_TOP_N=6 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 22:35:30,329 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 22:35:30,329 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 22:35:30,329 | INFO | clean_table: extracted 3 elements
+2025-08-31 22:35:30,329 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 22:35:30,329 | INFO | camelot: extracted 0 elements
+2025-08-31 22:35:30,330 | INFO | tabula: extracted 0 elements
+2025-08-31 22:35:30,330 | INFO | llamaparse: extracted 0 elements
+2025-08-31 22:35:30,664 | INFO | pymupdf: extracted 4 images
+2025-08-31 22:35:30,724 | INFO | text: extracted 13 page-text elements
+2025-08-31 22:35:30,782 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 22:35:30,782 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 22:35:30,782 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 22:35:30,782 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 22:35:30,783 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 22:35:30,783 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 22:35:30,783 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 22:35:30,783 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 22:35:30,802 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 22:35:30,974 | INFO | Chunking summary: total=46 text=10 table=3 figure=4 other=29 avg_tokens≈224.9
+2025-08-31 22:35:30,984 | INFO | Section histogram: [('Analysis', 12), ('Text', 10), ('Timeline', 8), ('Conclusion', 6), ('Figure', 4), ('Summary', 3), ('Table', 3)]
+2025-08-31 22:35:30,991 | INFO | Ingestion complete: 1 files -> 46 chunks -> 63 documents (tables=3, figures=4)
+2025-08-31 22:35:34,967 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 22:35:34,968 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 22:35:34,968 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 22:35:34,968 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 22:35:35,017 | INFO | EVAL files: QA=data\gear_wear_qa_context_free.jsonl (exists=True) | GT=data\gear_wear_QA_groundtruth.json (exists=True)
+2025-08-31 22:35:35,018 | INFO | QA auto-load: Loaded 46 QA items from data\gear_wear_qa_context_free.jsonl
+2025-08-31 22:35:35,022 | INFO | GT debug: gt_path=data\gear_wear_QA_groundtruth.json, gt_rows type=<class 'list'>, gt_rows len=46
+2025-08-31 22:35:35,023 | INFO | GT debug: first row keys=['question', 'ground_truths']
+2025-08-31 22:35:35,023 | INFO | GT auto-load: Loaded 0 ids and 46 questions from data\gear_wear_QA_groundtruth.json. Sample ids: 
+2025-08-31 22:35:38,324 | INFO | GT exact match: on what date was the first onset of wear detected by visual inspection -> ['April 9, 2023 [Gear wear Failure.pdf p1 Executive Summary]']
+2025-08-31 22:35:38,325 | INFO | EVAL Q[1]: On what date was the first onset of wear detected by visual inspection?
+2025-08-31 22:35:41,237 | INFO | GT exact match: on what date did the system reach the failure stage -> ['June 15, 2023 [Gear wear Failure.pdf p1 Executive Summary]']
+2025-08-31 22:35:41,238 | INFO | EVAL Q[2]: On what date did the system reach the failure stage?
+2025-08-31 22:35:43,828 | INFO | GT exact match: between which dates did the severe wear stage occur -> ['From May 14 to June 11 [Gear wear Failure.pdf p5 Severe Wear]']
+2025-08-31 22:35:43,828 | INFO | EVAL Q[3]: Between which dates did the severe wear stage occur?
+2025-08-31 22:35:46,750 | INFO | GT exact match: when did moderate wear begin -> ['April 23, 2023 [Gear wear Failure.pdf p3 Moderate Wear]']
+2025-08-31 22:35:46,750 | INFO | EVAL Q[4]: When did moderate wear begin?
+2025-08-31 22:35:48,407 | INFO | GT exact match: until what date did the healthy baseline extend with no abnormal indications -> ['Until April 8, 2023 [Gear wear Failure.pdf p1 Executive Summary]']
+2025-08-31 22:35:48,407 | INFO | EVAL Q[5]: Until what date did the healthy baseline extend with no abnormal indications?
+2025-08-31 22:35:50,650 | INFO | GT exact match: what is the model of the marine reduction gearbox investigated -> ['MG-5025A [Gear wear Failure.pdf p1 System Description, Table 3]']
+2025-08-31 22:35:50,650 | INFO | EVAL Q[6]: What is the model of the marine reduction gearbox investigated?
+2025-08-31 22:35:53,023 | INFO | GT exact match: which vessel's propulsion train was monitored -> ['INS Haifa [Gear wear Failure.pdf p1 Executive Summary]']
+2025-08-31 22:35:53,023 | INFO | EVAL Q[7]: Which vessel's propulsion train was monitored?
+2025-08-31 22:35:54,548 | INFO | GT exact match: what two steady speeds were used for data acquisition (in rps -> ['45 RPS and 15 RPS [Gear wear Failure.pdf p1 System Description]']
+2025-08-31 22:35:54,548 | INFO | EVAL Q[8]: What two steady speeds were used for data acquisition (in RPS)?
+2025-08-31 22:35:56,799 | INFO | GT exact match: what was the sampling rate per record -> ['50 kHz [Gear wear Failure.pdf p1 System Description]']
+2025-08-31 22:35:56,800 | INFO | EVAL Q[9]: What was the sampling rate per record?
+2025-08-31 22:35:59,258 | INFO | GT exact match: what was the duration of each time record -> ['60 seconds [Gear wear Failure.pdf p1 System Description]']
+2025-08-31 22:35:59,259 | INFO | EVAL Q[10]: What was the duration of each time record?
+2025-08-31 22:36:01,717 | INFO | GT no fuzzy match: which lubricant and viscosity grade were in service (best_score=0.533, threshold=0.6)
+2025-08-31 22:36:01,717 | INFO | EVAL Q[11]: Which lubricant and viscosity grade were in service?
+2025-08-31 22:36:04,285 | INFO | GT no fuzzy match: name the accelerometer model used on the shafts (best_score=0.524, threshold=0.6)
+2025-08-31 22:36:04,285 | INFO | EVAL Q[12]: Name the accelerometer model used on the shafts.
+2025-08-31 22:36:06,470 | INFO | GT no fuzzy match: which brand and model were used for the tachometer (best_score=0.562, threshold=0.6)
+2025-08-31 22:36:06,470 | INFO | EVAL Q[13]: Which brand and model were used for the tachometer?
+2025-08-31 22:36:09,245 | INFO | GT no fuzzy match: how many teeth did the tachometer gear have (best_score=0.516, threshold=0.6)
+2025-08-31 22:36:09,246 | INFO | EVAL Q[14]: How many teeth did the tachometer gear have?
+2025-08-31 22:36:11,923 | INFO | GT fuzzy match: what is the gear type and module size -> ['3 mm [Gear wear Failure.pdf p11 Table 3 Transmission features]'] (score=0.758)
+2025-08-31 22:36:11,924 | INFO | EVAL Q[15]: What is the gear type and module size?
+2025-08-31 22:36:14,239 | INFO | GT fuzzy match: what is the driving/driven transmission ratio -> ['18/35 [Gear wear Failure.pdf p11 Table 3 Transmission features]'] (score=0.659)
+2025-08-31 22:36:14,239 | INFO | EVAL Q[16]: What is the driving/driven transmission ratio?
+2025-08-31 22:36:16,850 | INFO | GT no fuzzy match: which monitoring method provided the earliest reliable indicator of wear onset (best_score=0.556, threshold=0.6)
+2025-08-31 22:36:16,851 | INFO | EVAL Q[17]: Which monitoring method provided the earliest reliable indicator of wear onset?
+2025-08-31 22:36:19,349 | INFO | GT no fuzzy match: name two spectral characteristics of the healthy baseline (best_score=0.434, threshold=0.6)
+2025-08-31 22:36:19,349 | INFO | EVAL Q[18]: Name two spectral characteristics of the healthy baseline.
+2025-08-31 22:36:22,096 | INFO | GT no fuzzy match: what two vibration-domain signs accompanied early flank wear during mild wear (best_score=0.485, threshold=0.6)
+2025-08-31 22:36:22,097 | INFO | EVAL Q[19]: What two vibration-domain signs accompanied early flank wear during mild wear?
+2025-08-31 22:36:23,868 | INFO | GT no fuzzy match: at 15 rps during early wear, what high-frequency behavior was observed (best_score=0.385, threshold=0.6)
+2025-08-31 22:36:23,868 | INFO | EVAL Q[20]: At 15 RPS during early wear, what high-frequency behavior was observed?
+2025-08-31 22:36:25,530 | INFO | GT no fuzzy match: by approximately how much did rms rise above april 9 levels at 45 rps during moderate wear (best_score=0.397, threshold=0.6)
+2025-08-31 22:36:25,531 | INFO | EVAL Q[21]: By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?
+2025-08-31 22:36:28,335 | INFO | GT fuzzy match: list two hallmark spectral changes that defined the moderate wear stage -> ['Enlarging contact scars, measurable loss of flank curvature [Gear wear Failure.pdf p4 Moderate Wear]'] (score=0.634)
+2025-08-31 22:36:28,336 | INFO | EVAL Q[22]: List two hallmark spectral changes that defined the moderate wear stage.
+2025-08-31 22:36:29,686 | INFO | GT no fuzzy match: during severe wear at 45 rps, by how much did rms exceed the april 9 baseline (best_score=0.353, threshold=0.6)
+2025-08-31 22:36:29,686 | INFO | EVAL Q[23]: During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?
+2025-08-31 22:36:33,124 | INFO | GT no fuzzy match: name three combined indicators that characterized the severe wear stage (best_score=0.541, threshold=0.6)
+2025-08-31 22:36:33,125 | INFO | EVAL Q[24]: Name three combined indicators that characterized the severe wear stage.
+2025-08-31 22:36:37,148 | INFO | GT no fuzzy match: what physical tooth-surface changes typified the transition into severe wear (best_score=0.524, threshold=0.6)
+2025-08-31 22:36:37,149 | INFO | EVAL Q[25]: What physical tooth-surface changes typified the transition into severe wear?
+2025-08-31 22:36:41,375 | INFO | GT no fuzzy match: why can rms energy drop at the moment of failure despite catastrophic damage (best_score=0.457, threshold=0.6)
+2025-08-31 22:36:41,376 | INFO | EVAL Q[26]: Why can RMS energy drop at the moment of failure despite catastrophic damage?
+2025-08-31 22:36:43,955 | INFO | GT no fuzzy match: which metric should frequency-domain monitoring emphasize for earlier detection (best_score=0.535, threshold=0.6)
+2025-08-31 22:36:43,955 | INFO | EVAL Q[27]: Which metric should frequency-domain monitoring emphasize for earlier detection?
+2025-08-31 22:36:46,237 | INFO | GT fuzzy match: what is the recommended action at the severe wear stage -> ['Adopt dual-path monitoring: visual inspection detects earliest onset; vibration analysis tracks progression and severity [Gear wear Failure.pdf p8 Overall Recommendation]'] (score=0.673)
+2025-08-31 22:36:46,237 | INFO | EVAL Q[28]: What is the recommended action at the severe wear stage?
+2025-08-31 22:36:48,479 | INFO | GT fuzzy match: what is the recommended action at the moderate wear stage -> ['Enlarging contact scars, measurable loss of flank curvature [Gear wear Failure.pdf p4 Moderate Wear]'] (score=0.679)
+2025-08-31 22:36:48,480 | INFO | EVAL Q[29]: What is the recommended action at the moderate wear stage?
+2025-08-31 22:36:50,788 | INFO | GT no fuzzy match: which two data sources should be synchronized into a single diagnostic report (best_score=0.453, threshold=0.6)
+2025-08-31 22:36:50,789 | INFO | EVAL Q[30]: Which two data sources should be synchronized into a single diagnostic report?
+2025-08-31 22:36:53,244 | INFO | GT no fuzzy match: name one ai-driven image task suggested to support objective assessments (best_score=0.465, threshold=0.6)
+2025-08-31 22:36:53,244 | INFO | EVAL Q[31]: Name one AI-driven image task suggested to support objective assessments.
+2025-08-31 22:36:54,817 | INFO | GT fuzzy match: what is the wear depth for case w1 (in μm -> ['40 μm [Gear wear Failure.pdf p11 Table 1]'] (score=0.800)
+2025-08-31 22:36:54,817 | INFO | EVAL Q[32]: What is the wear depth for case W1 (in μm)?
+2025-08-31 22:36:56,222 | INFO | GT fuzzy match: what is the wear depth for case w13 (in μm -> ['344 μm [Gear wear Failure.pdf p11 Table 1]'] (score=0.805)
+2025-08-31 22:36:56,222 | INFO | EVAL Q[33]: What is the wear depth for case W13 (in μm)?
+2025-08-31 22:36:57,678 | INFO | GT fuzzy match: what is the wear depth for case w22 (in μm -> ['488 μm [Gear wear Failure.pdf p11 Table 1]'] (score=0.779)
+2025-08-31 22:36:57,679 | INFO | EVAL Q[34]: What is the wear depth for case W22 (in μm)?
+2025-08-31 22:36:59,273 | INFO | GT fuzzy match: what is the wear depth for case w24 (in μm -> ['488 μm [Gear wear Failure.pdf p11 Table 1]'] (score=0.779)
+2025-08-31 22:36:59,273 | INFO | EVAL Q[35]: What is the wear depth for case W24 (in μm)?
+2025-08-31 22:37:00,660 | INFO | GT fuzzy match: what is the wear depth for case w25 (in μm -> ['488 μm [Gear wear Failure.pdf p11 Table 1]'] (score=0.779)
+2025-08-31 22:37:00,661 | INFO | EVAL Q[36]: What is the wear depth for case W25 (in μm)?
+2025-08-31 22:37:02,742 | INFO | GT fuzzy match: what is the wear depth for case w31 (in μm -> ['40 μm [Gear wear Failure.pdf p11 Table 1]'] (score=0.789)
+2025-08-31 22:37:02,742 | INFO | EVAL Q[37]: What is the wear depth for case W31 (in μm)?
+2025-08-31 22:37:04,342 | INFO | GT fuzzy match: what is the wear depth for case w33 (in μm -> ['344 μm [Gear wear Failure.pdf p11 Table 1]'] (score=0.779)
+2025-08-31 22:37:04,343 | INFO | EVAL Q[38]: What is the wear depth for case W33 (in μm)?
+2025-08-31 22:37:05,770 | INFO | GT fuzzy match: what is the wear depth for case w35 (in μm -> ['344 μm [Gear wear Failure.pdf p11 Table 1]'] (score=0.779)
+2025-08-31 22:37:05,770 | INFO | EVAL Q[39]: What is the wear depth for case W35 (in μm)?
+2025-08-31 22:37:08,881 | INFO | GT no fuzzy match: which wear case corresponds to 294 μm (best_score=0.425, threshold=0.6)
+2025-08-31 22:37:08,882 | INFO | EVAL Q[40]: Which wear case corresponds to 294 μm?
+2025-08-31 22:37:11,451 | INFO | GT no fuzzy match: which wear case corresponds to 466 μm (best_score=0.425, threshold=0.6)
+2025-08-31 22:37:11,452 | INFO | EVAL Q[41]: Which wear case corresponds to 466 μm?
+2025-08-31 22:37:13,430 | INFO | GT no fuzzy match: which wear case corresponds to 744 μm (best_score=0.425, threshold=0.6)
+2025-08-31 22:37:13,430 | INFO | EVAL Q[42]: Which wear case corresponds to 744 μm?
+2025-08-31 22:37:15,661 | INFO | GT no fuzzy match: which wear case corresponds to 579 μm (best_score=0.425, threshold=0.6)
+2025-08-31 22:37:15,662 | INFO | EVAL Q[43]: Which wear case corresponds to 579 μm?
+2025-08-31 22:37:18,842 | INFO | GT no fuzzy match: list the health stages in chronological order (best_score=0.460, threshold=0.6)
+2025-08-31 22:37:18,843 | INFO | EVAL Q[44]: List the health stages in chronological order.
+2025-08-31 22:37:20,328 | INFO | GT no fuzzy match: at which two speeds were both baseline and severe-wear measurements acquired (best_score=0.496, threshold=0.6)
+2025-08-31 22:37:20,328 | INFO | EVAL Q[45]: At which two speeds were both baseline and severe-wear measurements acquired?
+2025-08-31 22:37:23,079 | INFO | GT no fuzzy match: name the two primary sensor modalities used to document wear progression (best_score=0.451, threshold=0.6)
+2025-08-31 22:37:23,079 | INFO | EVAL Q[46]: Name the two primary sensor modalities used to document wear progression.
+2025-08-31 22:44:37,707 | INFO | FLAGS: HEADLESS=0 EVAL=1 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 22:44:37,708 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 22:44:37,708 | INFO | FLAGS[retrieval]: DENSE_K=3 SPARSE_K=3 CONTEXT_TOP_N=6 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 22:44:37,708 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 22:44:37,708 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 22:44:37,709 | INFO | clean_table: extracted 3 elements
+2025-08-31 22:44:37,709 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 22:44:37,709 | INFO | camelot: extracted 0 elements
+2025-08-31 22:44:37,709 | INFO | tabula: extracted 0 elements
+2025-08-31 22:44:37,710 | INFO | llamaparse: extracted 0 elements
+2025-08-31 22:44:38,013 | INFO | pymupdf: extracted 4 images
+2025-08-31 22:44:38,071 | INFO | text: extracted 13 page-text elements
+2025-08-31 22:44:38,112 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 22:44:38,113 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 22:44:38,113 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 22:44:38,114 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 22:44:38,117 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 22:44:38,117 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 22:44:38,117 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 22:44:38,117 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 22:44:38,135 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 22:44:38,345 | INFO | Chunking summary: total=46 text=10 table=3 figure=4 other=29 avg_tokens≈224.9
+2025-08-31 22:44:38,362 | INFO | Section histogram: [('Analysis', 12), ('Text', 10), ('Timeline', 8), ('Conclusion', 6), ('Figure', 4), ('Summary', 3), ('Table', 3)]
+2025-08-31 22:44:38,371 | INFO | Ingestion complete: 1 files -> 46 chunks -> 63 documents (tables=3, figures=4)
+2025-08-31 22:44:42,094 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 22:44:42,094 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 22:44:42,094 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 22:44:42,094 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 22:44:42,155 | INFO | EVAL files: QA=data\gear_wear_qa_context_free.jsonl (exists=True) | GT=data\gear_wear_QA_groundtruth.json (exists=True)
+2025-08-31 22:44:42,156 | INFO | QA auto-load: Loaded 46 QA items from data\gear_wear_qa_context_free.jsonl
+2025-08-31 22:44:42,161 | INFO | GT debug: gt_path=data\gear_wear_QA_groundtruth.json, gt_rows type=<class 'list'>, gt_rows len=46
+2025-08-31 22:44:42,165 | INFO | GT debug: first row keys=['question', 'ground_truths']
+2025-08-31 22:44:42,167 | INFO | GT auto-load: Loaded 0 ids and 46 questions from data\gear_wear_QA_groundtruth.json. Sample ids: 
+2025-08-31 22:44:44,681 | INFO | GT exact match: on what date was the first onset of wear detected by visual inspection -> ['April 9, 2023 [Gear wear Failure.pdf p1 Executive Summary]']
+2025-08-31 22:44:44,681 | INFO | EVAL Q[1]: On what date was the first onset of wear detected by visual inspection?
+2025-08-31 22:44:48,027 | INFO | GT exact match: on what date did the system reach the failure stage -> ['June 15, 2023 [Gear wear Failure.pdf p1 Executive Summary]']
+2025-08-31 22:44:48,028 | INFO | EVAL Q[2]: On what date did the system reach the failure stage?
+2025-08-31 22:44:50,497 | INFO | GT exact match: between which dates did the severe wear stage occur -> ['From May 14 to June 11 [Gear wear Failure.pdf p5 Severe Wear]']
+2025-08-31 22:44:50,497 | INFO | EVAL Q[3]: Between which dates did the severe wear stage occur?
+2025-08-31 22:44:52,920 | INFO | GT exact match: when did moderate wear begin -> ['April 23, 2023 [Gear wear Failure.pdf p3 Moderate Wear]']
+2025-08-31 22:44:52,920 | INFO | EVAL Q[4]: When did moderate wear begin?
+2025-08-31 22:44:54,731 | INFO | GT exact match: until what date did the healthy baseline extend with no abnormal indications -> ['Until April 8, 2023 [Gear wear Failure.pdf p1 Executive Summary]']
+2025-08-31 22:44:54,732 | INFO | EVAL Q[5]: Until what date did the healthy baseline extend with no abnormal indications?
+2025-08-31 22:44:56,808 | INFO | GT exact match: what is the model of the marine reduction gearbox investigated -> ['MG-5025A [Gear wear Failure.pdf p1 System Description, Table 3]']
+2025-08-31 22:44:56,809 | INFO | EVAL Q[6]: What is the model of the marine reduction gearbox investigated?
+2025-08-31 22:44:59,504 | INFO | GT exact match: which vessel's propulsion train was monitored -> ['INS Haifa [Gear wear Failure.pdf p1 Executive Summary]']
+2025-08-31 22:44:59,504 | INFO | EVAL Q[7]: Which vessel's propulsion train was monitored?
+2025-08-31 22:45:01,216 | INFO | GT exact match: what two steady speeds were used for data acquisition (in rps -> ['45 RPS and 15 RPS [Gear wear Failure.pdf p1 System Description]']
+2025-08-31 22:45:01,217 | INFO | EVAL Q[8]: What two steady speeds were used for data acquisition (in RPS)?
+2025-08-31 22:45:03,361 | INFO | GT exact match: what was the sampling rate per record -> ['50 kHz [Gear wear Failure.pdf p1 System Description]']
+2025-08-31 22:45:03,362 | INFO | EVAL Q[9]: What was the sampling rate per record?
+2025-08-31 22:45:05,796 | INFO | GT exact match: what was the duration of each time record -> ['60 seconds [Gear wear Failure.pdf p1 System Description]']
+2025-08-31 22:45:05,797 | INFO | EVAL Q[10]: What was the duration of each time record?
+2025-08-31 22:45:08,316 | INFO | GT exact match: which lubricant and viscosity grade were in service -> ['2640 semi-synthetic (15W/40) oil [Gear wear Failure.pdf p1 System Description, Table 3]']
+2025-08-31 22:45:08,317 | INFO | EVAL Q[11]: Which lubricant and viscosity grade were in service?
+2025-08-31 22:45:10,434 | INFO | GT exact match: name the accelerometer model used on the shafts -> ['Dytran 3053B [Gear wear Failure.pdf p2 Table]']
+2025-08-31 22:45:10,435 | INFO | EVAL Q[12]: Name the accelerometer model used on the shafts.
+2025-08-31 22:45:12,443 | INFO | GT exact match: which brand and model were used for the tachometer -> ['Honeywell 3010AN [Gear wear Failure.pdf p2 Table]']
+2025-08-31 22:45:12,443 | INFO | EVAL Q[13]: Which brand and model were used for the tachometer?
+2025-08-31 22:45:14,482 | INFO | GT exact match: how many teeth did the tachometer gear have -> ['30 teeth [Gear wear Failure.pdf p2 Table]']
+2025-08-31 22:45:14,482 | INFO | EVAL Q[14]: How many teeth did the tachometer gear have?
+2025-08-31 22:45:17,212 | INFO | GT exact match: what is the gear type and module size -> ['Spur gear, 3 mm module [Gear wear Failure.pdf p11 Table 3 Transmission features]']
+2025-08-31 22:45:17,212 | INFO | EVAL Q[15]: What is the gear type and module size?
+2025-08-31 22:45:20,267 | INFO | GT exact match: what is the driving/driven transmission ratio -> ['18/35 [Gear wear Failure.pdf p11 Table 3 Transmission features]']
+2025-08-31 22:45:20,268 | INFO | EVAL Q[16]: What is the driving/driven transmission ratio?
+2025-08-31 22:45:23,057 | INFO | GT exact match: which monitoring method provided the earliest reliable indicator of wear onset -> ['Visual inspection [Gear wear Failure.pdf p1 Executive Summary]']
+2025-08-31 22:45:23,057 | INFO | EVAL Q[17]: Which monitoring method provided the earliest reliable indicator of wear onset?
+2025-08-31 22:45:25,820 | INFO | GT exact match: name two spectral characteristics of the healthy baseline -> ['Stable frequency components, consistent amplitude levels [Gear wear Failure.pdf p2 Healthy Baseline]']
+2025-08-31 22:45:25,821 | INFO | EVAL Q[18]: Name two spectral characteristics of the healthy baseline.
+2025-08-31 22:45:28,584 | INFO | GT exact match: what two vibration-domain signs accompanied early flank wear during mild wear -> ['Increased RMS levels, emerging sidebands [Gear wear Failure.pdf p3 Mild Wear]']
+2025-08-31 22:45:28,585 | INFO | EVAL Q[19]: What two vibration-domain signs accompanied early flank wear during mild wear?
+2025-08-31 22:45:30,447 | INFO | GT exact match: at 15 rps during early wear, what high-frequency behavior was observed -> ['Amplitude modulation and sideband development [Gear wear Failure.pdf p3 Mild Wear]']
+2025-08-31 22:45:30,448 | INFO | EVAL Q[20]: At 15 RPS during early wear, what high-frequency behavior was observed?
+2025-08-31 22:45:31,989 | INFO | GT exact match: by approximately how much did rms rise above april 9 levels at 45 rps during moderate wear -> ['40-60% increase [Gear wear Failure.pdf p4 Moderate Wear]']
+2025-08-31 22:45:31,989 | INFO | EVAL Q[21]: By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?
+2025-08-31 22:45:35,059 | INFO | GT exact match: list two hallmark spectral changes that defined the moderate wear stage -> ['Enlarging contact scars, measurable loss of flank curvature [Gear wear Failure.pdf p4 Moderate Wear]']
+2025-08-31 22:45:35,059 | INFO | EVAL Q[22]: List two hallmark spectral changes that defined the moderate wear stage.
+2025-08-31 22:45:36,348 | INFO | GT exact match: during severe wear at 45 rps, by how much did rms exceed the april 9 baseline -> ['80-120% increase [Gear wear Failure.pdf p5 Severe Wear]']
+2025-08-31 22:45:36,349 | INFO | EVAL Q[23]: During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?
+2025-08-31 22:45:39,112 | INFO | GT exact match: name three combined indicators that characterized the severe wear stage -> ['High RMS levels, extensive sidebands, visual surface damage [Gear wear Failure.pdf p5 Severe Wear]']
+2025-08-31 22:45:39,112 | INFO | EVAL Q[24]: Name three combined indicators that characterized the severe wear stage.
+2025-08-31 22:45:42,820 | INFO | GT exact match: what physical tooth-surface changes typified the transition into severe wear -> ['Extensive pitting, spalling, and surface fatigue [Gear wear Failure.pdf p5 Severe Wear]']
+2025-08-31 22:45:42,821 | INFO | EVAL Q[25]: What physical tooth-surface changes typified the transition into severe wear?
+2025-08-31 22:45:46,931 | INFO | GT exact match: why can rms energy drop at the moment of failure despite catastrophic damage -> ['Loss of contact area and reduced gear mesh stiffness [Gear wear Failure.pdf p6 Failure Analysis]']
+2025-08-31 22:45:46,931 | INFO | EVAL Q[26]: Why can RMS energy drop at the moment of failure despite catastrophic damage?
+2025-08-31 22:45:49,670 | INFO | GT exact match: which metric should frequency-domain monitoring emphasize for earlier detection -> ['Sideband analysis and amplitude modulation [Gear wear Failure.pdf p7 Monitoring Recommendations]']
+2025-08-31 22:45:49,671 | INFO | EVAL Q[27]: Which metric should frequency-domain monitoring emphasize for earlier detection?
+2025-08-31 22:45:52,030 | INFO | GT exact match: what is the recommended action at the severe wear stage -> ['Immediate shutdown and gear replacement [Gear wear Failure.pdf p8 Overall Recommendation]']
+2025-08-31 22:45:52,030 | INFO | EVAL Q[28]: What is the recommended action at the severe wear stage?
+2025-08-31 22:45:55,256 | INFO | GT exact match: what is the recommended action at the moderate wear stage -> ['Increased monitoring frequency and preparation for maintenance [Gear wear Failure.pdf p8 Overall Recommendation]']
+2025-08-31 22:45:55,256 | INFO | EVAL Q[29]: What is the recommended action at the moderate wear stage?
+2025-08-31 22:45:57,934 | INFO | GT exact match: which two data sources should be synchronized into a single diagnostic report -> ['Vibration analysis and visual inspection data [Gear wear Failure.pdf p8 Overall Recommendation]']
+2025-08-31 22:45:57,935 | INFO | EVAL Q[30]: Which two data sources should be synchronized into a single diagnostic report?
+2025-08-31 22:46:00,550 | INFO | GT exact match: name one ai-driven image task suggested to support objective assessments -> ['Automated surface damage quantification [Gear wear Failure.pdf p8 Overall Recommendation]']
+2025-08-31 22:46:00,550 | INFO | EVAL Q[31]: Name one AI-driven image task suggested to support objective assessments.
+2025-08-31 22:46:02,619 | INFO | GT exact match: what is the wear depth for case w1 (in μm -> ['40 μm [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:02,619 | INFO | EVAL Q[32]: What is the wear depth for case W1 (in μm)?
+2025-08-31 22:46:04,079 | INFO | GT exact match: what is the wear depth for case w13 (in μm -> ['344 μm [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:04,080 | INFO | EVAL Q[33]: What is the wear depth for case W13 (in μm)?
+2025-08-31 22:46:05,564 | INFO | GT exact match: what is the wear depth for case w22 (in μm -> ['488 μm [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:05,565 | INFO | EVAL Q[34]: What is the wear depth for case W22 (in μm)?
+2025-08-31 22:46:07,324 | INFO | GT exact match: what is the wear depth for case w24 (in μm -> ['488 μm [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:07,324 | INFO | EVAL Q[35]: What is the wear depth for case W24 (in μm)?
+2025-08-31 22:46:08,739 | INFO | GT exact match: what is the wear depth for case w25 (in μm -> ['488 μm [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:08,739 | INFO | EVAL Q[36]: What is the wear depth for case W25 (in μm)?
+2025-08-31 22:46:10,079 | INFO | GT exact match: what is the wear depth for case w31 (in μm -> ['40 μm [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:10,079 | INFO | EVAL Q[37]: What is the wear depth for case W31 (in μm)?
+2025-08-31 22:46:11,780 | INFO | GT exact match: what is the wear depth for case w33 (in μm -> ['344 μm [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:11,781 | INFO | EVAL Q[38]: What is the wear depth for case W33 (in μm)?
+2025-08-31 22:46:13,263 | INFO | GT exact match: what is the wear depth for case w35 (in μm -> ['932 μm [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:13,264 | INFO | EVAL Q[39]: What is the wear depth for case W35 (in μm)?
+2025-08-31 22:46:15,631 | INFO | GT exact match: which wear case corresponds to 294 μm -> ['W12 [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:15,631 | INFO | EVAL Q[40]: Which wear case corresponds to 294 μm?
+2025-08-31 22:46:18,842 | INFO | GT exact match: which wear case corresponds to 466 μm -> ['W21 [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:18,842 | INFO | EVAL Q[41]: Which wear case corresponds to 466 μm?
+2025-08-31 22:46:21,325 | INFO | GT exact match: which wear case corresponds to 744 μm -> ['W28 [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:21,326 | INFO | EVAL Q[42]: Which wear case corresponds to 744 μm?
+2025-08-31 22:46:23,603 | INFO | GT exact match: which wear case corresponds to 579 μm -> ['W26 [Gear wear Failure.pdf p11 Table 1]']
+2025-08-31 22:46:23,604 | INFO | EVAL Q[43]: Which wear case corresponds to 579 μm?
+2025-08-31 22:46:27,319 | INFO | GT exact match: list the health stages in chronological order -> ['Healthy baseline, mild wear, moderate wear, severe wear, failure [Gear wear Failure.pdf p1-p6 Timeline]']
+2025-08-31 22:46:27,320 | INFO | EVAL Q[44]: List the health stages in chronological order.
+2025-08-31 22:46:28,890 | INFO | GT exact match: at which two speeds were both baseline and severe-wear measurements acquired -> ['15 RPS and 45 RPS [Gear wear Failure.pdf p1 System Description]']
+2025-08-31 22:46:28,890 | INFO | EVAL Q[45]: At which two speeds were both baseline and severe-wear measurements acquired?
+2025-08-31 22:46:32,128 | INFO | GT exact match: name the two primary sensor modalities used to document wear progression -> ['Accelerometers and tachometers [Gear wear Failure.pdf p2 Table]']
+2025-08-31 22:46:32,129 | INFO | EVAL Q[46]: Name the two primary sensor modalities used to document wear progression.
+2025-08-31 22:54:17,387 | INFO | FLAGS: HEADLESS=1 EVAL=1 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 22:54:17,388 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 22:54:17,388 | INFO | FLAGS[retrieval]: DENSE_K=3 SPARSE_K=3 CONTEXT_TOP_N=6 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 22:54:17,388 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 22:54:17,388 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 22:54:17,389 | INFO | clean_table: extracted 3 elements
+2025-08-31 22:54:17,389 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 22:54:17,389 | INFO | camelot: extracted 0 elements
+2025-08-31 22:54:17,390 | INFO | tabula: extracted 0 elements
+2025-08-31 22:54:17,390 | INFO | llamaparse: extracted 0 elements
+2025-08-31 22:54:17,739 | INFO | pymupdf: extracted 4 images
+2025-08-31 22:54:17,803 | INFO | text: extracted 13 page-text elements
+2025-08-31 22:54:17,881 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 22:54:17,882 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 22:54:17,882 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 22:54:17,883 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 22:54:17,884 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 22:54:17,884 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 22:54:17,885 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 22:54:17,885 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 22:54:17,905 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 22:54:52,905 | INFO | Chunking summary: total=39 text=9 table=3 figure=4 other=23 avg_tokens≈219.5
+2025-08-31 22:54:52,918 | INFO | Section histogram: [('Analysis', 9), ('Text', 9), ('Timeline', 6), ('Conclusion', 5), ('Figure', 4), ('Summary', 3), ('Table', 3)]
+2025-08-31 22:54:52,924 | INFO | Ingestion complete: 1 files -> 39 chunks -> 56 documents (tables=3, figures=4)
+2025-08-31 22:54:57,843 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 22:54:57,843 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 22:54:57,843 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 22:54:57,843 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 22:54:58,721 | INFO | EVAL files: QA=data\qa_single_test.jsonl (exists=True) | GT=data\gear_wear_QA_groundtruth_EVAL.json (exists=True)
+2025-08-31 22:54:58,721 | INFO | QA auto-load: Loaded 1 QA items from data\qa_single_test.jsonl
+2025-08-31 22:54:58,722 | INFO | GT debug: gt_path=data\gear_wear_QA_groundtruth_EVAL.json, gt_rows type=<class 'list'>, gt_rows len=46
+2025-08-31 22:54:58,723 | INFO | GT debug: first row keys=['question', 'ground_truths']
+2025-08-31 22:54:58,723 | INFO | GT auto-load: Loaded 0 ids and 46 questions from data\gear_wear_QA_groundtruth_EVAL.json. Sample ids: 
+2025-08-31 22:55:03,985 | INFO | GT exact match: name the accelerometer model used on the shafts -> ['Dytran 3053B']
+2025-08-31 22:55:03,986 | INFO | EVAL Q[1]: Name the accelerometer model used on the shafts.
+2025-08-31 22:55:10,592 | INFO | Evaluation summary (averaged over 1 items):
+Faithfulness: 0.000
+Answer relevancy: 0.000
+Context precision: 0.500
+Context recall: 1.000
+Table QA accuracy: 0.000
+Factual score: 0.000
+Factual EM rate: 0.000
+Factual token F1: 0.000
+Factual numeric: 0.000
+Factual range: 0.000
+Factual list F1: 0.000
+Overlap precision (heuristic): 0.048
+Overlap recall (heuristic): 1.000
+Overlap F1 (heuristic): 0.091
+2025-08-31 22:55:10,593 | INFO | Saved summary to logs\eval_ragas_summary.json and per-question to logs\eval_ragas_per_question.jsonl
+2025-08-31 22:55:10,593 | INFO | DeepEval skipped: missing CONFIDENT_API_KEY/DEEPEVAL_API_KEY
+2025-08-31 22:56:38,548 | INFO | FLAGS: HEADLESS=1 EVAL=1 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 22:56:38,548 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 22:56:38,548 | INFO | FLAGS[retrieval]: DENSE_K=3 SPARSE_K=3 CONTEXT_TOP_N=6 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 22:56:38,548 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 22:56:38,549 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 22:56:38,549 | INFO | clean_table: extracted 3 elements
+2025-08-31 22:56:38,550 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 22:56:38,550 | INFO | camelot: extracted 0 elements
+2025-08-31 22:56:38,550 | INFO | tabula: extracted 0 elements
+2025-08-31 22:56:38,550 | INFO | llamaparse: extracted 0 elements
+2025-08-31 22:56:38,953 | INFO | pymupdf: extracted 4 images
+2025-08-31 22:56:39,012 | INFO | text: extracted 13 page-text elements
+2025-08-31 22:56:39,081 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 22:56:39,081 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 22:56:39,082 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 22:56:39,082 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 22:56:39,082 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 22:56:39,082 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 22:56:39,082 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 22:56:39,082 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 22:56:39,108 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 22:57:12,895 | INFO | Chunking summary: total=39 text=9 table=3 figure=4 other=23 avg_tokens≈219.5
+2025-08-31 22:57:12,916 | INFO | Section histogram: [('Analysis', 9), ('Text', 9), ('Timeline', 6), ('Conclusion', 5), ('Figure', 4), ('Summary', 3), ('Table', 3)]
+2025-08-31 22:57:12,922 | INFO | Ingestion complete: 1 files -> 39 chunks -> 56 documents (tables=3, figures=4)
+2025-08-31 22:57:16,835 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 22:57:16,836 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 22:57:16,836 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 22:57:16,836 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 22:57:17,632 | INFO | EVAL files: QA=data\qa_single_test.jsonl (exists=True) | GT=data\gear_wear_QA_groundtruth_EVAL.json (exists=True)
+2025-08-31 22:57:17,633 | INFO | QA auto-load: Loaded 1 QA items from data\qa_single_test.jsonl
+2025-08-31 22:57:17,633 | INFO | GT debug: gt_path=data\gear_wear_QA_groundtruth_EVAL.json, gt_rows type=<class 'list'>, gt_rows len=46
+2025-08-31 22:57:17,633 | INFO | GT debug: first row keys=['question', 'ground_truths']
+2025-08-31 22:57:17,634 | INFO | GT auto-load: Loaded 0 ids and 46 questions from data\gear_wear_QA_groundtruth_EVAL.json. Sample ids: 
+2025-08-31 22:57:22,143 | INFO | GT exact match: what is the wear depth for case w1 (in μm -> ['40 μm']
+2025-08-31 22:57:22,144 | INFO | EVAL Q[1]: What is the wear depth for case W1 (in μm)?
+2025-08-31 22:57:29,122 | INFO | Evaluation summary (averaged over 1 items):
+Faithfulness: 1.000
+Answer relevancy: 0.000
+Context precision: 1.000
+Context recall: 1.000
+Table QA accuracy: 0.000
+Factual score: 0.050
+Factual EM rate: 0.000
+Factual token F1: 0.250
+Factual numeric: 0.000
+Factual range: 0.000
+Factual list F1: 0.000
+Overlap precision (heuristic): 0.012
+Overlap recall (heuristic): 1.000
+Overlap F1 (heuristic): 0.023
+2025-08-31 22:57:29,122 | INFO | Saved summary to logs\eval_ragas_summary.json and per-question to logs\eval_ragas_per_question.jsonl
+2025-08-31 22:57:29,122 | INFO | DeepEval skipped: missing CONFIDENT_API_KEY/DEEPEVAL_API_KEY
+2025-08-31 23:00:25,152 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 23:00:25,152 | INFO | FLAGS[retrieval]: DENSE_K=3 SPARSE_K=3 CONTEXT_TOP_N=6 CE_RERANK=0 GRAPH_DB=1
+2025-08-31 23:00:25,153 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 23:00:25,153 | INFO | toggles: clean_table=True, pdfplumber=True, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 23:00:25,153 | INFO | clean_table: extracted 3 elements
+2025-08-31 23:00:26,814 | INFO | pdfplumber: extracted 3 elements
+2025-08-31 23:00:26,815 | INFO | camelot: extracted 0 elements
+2025-08-31 23:00:26,815 | INFO | tabula: extracted 0 elements
+2025-08-31 23:00:26,815 | INFO | llamaparse: extracted 0 elements
+2025-08-31 23:00:27,333 | INFO | pymupdf: extracted 4 images
+2025-08-31 23:00:27,402 | INFO | text: extracted 13 page-text elements
+2025-08-31 23:00:27,471 | INFO | Gear wear Failure.pdf: tables=6 via ['manual', 'pdfplumber'] | images=4
+2025-08-31 23:00:27,471 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 23:00:27,471 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 23:00:27,471 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 23:00:27,471 | INFO | Gear wear Failure.pdf: Table 4 (pdfplumber) -> | Case |  | Wear depth |  |  | Wear depth |  | Wear depth | ...
+2025-08-31 23:00:27,472 | INFO | Gear wear Failure.pdf: Table 5 (pdfplumber) -> | Sensor |  | Direction and |  | Brand |  | Sensitivity |  |...
+2025-08-31 23:00:27,472 | INFO | Gear wear Failure.pdf: Table 6 (pdfplumber) -> |  | Feature |  |  | Value / Type |  |...
+2025-08-31 23:00:27,472 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 23:00:27,472 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 23:00:27,472 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 23:00:27,472 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 23:00:27,488 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 23:01:06,495 | INFO | Chunking summary: total=42 text=9 table=6 figure=4 other=23 avg_tokens≈235.4
+2025-08-31 23:01:06,513 | INFO | Section histogram: [('Analysis', 9), ('Text', 9), ('Table', 6), ('Timeline', 6), ('Conclusion', 5), ('Figure', 4), ('Summary', 3)]
+2025-08-31 23:01:06,523 | INFO | Ingestion complete: 1 files -> 42 chunks -> 60 documents (tables=6, figures=4)
+2025-08-31 23:11:11,342 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 23:11:11,342 | INFO | FLAGS[retrieval]: DENSE_K=3 SPARSE_K=3 CONTEXT_TOP_N=6 CE_RERANK=0 GRAPH_DB=1
+2025-08-31 23:11:11,342 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 23:11:11,343 | INFO | toggles: clean_table=True, pdfplumber=True, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 23:11:11,343 | INFO | clean_table: extracted 3 elements
+2025-08-31 23:11:12,500 | INFO | pdfplumber: extracted 3 elements
+2025-08-31 23:11:12,500 | INFO | camelot: extracted 0 elements
+2025-08-31 23:11:12,500 | INFO | tabula: extracted 0 elements
+2025-08-31 23:11:12,500 | INFO | llamaparse: extracted 0 elements
+2025-08-31 23:11:12,783 | INFO | pymupdf: extracted 4 images
+2025-08-31 23:11:12,833 | INFO | text: extracted 13 page-text elements
+2025-08-31 23:11:12,894 | INFO | Gear wear Failure.pdf: tables=6 via ['manual', 'pdfplumber'] | images=4
+2025-08-31 23:11:12,894 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 23:11:12,894 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 23:11:12,894 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 23:11:12,895 | INFO | Gear wear Failure.pdf: Table 4 (pdfplumber) -> | Case |  | Wear depth |  |  | Wear depth |  | Wear depth | ...
+2025-08-31 23:11:12,895 | INFO | Gear wear Failure.pdf: Table 5 (pdfplumber) -> | Sensor |  | Direction and |  | Brand |  | Sensitivity |  |...
+2025-08-31 23:11:12,895 | INFO | Gear wear Failure.pdf: Table 6 (pdfplumber) -> |  | Feature |  |  | Value / Type |  |...
+2025-08-31 23:11:12,895 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 23:11:12,895 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 23:11:12,896 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 23:11:12,896 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 23:11:12,917 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 23:11:46,883 | INFO | Chunking summary: total=42 text=9 table=6 figure=4 other=23 avg_tokens≈235.4
+2025-08-31 23:11:46,896 | INFO | Section histogram: [('Analysis', 9), ('Text', 9), ('Table', 6), ('Timeline', 6), ('Conclusion', 5), ('Figure', 4), ('Summary', 3)]
+2025-08-31 23:11:46,902 | INFO | Ingestion complete: 1 files -> 42 chunks -> 60 documents (tables=6, figures=4)
+2025-08-31 23:14:38,615 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 23:14:38,616 | INFO | FLAGS[retrieval]: DENSE_K=3 SPARSE_K=3 CONTEXT_TOP_N=6 CE_RERANK=0 GRAPH_DB=1
+2025-08-31 23:14:38,616 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 23:14:38,616 | INFO | toggles: clean_table=True, pdfplumber=True, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 23:14:38,617 | INFO | clean_table: extracted 3 elements
+2025-08-31 23:14:39,865 | INFO | pdfplumber: extracted 3 elements
+2025-08-31 23:14:39,865 | INFO | camelot: extracted 0 elements
+2025-08-31 23:14:39,865 | INFO | tabula: extracted 0 elements
+2025-08-31 23:14:39,866 | INFO | llamaparse: extracted 0 elements
+2025-08-31 23:14:40,121 | INFO | pymupdf: extracted 4 images
+2025-08-31 23:14:40,172 | INFO | text: extracted 13 page-text elements
+2025-08-31 23:14:40,229 | INFO | Gear wear Failure.pdf: tables=6 via ['manual', 'pdfplumber'] | images=4
+2025-08-31 23:14:40,230 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 23:14:40,230 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 23:14:40,230 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 23:14:40,231 | INFO | Gear wear Failure.pdf: Table 4 (pdfplumber) -> | Case |  | Wear depth |  |  | Wear depth |  | Wear depth | ...
+2025-08-31 23:14:40,231 | INFO | Gear wear Failure.pdf: Table 5 (pdfplumber) -> | Sensor |  | Direction and |  | Brand |  | Sensitivity |  |...
+2025-08-31 23:14:40,231 | INFO | Gear wear Failure.pdf: Table 6 (pdfplumber) -> |  | Feature |  |  | Value / Type |  |...
+2025-08-31 23:14:40,231 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 23:14:40,231 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 23:14:40,231 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 23:14:40,232 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 23:14:40,248 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 23:15:15,148 | INFO | Chunking summary: total=42 text=9 table=6 figure=4 other=23 avg_tokens≈235.4
+2025-08-31 23:15:15,164 | INFO | Section histogram: [('Analysis', 9), ('Text', 9), ('Table', 6), ('Timeline', 6), ('Conclusion', 5), ('Figure', 4), ('Summary', 3)]
+2025-08-31 23:15:15,177 | INFO | Ingestion complete: 1 files -> 42 chunks -> 60 documents (tables=6, figures=4)
+2025-08-31 23:18:33,429 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 23:18:33,434 | INFO | FLAGS[retrieval]: DENSE_K=3 SPARSE_K=3 CONTEXT_TOP_N=6 CE_RERANK=0 GRAPH_DB=1
+2025-08-31 23:18:33,435 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 23:18:33,436 | INFO | toggles: clean_table=True, pdfplumber=True, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 23:18:33,437 | INFO | clean_table: extracted 3 elements
+2025-08-31 23:18:35,323 | INFO | pdfplumber: extracted 3 elements
+2025-08-31 23:18:35,323 | INFO | camelot: extracted 0 elements
+2025-08-31 23:18:35,323 | INFO | tabula: extracted 0 elements
+2025-08-31 23:18:35,324 | INFO | llamaparse: extracted 0 elements
+2025-08-31 23:18:35,656 | INFO | pymupdf: extracted 4 images
+2025-08-31 23:18:35,706 | INFO | text: extracted 13 page-text elements
+2025-08-31 23:18:35,772 | INFO | Gear wear Failure.pdf: tables=6 via ['manual', 'pdfplumber'] | images=4
+2025-08-31 23:18:35,772 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 23:18:35,772 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 23:18:35,773 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 23:18:35,773 | INFO | Gear wear Failure.pdf: Table 4 (pdfplumber) -> | Case |  | Wear depth |  |  | Wear depth |  | Wear depth | ...
+2025-08-31 23:18:35,773 | INFO | Gear wear Failure.pdf: Table 5 (pdfplumber) -> | Sensor |  | Direction and |  | Brand |  | Sensitivity |  |...
+2025-08-31 23:18:35,774 | INFO | Gear wear Failure.pdf: Table 6 (pdfplumber) -> |  | Feature |  |  | Value / Type |  |...
+2025-08-31 23:18:35,774 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 23:18:35,774 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 23:18:35,775 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 23:18:35,775 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 23:18:35,802 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 23:19:15,973 | INFO | Chunking summary: total=42 text=9 table=6 figure=4 other=23 avg_tokens≈235.4
+2025-08-31 23:19:15,986 | INFO | Section histogram: [('Analysis', 9), ('Text', 9), ('Table', 6), ('Timeline', 6), ('Conclusion', 5), ('Figure', 4), ('Summary', 3)]
+2025-08-31 23:19:15,994 | INFO | Ingestion complete: 1 files -> 42 chunks -> 60 documents (tables=6, figures=4)
+2025-08-31 23:21:04,214 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 23:21:04,215 | INFO | FLAGS[retrieval]: DENSE_K=3 SPARSE_K=3 CONTEXT_TOP_N=6 CE_RERANK=0 GRAPH_DB=1
+2025-08-31 23:21:04,215 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 23:21:04,215 | INFO | toggles: clean_table=True, pdfplumber=True, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 23:21:04,215 | INFO | clean_table: extracted 3 elements
+2025-08-31 23:21:05,769 | INFO | pdfplumber: extracted 3 elements
+2025-08-31 23:21:05,770 | INFO | camelot: extracted 0 elements
+2025-08-31 23:21:05,771 | INFO | tabula: extracted 0 elements
+2025-08-31 23:21:05,771 | INFO | llamaparse: extracted 0 elements
+2025-08-31 23:21:06,124 | INFO | pymupdf: extracted 4 images
+2025-08-31 23:21:06,215 | INFO | text: extracted 13 page-text elements
+2025-08-31 23:21:06,320 | INFO | Gear wear Failure.pdf: tables=6 via ['manual', 'pdfplumber'] | images=4
+2025-08-31 23:21:06,322 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 23:21:06,323 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 23:21:06,323 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 23:21:06,324 | INFO | Gear wear Failure.pdf: Table 4 (pdfplumber) -> | Case |  | Wear depth |  |  | Wear depth |  | Wear depth | ...
+2025-08-31 23:21:06,324 | INFO | Gear wear Failure.pdf: Table 5 (pdfplumber) -> | Sensor |  | Direction and |  | Brand |  | Sensitivity |  |...
+2025-08-31 23:21:06,325 | INFO | Gear wear Failure.pdf: Table 6 (pdfplumber) -> |  | Feature |  |  | Value / Type |  |...
+2025-08-31 23:21:06,326 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 23:21:06,327 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 23:21:06,328 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 23:21:06,328 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 23:21:06,359 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 23:21:44,433 | INFO | Chunking summary: total=42 text=9 table=6 figure=4 other=23 avg_tokens≈235.4
+2025-08-31 23:21:44,451 | INFO | Section histogram: [('Analysis', 9), ('Text', 9), ('Table', 6), ('Timeline', 6), ('Conclusion', 5), ('Figure', 4), ('Summary', 3)]
+2025-08-31 23:21:44,464 | INFO | Ingestion complete: 1 files -> 42 chunks -> 60 documents (tables=6, figures=4)
+2025-08-31 23:26:51,167 | INFO | FLAGS: HEADLESS=1 EVAL=0 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 23:26:51,168 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 23:26:51,168 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 23:26:51,168 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 23:26:51,168 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 23:26:51,169 | INFO | clean_table: extracted 3 elements
+2025-08-31 23:26:51,169 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 23:26:51,169 | INFO | camelot: extracted 0 elements
+2025-08-31 23:26:51,170 | INFO | tabula: extracted 0 elements
+2025-08-31 23:26:51,170 | INFO | llamaparse: extracted 0 elements
+2025-08-31 23:26:51,450 | INFO | pymupdf: extracted 4 images
+2025-08-31 23:26:51,488 | INFO | text: extracted 13 page-text elements
+2025-08-31 23:26:51,536 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 23:26:51,537 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 23:26:51,537 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 23:26:51,538 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 23:26:51,538 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 23:26:51,539 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 23:26:51,539 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 23:26:51,539 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 23:26:51,562 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 23:26:51,727 | INFO | Chunking summary: total=32 text=7 table=3 figure=4 other=18 avg_tokens≈298.8
+2025-08-31 23:26:51,736 | INFO | Section histogram: [('Analysis', 7), ('Text', 7), ('Timeline', 5), ('Conclusion', 4), ('Figure', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 23:26:51,742 | INFO | Ingestion complete: 1 files -> 32 chunks -> 49 documents (tables=3, figures=4)
+2025-08-31 23:26:55,265 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 23:26:55,265 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 23:26:55,265 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 23:26:55,265 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 23:28:47,541 | INFO | FLAGS: HEADLESS=0 EVAL=0 USE_NORMALIZED=None VEC_BACKEND=chroma LLM_INDEX=None LLAMAPARSE=None
+2025-08-31 23:28:47,541 | INFO | FLAGS[chunking]: MULTI=1 SEMANTIC=1 TARGET_TOK=250 MAX_TOK=500 OVERLAP_N=1 HEADING_MIN_FONT=12
+2025-08-31 23:28:47,541 | INFO | FLAGS[retrieval]: DENSE_K=10 SPARSE_K=10 CONTEXT_TOP_N=8 CE_RERANK=1 GRAPH_DB=1
+2025-08-31 23:28:47,541 | INFO | Loading elements from: Gear wear Failure.pdf
+2025-08-31 23:28:47,542 | INFO | toggles: clean_table=True, pdfplumber=False, camelot=False, tabula=False, llamaparse=False, pymupdf=True
+2025-08-31 23:28:47,543 | INFO | clean_table: extracted 3 elements
+2025-08-31 23:28:47,544 | INFO | pdfplumber: extracted 0 elements
+2025-08-31 23:28:47,544 | INFO | camelot: extracted 0 elements
+2025-08-31 23:28:47,544 | INFO | tabula: extracted 0 elements
+2025-08-31 23:28:47,545 | INFO | llamaparse: extracted 0 elements
+2025-08-31 23:28:47,867 | INFO | pymupdf: extracted 4 images
+2025-08-31 23:28:47,945 | INFO | text: extracted 13 page-text elements
+2025-08-31 23:28:48,250 | INFO | Gear wear Failure.pdf: tables=3 via ['manual'] | images=4
+2025-08-31 23:28:48,251 | INFO | Gear wear Failure.pdf: Table 1 (manual) -> | Case | Wear depth [μm] | Case | Wear depth [μm] | Case | W...
+2025-08-31 23:28:48,251 | INFO | Gear wear Failure.pdf: Table 2 (manual) -> | Sensor | Direction and Position | Brand | Sensitivity [mV/...
+2025-08-31 23:28:48,251 | INFO | Gear wear Failure.pdf: Table 3 (manual) -> | Feature | Value / Type |...
+2025-08-31 23:28:48,251 | INFO | Gear wear Failure.pdf: Figure 1 (pymupdf) -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 23:28:48,251 | INFO | Gear wear Failure.pdf: Figure 2 (pymupdf) -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 23:28:48,251 | INFO | Gear wear Failure.pdf: Figure 3 (pymupdf) -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 23:28:48,251 | INFO | Gear wear Failure.pdf: Figure 4 (pymupdf) -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 23:28:48,264 | INFO | Gear wear Failure.pdf: page_count=13
+2025-08-31 23:28:48,494 | INFO | Chunking summary: total=32 text=7 table=3 figure=4 other=18 avg_tokens≈298.8
+2025-08-31 23:28:48,502 | INFO | Section histogram: [('Analysis', 7), ('Text', 7), ('Timeline', 5), ('Conclusion', 4), ('Figure', 4), ('Table', 3), ('Summary', 2)]
+2025-08-31 23:28:48,507 | INFO | Ingestion complete: 1 files -> 32 chunks -> 49 documents (tables=3, figures=4)
+2025-08-31 23:28:51,121 | INFO | Image: Gear wear Failure.pdf p12 fig#1 -> data/images/Gear wear Failure-p12-img1.png
+2025-08-31 23:28:51,121 | INFO | Image: Gear wear Failure.pdf p12 fig#2 -> data/images/Gear wear Failure-p12-img2.png
+2025-08-31 23:28:51,121 | INFO | Image: Gear wear Failure.pdf p13 fig#3 -> data/images/Gear wear Failure-p13-img1.png
+2025-08-31 23:28:51,122 | INFO | Image: Gear wear Failure.pdf p13 fig#4 -> data/images/Gear wear Failure-p13-img2.png
+2025-08-31 23:28:51,160 | INFO | QA auto-load: Loaded 46 QA ids from data\gear_wear_qa_context_free.jsonl (waiting for GT to join answers)

@@ -74,6 +74,14 @@ except Exception:
     LlamaParse = None  # type: ignore
     ResultType = None  # type: ignore
 
+# Clean table extraction
+try:
+    from app.clean_table_extract import extract_tables_clean
+    CLEAN_TABLE_EXTRACT_AVAILABLE = True
+except Exception:
+    extract_tables_clean = None
+    CLEAN_TABLE_EXTRACT_AVAILABLE = False
+
 # Simple element classes for testing
 class Element:
     """Minimal carrier used by the pipeline prior to chunking/indexing.
@@ -192,7 +200,7 @@ def _export_tables_to_files(elements: List[Element], path: Path) -> None:
                 cells = [c.strip() for c in ln.strip("|").split("|")]
                 # CSV escaping of quotes
                 csv_rows.append(
-                    ",".join(f'"{c.replace("\"", "\"\"")}"' for c in cells)
+                    ",".join(f'"{c.replace(chr(34), chr(34) + chr(34))}"' for c in cells)
                 )
             if csv_rows:
                 csv_path.write_text("\n".join(csv_rows), encoding="utf-8")
@@ -582,6 +590,51 @@ def _try_pymupdf_images(pdf_path: Path) -> List[Element]:
 
 
 @trace_func
+def _try_clean_table_extraction(pdf_path: Path) -> List[Element]:
+    """Extract tables using clean table extraction (preferred method).
+    
+    This uses the clean_table_extract module which provides better table structure
+    and handles the specific PDF layout correctly.
+    """
+    if not CLEAN_TABLE_EXTRACT_AVAILABLE or not extract_tables_clean or not _env_enabled("RAG_USE_CLEAN_TABLE", True):
+        return []
+    
+    log = get_logger()
+    debug = _env_enabled("RAG_CLEAN_TABLE_DEBUG")
+    
+    if debug:
+        log.info(f"clean_table: Starting extraction from {pdf_path.name}")
+    
+    elements = []
+    
+    try:
+        # Use the clean table extraction
+        clean_tables = extract_tables_clean(pdf_path)
+        
+        for table in clean_tables:
+            # Convert SimpleNamespace to Element
+            elements.append(Table(
+                text=table.text,
+                metadata={
+                    "extractor": table.metadata.extractor,
+                    "page_number": table.metadata.page_number,
+                    "table_index": getattr(table.metadata, 'table_number', 1),
+                    "table_summary": getattr(table.metadata, 'table_summary', ''),
+                    "table_label": getattr(table.metadata, 'table_label', ''),
+                    "table_number": getattr(table.metadata, 'table_number', 1),
+                    "table_anchor": getattr(table.metadata, 'table_anchor', ''),
+                }
+            ))
+    
+    except Exception as e:
+        log.warning(f"clean_table extraction failed: {e}")
+    
+    if debug:
+        log.info(f"clean_table: Extracted {len(elements)} tables total")
+    
+    return elements
+
+@trace_func
 def _try_llamaparse_tables(pdf_path: Path) -> List[Element]:
     """Extract tables via LlamaParse, returning Markdown tables as Table elements.
 
@@ -721,6 +774,7 @@ def load_elements(path: Path) -> List[Element]:
     # Log active toggles once per call to help debug unexpected extractor runs
     try:
         toggles = {
+            "clean_table": _env_enabled("RAG_USE_CLEAN_TABLE", True),
             "pdfplumber": _env_enabled("RAG_USE_PDFPLUMBER", True),
             "camelot": _env_enabled("RAG_USE_CAMELOT", False),
             "tabula": _env_enabled("RAG_USE_TABULA", False),
@@ -728,7 +782,8 @@ def load_elements(path: Path) -> List[Element]:
             "pymupdf": _env_enabled("RAG_USE_PYMUPDF", True),
         }
         log.info(
-            "toggles: pdfplumber=%s, camelot=%s, tabula=%s, llamaparse=%s, pymupdf=%s",
+            "toggles: clean_table=%s, pdfplumber=%s, camelot=%s, tabula=%s, llamaparse=%s, pymupdf=%s",
+            toggles["clean_table"],
             toggles["pdfplumber"],
             toggles["camelot"],
             toggles["tabula"],
@@ -745,6 +800,7 @@ def load_elements(path: Path) -> List[Element]:
 
     # Try each enabled extractor (tables)
     extractors = [
+        ("clean_table", _try_clean_table_extraction),  # Preferred method
         ("pdfplumber", _try_pdfplumber_tables),
         ("camelot", _try_camelot_tables),
         ("tabula", _try_tabula_tables),

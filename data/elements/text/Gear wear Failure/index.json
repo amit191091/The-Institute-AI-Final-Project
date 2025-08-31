@@ -1,0 +1,80 @@
+[
+  {
+    "page": 1,
+    "chars": 2573,
+    "words": 378,
+    "file": "data/elements/text/Gear wear Failure/p1.txt"
+  },
+  {
+    "page": 2,
+    "chars": 3013,
+    "words": 434,
+    "file": "data/elements/text/Gear wear Failure/p2.txt"
+  },
+  {
+    "page": 3,
+    "chars": 3318,
+    "words": 483,
+    "file": "data/elements/text/Gear wear Failure/p3.txt"
+  },
+  {
+    "page": 4,
+    "chars": 2757,
+    "words": 384,
+    "file": "data/elements/text/Gear wear Failure/p4.txt"
+  },
+  {
+    "page": 5,
+    "chars": 2964,
+    "words": 426,
+    "file": "data/elements/text/Gear wear Failure/p5.txt"
+  },
+  {
+    "page": 6,
+    "chars": 2916,
+    "words": 414,
+    "file": "data/elements/text/Gear wear Failure/p6.txt"
+  },
+  {
+    "page": 7,
+    "chars": 3160,
+    "words": 463,
+    "file": "data/elements/text/Gear wear Failure/p7.txt"
+  },
+  {
+    "page": 8,
+    "chars": 2192,
+    "words": 296,
+    "file": "data/elements/text/Gear wear Failure/p8.txt"
+  },
+  {
+    "page": 9,
+    "chars": 2504,
+    "words": 349,
+    "file": "data/elements/text/Gear wear Failure/p9.txt"
+  },
+  {
+    "page": 10,
+    "chars": 2958,
+    "words": 422,
+    "file": "data/elements/text/Gear wear Failure/p10.txt"
+  },
+  {
+    "page": 11,
+    "chars": 1102,
+    "words": 175,
+    "file": "data/elements/text/Gear wear Failure/p11.txt"
+  },
+  {
+    "page": 12,
+    "chars": 220,
+    "words": 43,
+    "file": "data/elements/text/Gear wear Failure/p12.txt"
+  },
+  {
+    "page": 13,
+    "chars": 311,
+    "words": 51,
+    "file": "data/elements/text/Gear wear Failure/p13.txt"
+  }
+]

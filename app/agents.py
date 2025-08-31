@@ -159,10 +159,14 @@ def route_question_ex(q: str) -> Tuple[str, Dict]:
 		trace["matched"].append("timeline_date")
 		trace["route"] = "table"
 		return "table", trace
-	# Table/Figure cues
-	if simp.get("wants_table") or any(w in ql for w in ("table", "chart", "value", "figure", "fig ", "image", "graph", "plot")) or signals.get("has_sampling_tokens") or signals.get("has_sensitivity_tokens"):
-		trace["matched"].append("table_figure_keywords")
-		# Figures often have short captions; treat them as structured lookup to avoid over-generation
+	# Figure-specific cues (prioritize over table for figure questions)
+	if simp.get("wants_figure") or any(w in ql for w in ("figure", "fig ", "image", "graph", "plot")):
+		trace["matched"].append("figure_keywords")
+		trace["route"] = "needle"  # Use needle agent for figures to allow more detailed descriptions
+		return "needle", trace
+	# Table cues
+	if simp.get("wants_table") or any(w in ql for w in ("table", "chart", "value")) or signals.get("has_sampling_tokens") or signals.get("has_sensitivity_tokens"):
+		trace["matched"].append("table_keywords")
 		trace["route"] = "table"
 		return "table", trace
 	# Default
@@ -340,6 +344,8 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 		best_sens = None
 		best_rate = None
 		seen_sources: list[Document] = []
+		
+		# First try KV docs
 		for d in docs:
 			md = d.metadata or {}
 			sec = md.get("section") or md.get("section_type")
@@ -360,6 +366,28 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 				best_rate = v
 				if not seen_sources:
 					seen_sources = [d]
+		
+		# If no KV docs found, try direct table lookup for accelerometer sensitivity
+		if not best_sens and any(w in ql for w in ("accelerometer", "sensitivity")):
+			for d in docs:
+				md = d.metadata or {}
+				if md.get("section") == "Table":
+					text = (d.page_content or "").lower()
+					# Look for accelerometer rows with sensitivity values
+					if "accelerometer" in text and "sensitivity" in text:
+						lines = text.split('\n')
+						for line in lines:
+							if "accelerometer" in line.lower():
+								# Check if this line contains a sensitivity value (mV/g)
+								if any(u in line.lower() for u in ("mv/g", "mvg", "mv/g")):
+									# Extract the sensitivity value
+									import re as _re
+									sens_match = _re.search(r"(\d+\.?\d*)\s*(?:mv/g|mvg)", line.lower())
+									if sens_match:
+										best_sens = f"{sens_match.group(1)} mV/g"
+										seen_sources = [d]
+										break
+		
 		if best_sens or best_rate:
 			parts = []
 			if best_sens:
@@ -368,7 +396,49 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 				parts.append(f"sampling rate: {best_rate}")
 			return _append_fallback_citation("; ".join(parts), seen_sources or docs)
 	# Rule-based extracts for recurring factual questions to boost faithfulness
-	# (1) Two steady speeds used for data acquisition (RPS)
+	# (1) Starboard Shaft Accelerometer sensitivity lookup
+	if any(w in ql for w in ("starboard", "shaft")) and any(w in ql for w in ("accelerometer", "sensitivity")):
+		for d in docs:
+			md = d.metadata or {}
+			if md.get("section") == "Table":
+				text = (d.page_content or "").lower()
+				if "starboard" in text and "accelerometer" in text and "sensitivity" in text:
+					lines = text.split('\n')
+					for line in lines:
+						# Look for any line containing both "starboard" and "accelerometer"
+						if "starboard" in line.lower() and "accelerometer" in line.lower():
+							# Extract sensitivity value from the sensitivity column
+							import re as _re
+							# Look for the sensitivity value in the line
+							sens_match = _re.search(r"(\d+\.?\d*)\s*(?:mv/g|mvg)", line.lower())
+							if sens_match:
+								return _append_fallback_citation(f"{sens_match.group(1)} mV/g", [d])
+							# If no mV/g found, look for just a number that could be sensitivity
+							num_match = _re.search(r"(\d+\.?\d*)", line.lower())
+							if num_match:
+								return _append_fallback_citation(f"{num_match.group(1)} mV/g", [d])
+	
+	# (2) General accelerometer sensitivity lookup
+	if any(w in ql for w in ("accelerometer", "sensitivity")) and not any(w in ql for w in ("starboard", "port")):
+		for d in docs:
+			md = d.metadata or {}
+			if md.get("section") == "Table":
+				text = (d.page_content or "").lower()
+				if "accelerometer" in text and "sensitivity" in text:
+					lines = text.split('\n')
+					for line in lines:
+						if "accelerometer" in line.lower():
+							# Extract sensitivity value
+							import re as _re
+							sens_match = _re.search(r"(\d+\.?\d*)\s*(?:mv/g|mvg)", line.lower())
+							if sens_match:
+								return _append_fallback_citation(f"{sens_match.group(1)} mV/g", [d])
+							# If no mV/g found, look for just a number
+							num_match = _re.search(r"(\d+\.?\d*)", line.lower())
+							if num_match:
+								return _append_fallback_citation(f"{num_match.group(1)} mV/g", [d])
+	
+	# (3) Two steady speeds used for data acquisition (RPS)
 	if any(w in ql for w in ("two speeds", "two steady speeds")) and ("rps" in ql or "speeds" in ql):
 		for d in docs:
 			text = (d.page_content or "").lower()
@@ -389,7 +459,7 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 					if m:
 						a, b = m.group(1), m.group(2)
 						return _append_fallback_citation(f"{a} and {b} RPS", [d])
-	# (2) RMS percent rise ranges at 45 RPS during moderate/severe wear
+	# (4) RMS percent rise ranges at 45 RPS during moderate/severe wear
 	if ("rms" in ql) and ("percent" in ql) and ("45" in ql or "45 rps" in ql):
 		for d in docs:
 			text = (d.page_content or "").lower().replace("%", " percent ")
@@ -400,7 +470,7 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 					# Preserve unicode en dash for readability
 					return _append_fallback_citation(f"About {m.group(1)}–{m.group(2)}%", [d])
 
-	# (3) Sensor modalities
+	# (5) Sensor modalities
 	# Prefer instrumentation pair for documenting wear progression: accelerometers (vibration) + microscope-based imaging
 	if ("sensor" in ql or "sensors" in ql or "modality" in ql or "modalities" in ql) and ("document" in ql or "wear" in ql or "progression" in ql):
 		acc_doc: Document | None = None
@@ -434,7 +504,7 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 					v = str(md.get("kv_value") or "").lower()
 					if ("tachometer" in k) or ("tachometer" in v):
 						return _append_fallback_citation("Accelerometers and tachometer.", [d])
-	# (4) AI-driven image task suggestion (from figure captions)
+	# (6) AI-driven image task suggestion (from figure captions)
 	if any(w in ql for w in ("ai", "image", "vision", "task", "detection", "segmentation", "quantification")):
 		for d in docs:
 			md = d.metadata or {}

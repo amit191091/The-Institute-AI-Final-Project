@@ -946,6 +946,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				)
 
 
+
 			with gr.Tab("Figures"):
 				# Build a gallery of extracted figures, sorted by figure_number/figure_order
 				fig_docs = [d for d in docs if d.metadata.get("section") == "Figure" and d.metadata.get("image_path")]
@@ -1056,6 +1057,18 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					value="Docs co-mention (default)",
 					label="Graph source"
 				)
+				layout = gr.Dropdown(
+					choices=[
+						"Force-directed (default)",
+						"Spread (maximum spacing)",
+						"Cluster (W-case optimized)",
+						"Hierarchical",
+						"Circular",
+						"Compact"
+					],
+					value="Force-directed (default)",
+					label="Layout type"
+				)
 				btn_graph = gr.Button("Generate / Refresh Graph")
 				gr.Markdown("#### Graph DB (Neo4j) — optional")
 				# Prefill with a sample so clicks don't pass an empty string on some Gradio builds
@@ -1151,7 +1164,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 						G4.add_edge(na, nb, type=str(t))
 					return G4
 
-				def _gen_graph(source_choice: str):
+				def _gen_graph(source_choice: str, layout_choice: str):
 					try:
 						if render_graph_html is None:
 							return gr.update(value=""), "(graph module not available; install dependencies: networkx, pyvis)"
@@ -1159,7 +1172,9 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 						if source_choice == "Docs co-mention (default)":
 							if build_graph is None:
 								return gr.update(value=""), "(build_graph not available)"
-							G = build_graph(docs)
+							# Use the enhanced graph building with filtering
+							from app.graph import create_clean_graph
+							G = create_clean_graph(docs, max_nodes=60)
 						elif source_choice == "Normalized graph.json":
 							G = _build_graph_from_normalized_json()
 						elif source_choice == "Normalized chunks":
@@ -1169,10 +1184,28 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 						else:
 							if build_graph is None:
 								return gr.update(value=""), "(unknown source)"
-							G = build_graph(docs)
+							# Use the enhanced graph building with filtering
+							from app.graph import create_clean_graph
+							G = create_clean_graph(docs, max_nodes=60)
 						Path("logs").mkdir(exist_ok=True)
 						out = Path("logs")/"graph.html"
-						render_graph_html(G, str(out))
+						
+						# Apply layout-specific rendering if available
+						try:
+							from app.graph import render_graph_html_with_layout
+							layout_map = {
+								"Force-directed (default)": "force",
+								"Spread (maximum spacing)": "spread",
+								"Cluster (W-case optimized)": "cluster",
+								"Hierarchical": "hierarchical", 
+								"Circular": "circular",
+								"Compact": "force"
+							}
+							layout_type = layout_map.get(layout_choice, "force")
+							render_graph_html_with_layout(G, str(out), layout_type)
+						except ImportError:
+							# Fallback to standard rendering
+							render_graph_html(G, str(out))
 						html_data = out.read_text(encoding="utf-8")
 						# Best-effort inline via iframe srcdoc; also provide a link for full view
 						iframe = f"<p><a href='file:///{out.resolve().as_posix()}' target='_blank'>Open graph.html in browser</a></p>" \
@@ -1193,7 +1226,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 						_graph_status.value = "(Graph not available yet – click the button to generate it.)"
 				except Exception:
 					_graph_status.value = "(Graph not available yet – click the button to generate it.)"
-				btn_graph.click(_gen_graph, inputs=[src], outputs=[_graph_view, _graph_status])
+				btn_graph.click(_gen_graph, inputs=[src, layout], outputs=[_graph_view, _graph_status])
 
 				def _run_cypher_ui(q:str=""):
 					try:

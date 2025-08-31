@@ -208,7 +208,7 @@ class _LLM:
         if (self._backend is None or force_openai) and os.getenv("OPENAI_API_KEY"):
             try:
                 from langchain_openai import ChatOpenAI
-                model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-nano")
+                model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.0-mini")
                 try:
                     self._backend = ChatOpenAI(model=model, temperature=0.0, api_key=os.getenv("OPENAI_API_KEY"))  # type: ignore[call-arg]
                 except Exception:
@@ -687,6 +687,9 @@ def _load_json_or_jsonl(path: Path):
             if isinstance(obj, list):
                 return obj
             if isinstance(obj, dict):
+                # Handle nested structure like {"questions": [...]}
+                if "questions" in obj and isinstance(obj["questions"], list):
+                    return obj["questions"]
                 return [{"key": k, "value": v} for k, v in obj.items()]
             return []
     except Exception:
@@ -706,7 +709,7 @@ def _discover_eval_files():
     if gt_override is not None and not gt_override.is_file():
         gt_override = None
     qa = qa_override if qa_override is not None else (Path("data") / "gear_wear_qa_context_free.jsonl")
-    gt = gt_override if gt_override is not None else (Path("data") / "gear_wear_ground_truth_context_free.json")
+    gt = gt_override if gt_override is not None else (Path("data") / "gear_wear_QA_groundtruth_EVAL.json")
     qa = qa if qa.exists() and qa.is_file() else None
     gt = gt if gt.exists() and gt.is_file() else None
     return qa, gt
@@ -819,6 +822,12 @@ def run_evaluation(docs, hybrid, llm: _LLM):
     except Exception:
         pass
     gt_rows = _load_json_or_jsonl(gt_path) if gt_path else []
+    try:
+        log.info("GT debug: gt_path=%s, gt_rows type=%s, gt_rows len=%d", str(gt_path), type(gt_rows), len(gt_rows or []))
+        if gt_rows and len(gt_rows) > 0:
+            log.info("GT debug: first row keys=%s", list(gt_rows[0].keys()) if isinstance(gt_rows[0], dict) else "not dict")
+    except Exception as e:
+        log.info("GT debug error: %s", e)
     gt_by_id, gt_by_q = _index_ground_truth(gt_rows)
     try:
         log.info(
@@ -850,8 +859,10 @@ def run_evaluation(docs, hybrid, llm: _LLM):
         gts = []
         if qid and str(qid) in gt_by_id:
             gts = gt_by_id.get(str(qid), [])
+            log.info("GT match by ID: %s -> %s", qid, gts)
         if (not gts) and norm_q in gt_by_q:
             gts = gt_by_q.get(norm_q, [])
+            log.info("GT exact match: %s -> %s", norm_q, gts)
         if not gts and gt_by_q:
             keys = list(gt_by_q.keys())
             best = None
@@ -861,12 +872,16 @@ def run_evaluation(docs, hybrid, llm: _LLM):
                 if s > best_score:
                     best_score = s
                     best = k
-            if best is not None and best_score >= 0.75:
+            if best is not None and best_score >= 0.5:
                 gts = gt_by_q.get(best, [])
+                log.info("GT fuzzy match: %s -> %s (score=%.3f)", norm_q, gts, best_score)
+            else:
+                log.info("GT no fuzzy match: %s (best_score=%.3f, threshold=0.5)", norm_q, best_score)
         if (not gts) and isinstance(row.get("answer"), (str, int, float)):
             ans_txt = str(row["answer"]).strip()
             if ans_txt:
                 gts = [ans_txt]
+                log.info("GT fallback to answer: %s", gts)
         if gts:
             any_gt = True
         ref = gts[0] if isinstance(gts, list) and gts else ""
@@ -1086,7 +1101,7 @@ def run() -> None:
                 ui = build_ui(docs, hybrid, llm, debug=None)
                 share = os.getenv("GRADIO_SHARE", "").lower() in ("1", "true", "yes")
                 port = int(os.getenv("GRADIO_PORT", "7860"))
-                ui.launch(share=share, server_name=os.getenv("GRADIO_SERVER_NAME", "127.0.0.1"), server_port=port, show_error=True)
+                ui.launch(share=share, server_name=os.getenv("GRADIO_SERVER_NAME", "127.0.0.1"), server_port=port, show_error=True, inbrowser=True)
             except Exception as e:
                 print(f"UI failed to launch (UI-ONLY): {e}")
             return
@@ -1159,7 +1174,7 @@ def run() -> None:
         ui = build_ui(docs, hybrid, llm, debug)
         share = os.getenv("GRADIO_SHARE", "").lower() in ("1", "true", "yes")
         port = int(os.getenv("GRADIO_PORT", "7860"))
-        ui.launch(share=share, server_name=os.getenv("GRADIO_SERVER_NAME", "127.0.0.1"), server_port=port, show_error=True)
+        ui.launch(share=share, server_name=os.getenv("GRADIO_SERVER_NAME", "127.0.0.1"), server_port=port, show_error=True, inbrowser=True)
     except Exception as e:
         print(f"UI failed to launch: {e}")
         print(ask(docs, hybrid, llm, "Summarize the failure modes described."))
