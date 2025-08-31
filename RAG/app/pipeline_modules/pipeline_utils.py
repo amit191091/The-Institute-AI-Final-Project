@@ -94,13 +94,19 @@ class LLM:
                     try:
                         self._backend = ChatOpenAI(
                             model=model, 
-                            temperature=settings.llm.TEMPERATURE
+                            temperature=settings.llm.TEMPERATURE,
+                            request_timeout=120  # 2 minutes timeout for API calls
                         )  # type: ignore[call-arg]
                     except Exception:
                         try:
-                            self._backend = ChatOpenAI(model_name=model)  # type: ignore[call-arg]
+                            self._backend = ChatOpenAI(
+                                model_name=model,
+                                request_timeout=120  # 2 minutes timeout for API calls
+                            )  # type: ignore[call-arg]
                         except Exception:
-                            self._backend = ChatOpenAI()  # type: ignore[call-arg]
+                            self._backend = ChatOpenAI(
+                                request_timeout=120  # 2 minutes timeout for API calls
+                            )  # type: ignore[call-arg]
                     self._which = "openai"
                 except Exception:
                     self._backend = None
@@ -112,7 +118,8 @@ class LLM:
                     from langchain_google_genai import ChatGoogleGenerativeAI
                     self._backend = ChatGoogleGenerativeAI(
                         model=settings.llm.GOOGLE_MODEL, 
-                        temperature=settings.llm.TEMPERATURE
+                        temperature=settings.llm.TEMPERATURE,
+                        request_timeout=120  # 2 minutes timeout for API calls
                     )
                     self._which = "google"
                 except Exception:
@@ -125,7 +132,8 @@ class LLM:
                     from langchain_google_genai import ChatGoogleGenerativeAI
                     self._backend = ChatGoogleGenerativeAI(
                         model=settings.llm.GOOGLE_MODEL, 
-                        temperature=settings.llm.TEMPERATURE
+                        temperature=settings.llm.TEMPERATURE,
+                        request_timeout=120  # 2 minutes timeout for API calls
                     )
                     self._which = "google"
                 except Exception:
@@ -139,13 +147,19 @@ class LLM:
                 try:
                     self._backend = ChatOpenAI(
                         model=model, 
-                        temperature=settings.llm.TEMPERATURE
+                        temperature=settings.llm.TEMPERATURE,
+                        request_timeout=120  # 2 minutes timeout for API calls
                     )  # type: ignore[call-arg]
                 except Exception:
                     try:
-                        self._backend = ChatOpenAI(model_name=model)  # type: ignore[call-arg]
+                        self._backend = ChatOpenAI(
+                            model_name=model,
+                            request_timeout=120  # 2 minutes timeout for API calls
+                        )  # type: ignore[call-arg]
                     except Exception:
-                        self._backend = ChatOpenAI()  # type: ignore[call-arg]
+                        self._backend = ChatOpenAI(
+                            request_timeout=120  # 2 minutes timeout for API calls
+                        )  # type: ignore[call-arg]
                 self._which = "openai"
             except Exception:
                 self._backend = None

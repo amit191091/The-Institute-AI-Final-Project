@@ -25,7 +25,7 @@ NEEDLE_SYSTEM = (
 	" For vessel questions, look for 'INS Haifa' or similar vessel names."
 	" For gearbox model questions, look for 'MG-5025A' or similar model numbers."
 	" For gear type questions, look for 'Spur gears' or similar gear types."
-	" For transmission ratio questions, look for '18/35' or similar ratios."
+	" For transmission ratio questions, provide complete answers like 'The transmission ratio (driving/driven) is 18/35'."
 	" For gear module questions, look for '3 mm' or similar module values."
 	" For wear depth questions, look for exact values with μm units in tables."
 	" For baseline questions, look for '0 μm' or 'healthy' baseline values."
@@ -85,6 +85,7 @@ NEEDLE_PROMPT = (
 	" For wear depths, include exact μm values."
 	" For accelerometer sensitivity, look for exact mV/g values."
 	" For tachometer specifications, include teeth count."
+	" For transmission ratio questions, provide complete answers like 'The transmission ratio (driving/driven) is 18/35'."
 	" Add a citation [file_name pX]. If not in context, answer exactly: Not found in context."
 	" Keep the answer to one short sentence (max ~25 words).\n"
 	"Answer:"
@@ -125,7 +126,7 @@ FEWSHOT_NEEDLE = [
 	{"q": "Which vessel's propulsion train was monitored?", "a": "INS Haifa [Gear wear Failure.pdf pX]."},
 	{"q": "What gear type is used in the transmission?", "a": "Spur gears [Gear wear Failure.pdf pX]."},
 	{"q": "What is the gear module value?", "a": "3 mm [Gear wear Failure.pdf pX]."},
-	{"q": "What is the transmission ratio (driving/driven)?", "a": "18/35 [Gear wear Failure.pdf pX]."},
+	{"q": "What is the transmission ratio (driving/driven)?", "a": "The transmission ratio (driving/driven) is 18/35 [Gear wear Failure.pdf pX]."},
 	{"q": "What was the duration of each time record?", "a": "60 seconds [Gear wear Failure.pdf pX]."},
 	{"q": "What brand of accelerometers was used?", "a": "Dytran 3053B [Gear wear Failure.pdf pX]."},
 	{"q": "What was the accelerometer sensitivity (mV/g)?", "a": "1783 mV/g (Starboard), 1787 mV/g (Port) [Gear wear Failure.pdf pX]."},

@@ -157,7 +157,8 @@ def build_pipeline(paths: List[Path]) -> Tuple[List, Any, Dict[str, Any]]:
     
     # Optional: dump Chroma snapshot
     try:
-        dump_chroma_snapshot(dense_index)
+        chroma_snapshot_path = settings.paths.LOGS_DIR / "chroma_snapshot.jsonl"
+        dump_chroma_snapshot(dense_index, chroma_snapshot_path)
     except Exception as e:
         log.warning(f"Failed to dump Chroma snapshot: {e}")
     

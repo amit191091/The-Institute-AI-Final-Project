@@ -16,13 +16,34 @@ from pathlib import Path
 # RAG TOOL MODELS
 # ============================================================================
 
+class DatabaseFiguresInput(BaseModel):
+    """Input model for Database figures and tables operations."""
+    
+    action: Literal["index", "query", "extract_tables", "extract_figures"] = Field(
+        ..., 
+        description="Action to perform on the Database figures and tables PDF",
+        examples=["index", "query", "extract_tables", "extract_figures"]
+    )
+    question: Optional[str] = Field(
+        None, 
+        description="Question to ask about the database figures and tables (required for query action)",
+        examples=["What are the wear depth measurements?", "Show me the vibration data tables"]
+    )
+    top_k: int = Field(
+        5, 
+        description="Number of top results to retrieve for queries",
+        ge=1,
+        le=20
+    )
+
+
 class RAGIndexInput(BaseModel):
     """Input model for RAG indexing operations."""
     
     path: str = Field(
         ..., 
         description="Path to documents directory or file to index",
-        examples=["documents/", "Gear wear Failure.pdf"]
+        examples=["documents/", "Gear wear Failure.pdf", "Pictures and Vibrations database/Database figures and tables.pdf"]
     )
     clear: bool = Field(
         False, 
@@ -211,6 +232,16 @@ class MCPResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error message if operation failed")
 
 
+class DatabaseFiguresResponse(MCPResponse):
+    """Response model for Database figures and tables operations."""
+    
+    action: str = Field(..., description="Action that was performed")
+    data: Dict[str, Any] = Field(..., description="Results data based on action")
+    tables: Optional[List[Dict[str, Any]]] = Field(None, description="Extracted tables")
+    figures: Optional[List[Dict[str, Any]]] = Field(None, description="Extracted figures")
+    answer: Optional[str] = Field(None, description="Generated answer for queries")
+
+
 class RAGIndexResponse(MCPResponse):
     """Response model for RAG indexing operations."""
     
@@ -271,6 +302,7 @@ class TimelineSummarizeResponse(MCPResponse):
 # ============================================================================
 
 TOOL_MODELS = {
+    "database_figures": {"input": DatabaseFiguresInput, "response": DatabaseFiguresResponse},
     "rag_index": {"input": RAGIndexInput, "response": RAGIndexResponse},
     "rag_query": {"input": RAGQueryInput, "response": RAGQueryResponse},
     "rag_evaluate": {"input": RAGEvaluateInput, "response": RAGEvaluateResponse},

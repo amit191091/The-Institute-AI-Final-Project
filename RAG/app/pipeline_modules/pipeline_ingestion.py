@@ -80,12 +80,11 @@ def discover_input_paths() -> List[Path]:
     ]
     
     # Supported file extensions
-    supported_extensions = {'.pdf', '.xlsx', '.xls'} # {'.pdf', '.txt', '.md', '.csv', '.docx', '.doc'} Optional
+    supported_extensions = {'.pdf'} # {'.pdf', '.txt', '.md', '.csv', '.docx', '.doc'} Optional
     
     # Files to exclude from processing
     excluded_files = {
         'הנחיות פרויקט גמר.pdf',  # Hebrew project guidelines - not part of analysis
-        'Database figures and tables.pdf',  # MCP Tools config file - causes incorrect answers
         'README.md',
         'requirements.txt',
         '.gitignore'
@@ -93,7 +92,6 @@ def discover_input_paths() -> List[Path]:
     
     # Directories to exclude from processing (contain large irrelevant files)
     excluded_directories = {
-        'Pictures and Vibrations database',  # Contains 97.6MB of raw vibration data not needed for Q&A
         '__pycache__',
         '.git',
         'node_modules',

@@ -77,7 +77,7 @@ from RAG.app.Evaluation_Analysis.evaluation_utils import run_eval_detailed, pret
 # Legacy function aliases removed - use the actual functions directly
 
 
-def run_evaluation(docs, hybrid, llm: LLM):
+def run_evaluation(docs, hybrid, llm: LLM, questions_limit: int = None):
     log = get_logger()
     qa_path, gt_path = discover_eval_files()
     if not qa_path:
@@ -89,6 +89,12 @@ def run_evaluation(docs, hybrid, llm: LLM):
     gt_map = normalize_ground_truth(gt_rows)
     rows_out = []
     any_gt = False
+    
+    # Limit the number of questions if specified
+    if questions_limit and questions_limit > 0:
+        qa_rows = qa_rows[:questions_limit]
+        log.info(f"Limiting evaluation to {questions_limit} questions")
+    
     for i, row in enumerate(qa_rows, start=1):
         if not isinstance(row, dict):
             continue

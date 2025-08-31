@@ -73,6 +73,184 @@ def measure_timing(func):
     return wrapper
 
 # ============================================================================
+# DATABASE FIGURES TOOLS
+# ============================================================================
+
+@measure_timing
+def database_figures(action: str, question: Optional[str] = None, top_k: int = 5) -> Dict[str, Any]:
+    """
+    Work with the Database figures and tables PDF.
+    
+    Args:
+        action: Action to perform (index, query, extract_tables, extract_figures)
+        question: Question for query action
+        top_k: Number of top results to retrieve
+        
+    Returns:
+        Dict with ok, action, data, tables, figures, answer, run_id, timings
+    """
+    try:
+        # Path to the Database figures and tables PDF
+        pdf_path = Path("Pictures and Vibrations database/Database figures and tables.pdf")
+        
+        if not pdf_path.exists():
+            return {
+                "ok": False,
+                "action": action,
+                "data": {},
+                "tables": None,
+                "figures": None,
+                "answer": None,
+                "run_id": generate_run_id(),
+                "timings": {},
+                "error": f"Database figures PDF not found at {pdf_path}"
+            }
+        
+        if action == "index":
+            # Index the PDF for RAG
+            from RAG.app.loaders import load_many
+            from RAG.app.chunking import structure_chunks
+            from RAG.app.Data_Management.metadata import attach_metadata
+            from RAG.app.Data_Management.indexing import build_dense_index, build_sparse_retriever, to_documents
+            
+            # Load the PDF
+            docs_generator = load_many([pdf_path])
+            docs = []
+            for file_path, elements in docs_generator:
+                chunks = structure_chunks(elements, str(file_path))
+                if chunks:
+                    for chunk in chunks:
+                        record = attach_metadata(chunk)
+                        docs.append(record)
+            
+            # Convert to documents and build indexes
+            documents = to_documents(docs)
+            dense_index = build_dense_index(documents)
+            sparse_retriever = build_sparse_retriever(documents)
+            
+            return {
+                "ok": True,
+                "action": action,
+                "data": {"indexed_docs": len(documents)},
+                "tables": None,
+                "figures": None,
+                "answer": None,
+                "run_id": generate_run_id(),
+                "timings": {}
+            }
+            
+        elif action == "query":
+            if not question:
+                return {
+                    "ok": False,
+                    "action": action,
+                    "data": {},
+                    "tables": None,
+                    "figures": None,
+                    "answer": None,
+                    "run_id": generate_run_id(),
+                    "timings": {},
+                    "error": "Question is required for query action"
+                }
+            
+            # Query the PDF using RAG
+            from RAG.app.rag_service import RAGService
+            
+            service = RAGService()
+            
+            # Index the PDF first if not already indexed
+            if not service.hybrid_retriever:
+                database_figures("index")
+            
+            # Query the system
+            result = service.query(question, use_agent=True)
+            
+            return {
+                "ok": True,
+                "action": action,
+                "data": {"question": question, "top_k": top_k},
+                "tables": None,
+                "figures": None,
+                "answer": result.get("answer", ""),
+                "run_id": generate_run_id(),
+                "timings": {}
+            }
+            
+        elif action == "extract_tables":
+            # Extract tables from the PDF
+            from RAG.app.loaders import load_many
+            from RAG.app.table_ops import extract_tables_from_elements
+            
+            docs_generator = load_many([pdf_path])
+            tables = []
+            
+            for file_path, elements in docs_generator:
+                extracted_tables = extract_tables_from_elements(elements)
+                tables.extend(extracted_tables)
+            
+            return {
+                "ok": True,
+                "action": action,
+                "data": {"extracted_tables": len(tables)},
+                "tables": tables,
+                "figures": None,
+                "answer": None,
+                "run_id": generate_run_id(),
+                "timings": {}
+            }
+            
+        elif action == "extract_figures":
+            # Extract figures from the PDF
+            from RAG.app.loaders import load_many
+            from RAG.app.Data_Management.image_extraction import extract_images_from_elements
+            
+            docs_generator = load_many([pdf_path])
+            figures = []
+            
+            for file_path, elements in docs_generator:
+                extracted_figures = extract_images_from_elements(elements)
+                figures.extend(extracted_figures)
+            
+            return {
+                "ok": True,
+                "action": action,
+                "data": {"extracted_figures": len(figures)},
+                "tables": None,
+                "figures": figures,
+                "answer": None,
+                "run_id": generate_run_id(),
+                "timings": {}
+            }
+        
+        else:
+            return {
+                "ok": False,
+                "action": action,
+                "data": {},
+                "tables": None,
+                "figures": None,
+                "answer": None,
+                "run_id": generate_run_id(),
+                "timings": {},
+                "error": f"Unknown action: {action}"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in database_figures: {e}")
+        return {
+            "ok": False,
+            "action": action,
+            "data": {},
+            "tables": None,
+            "figures": None,
+            "answer": None,
+            "run_id": generate_run_id(),
+            "timings": {},
+            "error": str(e)
+        }
+
+
+# ============================================================================
 # RAG TOOLS
 # ============================================================================
 
@@ -82,7 +260,7 @@ def rag_index(path: str, clear: bool = False) -> Dict[str, Any]:
     Index documents for RAG system.
     
     Args:
-        path: Path to documents directory
+        path: Path to documents directory or specific file
         clear: Whether to clear existing index
         
     Returns:
@@ -97,8 +275,37 @@ def rag_index(path: str, clear: bool = False) -> Dict[str, Any]:
         if clear:
             service._clean_run_outputs()
         
-        # Run pipeline
-        result = service.run_pipeline(use_normalized=False)
+        # Check if path is a specific file (like Database figures and tables.pdf)
+        path_obj = Path(path)
+        if path_obj.is_file() and path_obj.name == "Database figures and tables.pdf":
+            # Handle specific file indexing
+            from RAG.app.loaders import load_many
+            from RAG.app.chunking import structure_chunks
+            from RAG.app.Data_Management.metadata import attach_metadata
+            from RAG.app.Data_Management.indexing import build_dense_index, build_sparse_retriever, to_documents
+            
+            # Load the specific file
+            docs_generator = load_many([path_obj])
+            docs = []
+            for file_path, elements in docs_generator:
+                chunks = structure_chunks(elements, str(file_path))
+                if chunks:
+                    for chunk in chunks:
+                        record = attach_metadata(chunk)
+                        docs.append(record)
+            
+            # Convert to documents and build indexes
+            documents = to_documents(docs)
+            dense_index = build_dense_index(documents)
+            sparse_retriever = build_sparse_retriever(documents)
+            
+            # Store for later use
+            service.hybrid_retriever = service.indexing_service.build_hybrid_retriever(dense_index, sparse_retriever)
+            
+            result = {"doc_count": len(documents)}
+        else:
+            # Run standard pipeline
+            result = service.run_pipeline(use_normalized=False)
         
         # Create snapshot
         snapshot_path = f"index_snapshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"

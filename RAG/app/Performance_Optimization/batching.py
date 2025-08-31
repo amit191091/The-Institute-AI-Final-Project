@@ -4,6 +4,7 @@ Provides batch processing for documents and streaming for large files.
 """
 
 import asyncio
+import os
 from typing import List, Dict, Any, Iterator, Generator, Optional, Callable
 from pathlib import Path
 import time
@@ -20,7 +21,7 @@ class BatchConfig:
     """Configuration for batch processing."""
     batch_size: int = 10
     max_workers: int = 4
-    timeout: int = 300  # 5 minutes
+    timeout: int = int(os.getenv("RAG_BATCH_TIMEOUT", "300"))  # Use environment variable or default to 5 minutes
     chunk_size: int = 1024 * 1024  # 1MB for streaming
 
 

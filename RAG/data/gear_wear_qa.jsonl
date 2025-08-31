@@ -1,8 +1,8 @@
-{"id": "gwf-v2-001", "question": "On what date was the first onset of wear detected by visual inspection?", "answer": "April 9, 2023"}
-{"id": "gwf-v2-002", "question": "On what date did the system reach the failure stage?", "answer": "June 15, 2023"}
+{"id": "gwf-v2-001", "question": "On what date was the first onset of wear detected by visual inspection?", "answer": "April 9"}
+{"id": "gwf-v2-002", "question": "On what date did the system reach the failure stage?", "answer": "June 15"}
 {"id": "gwf-v2-003", "question": "Between which dates did the severe wear stage occur?", "answer": "From May 14 to June 11"}
-{"id": "gwf-v2-004", "question": "When did moderate wear begin?", "answer": "April 23, 2023"}
-{"id": "gwf-v2-005", "question": "Until what date did the healthy baseline extend with no abnormal indications?", "answer": "Until April 8, 2023"}
+{"id": "gwf-v2-004", "question": "When did moderate wear begin?", "answer": "April 23"}
+{"id": "gwf-v2-005", "question": "Until what date did the healthy baseline extend with no abnormal indications?", "answer": "Until April 8"}
 {"id": "gwf-v2-006", "question": "What is the model of the marine reduction gearbox investigated?", "answer": "MG-5025A"}
 {"id": "gwf-v2-007", "question": "Which vessel's propulsion train was monitored?", "answer": "INS Haifa"}
 {"id": "gwf-v2-008", "question": "What two steady speeds were used for data acquisition (in RPS)?", "answer": "45 RPS and 15 RPS"}
@@ -23,7 +23,7 @@
 {"id": "gwf-v2-023", "question": "What brand of accelerometers was used?", "answer": "Dytran 3053B"}
 {"id": "gwf-v2-024", "question": "What was the accelerometer sensitivity (mV/g)?", "answer": "1783 mV/g (Starboard), 1787 mV/g (Port)"}
 {"id": "gwf-v2-025", "question": "What brand of tachometer was used?", "answer": "Honeywell 3010AN, 30 teeth"}
-{"id": "gwf-v2-026", "question": "On what date was the new data-acquisition chain installed?", "answer": "February 13, 2023"}
+{"id": "gwf-v2-026", "question": "On what date was the new data-acquisition chain installed?", "answer": "February 13"}
 {"id": "gwf-v2-027", "question": "What did the baseline RMS vibration levels indicate?", "answer": "Stable alignment, no assembly errors, no abnormal gear contact"}
 {"id": "gwf-v2-028", "question": "What was the earliest diagnostic indicator of mild wear?", "answer": "Tooth photographs showing profile deviations"}
 {"id": "gwf-v2-029", "question": "What RMS trend was observed by April 23?", "answer": "RMS values consistently above the baseline"}

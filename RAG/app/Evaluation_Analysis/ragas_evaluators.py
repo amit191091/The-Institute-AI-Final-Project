@@ -228,11 +228,25 @@ def run_eval_detailed(dataset):
         has_gt = any(isinstance(x, list) and len(x) > 0 for x in (gts or []))
     except Exception as e:
         has_gt = False
-    metrics: list = [m for m in (faithfulness, answer_relevancy) if m is not None]
-    if has_ref and context_precision is not None:
-        metrics.append(context_precision)
-    if has_gt and context_recall is not None:
-        metrics.append(context_recall)
+    # Check if we're in fast evaluation mode (only essential metrics)
+    fast_mode = os.getenv("RAG_FAST_EVAL", "0").lower() in ("1", "true", "yes")
+    
+    if fast_mode:
+        # Only run the 5 required project metrics
+        metrics: list = [m for m in (faithfulness,) if m is not None]
+        if has_ref and context_precision is not None:
+            metrics.append(context_precision)
+        if has_gt and context_recall is not None:
+            metrics.append(context_recall)
+        # Skip answer_relevancy in fast mode to save time and tokens
+        # Note: We'll calculate answer_correctness and table_qa_accuracy from factual metrics later
+    else:
+        # Full evaluation mode (original behavior)
+        metrics: list = [m for m in (faithfulness, answer_relevancy) if m is not None]
+        if has_ref and context_precision is not None:
+            metrics.append(context_precision)
+        if has_gt and context_recall is not None:
+            metrics.append(context_recall)
     if not metrics:
         raise RuntimeError("No RAGAS metrics available")
     # Evaluate
@@ -292,22 +306,26 @@ def run_eval_detailed(dataset):
                     "context_precision": _maybe_float(_pick(row, ["context_precision", "ctx_precision", "precision"])),
                     "context_recall": _maybe_float(_pick(row, ["context_recall", "ctx_recall", "recall"])),
                 }
-                # Factual metrics against reference
+                # Calculate factual metrics for Answer Correctness (always needed)
                 try:
                     fm = compute_factual_metrics(rec.get("answer") or "", rec.get("reference") or "")
                     rec.update(fm)
                 except Exception as e:
                     pass
-                # Add overlap metrics per-question
-                try:
-                    ref = rec.get("reference") or ""
-                    # Use original contexts for this index
-                    ctxs = _get_col("contexts")[i] if i < len(_get_col("contexts")) else []
-                    p, r, f1v = overlap_prf1(ref, list(ctxs or []))
-                    rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
-                except Exception as e:
-                    pass
-                # mark table QA correctness
+                
+                # Only calculate extra metrics in full mode
+                fast_mode = os.getenv("RAG_FAST_EVAL", "0").lower() in ("1", "true", "yes")
+                if not fast_mode:
+                    # Add overlap metrics per-question (only in full mode)
+                    try:
+                        ref = rec.get("reference") or ""
+                        # Use original contexts for this index
+                        ctxs = _get_col("contexts")[i] if i < len(_get_col("contexts")) else []
+                        p, r, f1v = overlap_prf1(ref, list(ctxs or []))
+                        rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
+                    except Exception as e:
+                        pass
+                # mark table QA correctness (always needed for Table-QA Accuracy)
                 rec["table_like"] = _is_table_like_question(rec.get("question"))
                 rec["table_correct"] = _table_correct(rec)
                 per_q.append(rec)
@@ -326,19 +344,24 @@ def run_eval_detailed(dataset):
                     "context_precision": _maybe_float(_pick(item, ["context_precision", "ctx_precision", "precision"])),
                     "context_recall": _maybe_float(_pick(item, ["context_recall", "ctx_recall", "recall"])),
                 }
+                # Calculate factual metrics for Answer Correctness (always needed)
                 try:
                     fm = compute_factual_metrics(rec.get("answer") or "", rec.get("reference") or "")
                     rec.update(fm)
                 except Exception:
                     pass
-                try:
-                    ref = rec.get("reference") or ""
-                    ctxs = _get_col("contexts")[i] if i < len(_get_col("contexts")) else []
-                    p, r, f1v = overlap_prf1(ref, list(ctxs or []))
-                    rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
-                except Exception:
-                    pass
-                # mark table QA correctness
+                
+                # Only calculate extra metrics in full mode
+                fast_mode = os.getenv("RAG_FAST_EVAL", "0").lower() in ("1", "true", "yes")
+                if not fast_mode:
+                    try:
+                        ref = rec.get("reference") or ""
+                        ctxs = _get_col("contexts")[i] if i < len(_get_col("contexts")) else []
+                        p, r, f1v = overlap_prf1(ref, list(ctxs or []))
+                        rec["overlap_precision"], rec["overlap_recall"], rec["overlap_f1"] = p, r, f1v
+                    except Exception:
+                        pass
+                # mark table QA correctness (always needed for Table-QA Accuracy)
                 rec["table_like"] = _is_table_like_question(rec.get("question"))
                 rec["table_correct"] = _table_correct(rec)
                 per_q.append(rec)
@@ -365,29 +388,48 @@ def run_eval_detailed(dataset):
         vals = [v for v in values if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
         return float(sum(vals) / len(vals)) if vals else None
 
+    # Calculate the 5 required project metrics
     summary = {
-        "faithfulness": _mean_safe([r.get("faithfulness") for r in per_q]),
-        "answer_relevancy": _mean_safe([r.get("answer_relevancy") for r in per_q]),
+        # 1. Answer Correctness (Ground Truth comparison)
+        "answer_correctness": _mean_safe([1.0 if r.get("factual_em") else 0.0 for r in per_q]),
+        
+        # 2. Context Precision ≥ 0.75
         "context_precision": _mean_safe([r.get("context_precision") for r in per_q]),
+        
+        # 3. Context Recall ≥ 0.70
         "context_recall": _mean_safe([r.get("context_recall") for r in per_q]),
+        
+        # 4. Faithfulness ≥ 0.85
+        "faithfulness": _mean_safe([r.get("faithfulness") for r in per_q]),
+        
+        # 5. Table-QA Accuracy ≥ 0.90
+        "table_qa_accuracy": _mean_safe([1.0 if r.get("table_correct") else 0.0 for r in per_q if r.get("table_like")]),
     }
-    # Factual summary
-    try:
-        summary["factual_em_rate"] = _mean_safe([1.0 if r.get("factual_em") else 0.0 for r in per_q])
-        summary["factual_token_f1"] = _mean_safe([r.get("factual_token_f1") for r in per_q])
-        summary["factual_numeric"] = _mean_safe([r.get("factual_numeric") for r in per_q])
-        summary["factual_range"] = _mean_safe([r.get("factual_range") for r in per_q])
-        summary["factual_list_f1"] = _mean_safe([r.get("factual_list_f1") for r in per_q])
-        summary["factual_score"] = _mean_safe([r.get("factual_score") for r in per_q])
-    except Exception:
-        pass
-    # Compute overlap metrics summary
-    try:
-        summary["overlap_precision"] = _mean_safe([r.get("overlap_precision") for r in per_q])
-        summary["overlap_recall"] = _mean_safe([r.get("overlap_recall") for r in per_q])
-        summary["overlap_f1"] = _mean_safe([r.get("overlap_f1") for r in per_q])
-    except Exception:
-        pass
+    
+    # Only calculate essential metrics in fast mode
+    fast_mode = os.getenv("RAG_FAST_EVAL", "0").lower() in ("1", "true", "yes")
+    if not fast_mode:
+        # Keep original metrics for compatibility (only in full mode)
+        summary.update({
+            "answer_relevancy": _mean_safe([r.get("answer_relevancy") for r in per_q]),
+        })
+        # Factual summary (only in full mode)
+        try:
+            summary["factual_em_rate"] = _mean_safe([1.0 if r.get("factual_em") else 0.0 for r in per_q])
+            summary["factual_token_f1"] = _mean_safe([r.get("factual_token_f1") for r in per_q])
+            summary["factual_numeric"] = _mean_safe([r.get("factual_numeric") for r in per_q])
+            summary["factual_range"] = _mean_safe([r.get("factual_range") for r in per_q])
+            summary["factual_list_f1"] = _mean_safe([r.get("factual_list_f1") for r in per_q])
+            summary["factual_score"] = _mean_safe([r.get("factual_score") for r in per_q])
+        except Exception:
+            pass
+        # Compute overlap metrics summary (only in full mode)
+        try:
+            summary["overlap_precision"] = _mean_safe([r.get("overlap_precision") for r in per_q])
+            summary["overlap_recall"] = _mean_safe([r.get("overlap_recall") for r in per_q])
+            summary["overlap_f1"] = _mean_safe([r.get("overlap_f1") for r in per_q])
+        except Exception:
+            pass
 
     # Table QA accuracy
     try:
@@ -418,25 +460,32 @@ def pretty_metrics(m: dict) -> str:
             return str(x)
         except Exception:
             return str(x)
+    # Project Required Metrics (5 metrics)
     lines = [
-        f"Faithfulness: {_fmt(m.get('faithfulness'))}",
-        f"Answer relevancy: {_fmt(m.get('answer_relevancy'))}",
-        f"Context precision: {_fmt(m.get('context_precision'))}",
-        f"Context recall: {_fmt(m.get('context_recall'))}",
+        "📊 PROJECT REQUIRED METRICS:",
+        f"1. Answer Correctness: {_fmt(m.get('answer_correctness'))} (Target: High)",
+        f"2. Context Precision: {_fmt(m.get('context_precision'))} (Target: ≥0.75)",
+        f"3. Context Recall: {_fmt(m.get('context_recall'))} (Target: ≥0.70)",
+        f"4. Faithfulness: {_fmt(m.get('faithfulness'))} (Target: ≥0.85)",
+        f"5. Table-QA Accuracy: {_fmt(m.get('table_qa_accuracy'))} (Target: ≥0.90)",
     ]
-    if "table_qa_accuracy" in m:
-        lines.append(f"Table QA accuracy: {_fmt(m.get('table_qa_accuracy'))}")
-    # Factual metrics (context-agnostic)
-    if any(k in m for k in ("factual_score", "factual_em_rate", "factual_token_f1", "factual_numeric", "factual_range", "factual_list_f1")):
-        lines.append(f"Factual score: {_fmt(m.get('factual_score'))}")
-        lines.append(f"Factual EM rate: {_fmt(m.get('factual_em_rate'))}")
-        lines.append(f"Factual token F1: {_fmt(m.get('factual_token_f1'))}")
-        lines.append(f"Factual numeric: {_fmt(m.get('factual_numeric'))}")
-        lines.append(f"Factual range: {_fmt(m.get('factual_range'))}")
-        lines.append(f"Factual list F1: {_fmt(m.get('factual_list_f1'))}")
-    # Optional heuristic overlap metrics (no LLM/embeddings required)
-    if any(k in m for k in ("overlap_precision", "overlap_recall", "overlap_f1")):
-        lines.append(f"Overlap precision (heuristic): {_fmt(m.get('overlap_precision'))}")
-        lines.append(f"Overlap recall (heuristic): {_fmt(m.get('overlap_recall'))}")
-        lines.append(f"Overlap F1 (heuristic): {_fmt(m.get('overlap_f1'))}")
+    # Only show the 5 required metrics in fast mode
+    fast_mode = os.getenv("RAG_FAST_EVAL", "0").lower() in ("1", "true", "yes")
+    if not fast_mode:
+        # Show additional metrics only in full mode
+        if "table_qa_accuracy" in m:
+            lines.append(f"Table QA accuracy: {_fmt(m.get('table_qa_accuracy'))}")
+        # Factual metrics (context-agnostic)
+        if any(k in m for k in ("factual_score", "factual_em_rate", "factual_token_f1", "factual_numeric", "factual_range", "factual_list_f1")):
+            lines.append(f"Factual score: {_fmt(m.get('factual_score'))}")
+            lines.append(f"Factual EM rate: {_fmt(m.get('factual_em_rate'))}")
+            lines.append(f"Factual token F1: {_fmt(m.get('factual_token_f1'))}")
+            lines.append(f"Factual numeric: {_fmt(m.get('factual_numeric'))}")
+            lines.append(f"Factual range: {_fmt(m.get('factual_range'))}")
+            lines.append(f"Factual list F1: {_fmt(m.get('factual_list_f1'))}")
+        # Optional heuristic overlap metrics (no LLM/embeddings required)
+        if any(k in m for k in ("overlap_precision", "overlap_recall", "overlap_f1")):
+            lines.append(f"Overlap precision (heuristic): {_fmt(m.get('overlap_precision'))}")
+            lines.append(f"Overlap recall (heuristic): {_fmt(m.get('overlap_recall'))}")
+            lines.append(f"Overlap F1 (heuristic): {_fmt(m.get('overlap_f1'))}")
     return "\n".join(lines)

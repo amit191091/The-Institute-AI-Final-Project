@@ -23,7 +23,7 @@ from mcp import stdio_server
 
 # Import our tool implementations and models
 from MCP_Tools.tool_implementations import (
-    rag_index, rag_query, rag_evaluate,
+    database_figures, rag_index, rag_query, rag_evaluate,
     vision_align, vision_measure,
     vib_features, timeline_summarize
 )
@@ -41,6 +41,34 @@ server = Server("gear-wear-analysis")
 # ============================================================================
 
 TOOL_DEFINITIONS = {
+    "database_figures": {
+        "name": "database_figures",
+        "description": "Work with the Database figures and tables PDF. Index, query, extract tables, and extract figures from this specific document.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["index", "query", "extract_tables", "extract_figures"],
+                    "description": "Action to perform on the Database figures and tables PDF"
+                },
+                "question": {
+                    "type": "string",
+                    "description": "Question to ask about the database figures and tables (required for query action)",
+                    "examples": ["What are the wear depth measurements?", "Show me the vibration data tables"]
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Number of top results to retrieve for queries",
+                    "default": 5,
+                    "minimum": 1,
+                    "maximum": 20
+                }
+            },
+            "required": ["action"]
+        }
+    },
+    
     "rag_index": {
         "name": "rag_index",
         "description": "Index documents for RAG system. Processes PDFs, Word documents, and other files to create a searchable index for question answering.",
@@ -50,7 +78,7 @@ TOOL_DEFINITIONS = {
                 "path": {
                     "type": "string",
                     "description": "Path to documents directory or file to index",
-                    "examples": ["documents/", "Gear wear Failure.pdf"]
+                    "examples": ["documents/", "Gear wear Failure.pdf", "Pictures and Vibrations database/Database figures and tables.pdf"]
                 },
                 "clear": {
                     "type": "boolean",
@@ -215,6 +243,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         
         # Map tool names to functions
         tool_functions = {
+            "database_figures": database_figures,
             "rag_index": rag_index,
             "rag_query": rag_query,
             "rag_evaluate": rag_evaluate,
@@ -265,6 +294,7 @@ def main():
         
         # Verify all tools are available
         tool_functions = {
+            "database_figures": database_figures,
             "rag_index": rag_index,
             "rag_query": rag_query,
             "rag_evaluate": rag_evaluate,

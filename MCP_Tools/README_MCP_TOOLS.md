@@ -79,6 +79,13 @@ MCP_Tools/
 
 ## 🚀 **FEATURES**
 
+### **Database Figures Integration**
+- ✅ **PDF Processing**: Direct access to "Database figures and tables.pdf"
+- ✅ **Table Extraction**: Extract and analyze tables from the PDF
+- ✅ **Figure Extraction**: Extract and process figures from the PDF
+- ✅ **RAG Integration**: Full RAG system integration for querying
+- ✅ **Structured Data**: Access to structured measurement data
+
 ### **External Tool Integration**
 - ✅ **API Integration**: Connect to external APIs and services
 - ✅ **Data Sources**: Access to various data sources
@@ -196,6 +203,27 @@ server.register_tool("weather_api", WeatherAPITool())
 
 # Start server
 server.start()
+```
+
+### **Database Figures Tool Usage**
+```python
+from MCP_Tools.tool_implementations import database_figures
+
+# Index the Database figures and tables PDF
+result = database_figures("index")
+print(f"Indexed {result['data']['indexed_docs']} documents")
+
+# Query the database
+result = database_figures("query", question="What are the wear depth measurements?")
+print(f"Answer: {result['answer']}")
+
+# Extract tables
+result = database_figures("extract_tables")
+print(f"Found {result['data']['extracted_tables']} tables")
+
+# Extract figures
+result = database_figures("extract_figures")
+print(f"Found {result['data']['extracted_figures']} figures")
 ```
 
 ### **Tool Usage**

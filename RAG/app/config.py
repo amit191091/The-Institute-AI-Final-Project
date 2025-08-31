@@ -271,6 +271,11 @@ class FallbackSettings:
     def SPEED_VALUES(self) -> List[str]:
         """Generate speed data dynamically from configured patterns."""
         return [f"{speed} rps" for speed in self.SPEED_PATTERNS] + [f"{speed} [rps]" for speed in self.SPEED_PATTERNS]
+    
+    @property
+    def SPEED_DATA(self) -> List[str]:
+        """Alias for SPEED_VALUES for backward compatibility."""
+        return self.SPEED_VALUES
 
 
 @dataclass(frozen=True)
