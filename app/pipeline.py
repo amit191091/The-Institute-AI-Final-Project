@@ -45,6 +45,7 @@ from app.agents import (
     answer_needle,
     answer_summary,
     answer_table,
+    answer_figure_display,
     route_question,
     route_question_ex,
 )
@@ -759,6 +760,9 @@ def ask(docs, hybrid, llm: _LLM, question: str, ground_truth: str | None = None)
         if route == "summary":
             ans = answer_summary(_LLM(), top_docs, question)
             agent_used = "summary"
+        elif route == "figure_display":
+            ans = answer_figure_display(_LLM(), top_docs, question)
+            agent_used = "figure_display"
         elif route == "table" or route == "graph":  # temporary: route graph to table agent until dedicated graph agent is added
             ans = answer_table(_LLM(), top_docs, question)
             agent_used = "table"
@@ -871,6 +875,8 @@ def answer_with_contexts(docs, hybrid, llm: _LLM, question: str):
             route = route_question(question)
         if route == "summary":
             ans = answer_summary(llm, top_docs, question)
+        elif route == "figure_display":
+            ans = answer_figure_display(llm, top_docs, question)
         elif route == "table" or route == "graph":
             ans = answer_table(llm, top_docs, question)
         else:

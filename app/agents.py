@@ -176,11 +176,11 @@ def route_question_ex(q: str) -> Tuple[str, Dict]:
 		trace["route"] = "needle"
 		return "needle", trace
 	
-	# Pure figure navigation -> needle (figure mode)
+	# Pure figure navigation -> figure_display (show image, not describe OCR)
 	if wants_figure:
-		trace["matched"].append("figure_nav_needle")
-		trace["route"] = "needle"
-		return "needle", trace
+		trace["matched"].append("figure_display")
+		trace["route"] = "figure_display"
+		return "figure_display", trace
 	
 	# Table/Figure cues - direct detection without simplify_question
 	if any(w in ql for w in ("table", "chart", "value", "figure", "fig ", "image", "graph", "plot")) or \
@@ -545,6 +545,130 @@ def answer_table(llm: LLMCallable, docs: List[Document], question: str) -> str:
 	except Exception:
 		pass
 	return ans
+
+@trace_func
+def answer_figure_display(llm: LLMCallable, docs: List[Document], question: str) -> str:
+	"""
+	Handle requests to display/show figures. Instead of describing OCR text,
+	find the figure, extract its image path, and provide contextual explanation.
+	"""
+	import re
+	import os
+	from pathlib import Path
+	
+	# Extract figure number from question
+	figure_number = None
+	ql = question.lower()
+	patterns = [
+		r"figure\s+(\d+)",
+		r"fig\.?\s+(\d+)",
+		r"show.*figure\s+(\d+)",
+		r"display.*figure\s+(\d+)"
+	]
+	
+	for pattern in patterns:
+		match = re.search(pattern, ql)
+		if match:
+			figure_number = int(match.group(1))
+			break
+	
+	if not figure_number:
+		return "I couldn't identify which figure you want to see. Please specify a figure number."
+	
+	# Find figure documents - look for content starting with [FIGURE] since section_type might be None
+	figure_docs = [d for d in docs if d.page_content and d.page_content.strip().startswith("[FIGURE]")]
+	
+	# Look for the specific figure
+	target_figure_doc = None
+	image_path = None
+	
+	for doc in figure_docs:
+		content = doc.page_content or ""
+		doc_fig_num = None
+		
+		# First try metadata
+		if doc.metadata:
+			try:
+				doc_fig_num = doc.metadata.get("figure_number")
+				if doc_fig_num:
+					doc_fig_num = int(doc_fig_num)
+			except:
+				pass
+		
+		# If not in metadata, try to extract from content
+		if not doc_fig_num:
+			for pattern in [r"Figure\s+(\d+)", r"fig\.?\s+(\d+)"]:
+				match = re.search(pattern, content, re.IGNORECASE)
+				if match:
+					doc_fig_num = int(match.group(1))
+					break
+		
+		if doc_fig_num == figure_number:
+			target_figure_doc = doc
+			# Look for image path in metadata first
+			if doc.metadata:
+				image_path = doc.metadata.get("image_path") or doc.metadata.get("img_path")
+			
+			# If not in metadata, try to extract from content
+			if not image_path:
+				img_match = re.search(r"data/images/([^\s\n]+\.(?:png|jpg|jpeg|gif))", content)
+				if img_match:
+					image_path = f"data/images/{img_match.group(1)}"
+			break
+	
+	if not target_figure_doc:
+		return f"Figure {figure_number} was not found in the document."
+	
+	# Get enhanced description and context
+	from app.figure_enhancer import extract_figure_descriptions_from_chunks
+	
+	# Get all chunks for context extraction
+	all_chunks = [{"content": d.page_content, "section_type": d.metadata.get("section_type")} 
+	              for d in docs if d.page_content]
+	
+	descriptions = extract_figure_descriptions_from_chunks(all_chunks)
+	
+	# Extract key analytical sentences from the content (not full context)
+	content = target_figure_doc.page_content or ""
+	analysis_sentences = []
+	lines = content.split('\n')
+	for line in lines:
+		line = line.strip()
+		if (len(line) > 50 and 
+		    any(keyword in line.lower() for keyword in ['analysis', 'showed', 'signature', 'frequency', 'operation']) and
+		    not line.startswith('[FIGURE]') and 
+		    not line.startswith('Figure')):
+			analysis_sentences.append(line)
+	
+	key_analysis = '. '.join(analysis_sentences[:2]) if analysis_sentences else ""
+	
+	# Build comprehensive response
+	response_parts = []
+	
+	# Add image path if available
+	if image_path:
+		if os.path.exists(image_path):
+			response_parts.append(f"📊 **Figure {figure_number}** (Image: {image_path})")
+		else:
+			response_parts.append(f"📊 **Figure {figure_number}** (Image path: {image_path} - not found)")
+	else:
+		response_parts.append(f"📊 **Figure {figure_number}**")
+	
+	# Add description
+	if figure_number in descriptions:
+		response_parts.append(f"**Description:** {descriptions[figure_number]}")
+	
+	# Add contextual analysis
+	if key_analysis:
+		response_parts.append(f"**Analysis:** {key_analysis}")
+	
+	# Add source citation
+	if target_figure_doc.metadata:
+		file_name = target_figure_doc.metadata.get("file_name", "document")
+		page = target_figure_doc.metadata.get("page", "?")
+		response_parts.append(f"[{file_name} p{page}]")
+	
+	return "\n\n".join(response_parts)
 
 # --- Output post-processing helpers ---
 def _has_citation(text: str) -> bool:

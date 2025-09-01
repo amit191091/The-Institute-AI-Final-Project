@@ -213,16 +213,41 @@ def enhance_figure_content(content: str, figure_number: Optional[int] = None,
                 enhanced_desc = figure_descriptions[figure_number]
                 app_logger.info(f"Replacing with document description: '{enhanced_desc[:50]}...'")
                 
-                # Replace OCR text with actual description
+                # Get additional contextual information
+                context_info = ""
+                if all_chunks:
+                    context_info = extract_contextual_figure_info(figure_number, all_chunks)
+                
+                # Combine description with context
+                full_description = enhanced_desc
+                if context_info:
+                    full_description += f" {context_info}"
+                    app_logger.info(f"Added contextual info for Figure {figure_number}")
+                
+                # Replace OCR text with actual description and context
                 enhanced_content = re.sub(
                     r'OCR Text:\s*.+?(?=\nContext|\n|$)', 
-                    f"Document Description: {enhanced_desc}", 
+                    f"Document Description: {full_description}", 
                     content, 
                     flags=re.IGNORECASE | re.DOTALL
                 )
                 return enhanced_content
             else:
                 app_logger.warning(f"No description found for Figure {figure_number}")
+    
+    # Even if no OCR issues, try to enhance with contextual info
+    if figure_number in figure_descriptions:
+        context_info = ""
+        if all_chunks:
+            context_info = extract_contextual_figure_info(figure_number, all_chunks)
+        if context_info:
+            enhanced_desc = figure_descriptions[figure_number]
+            full_description = f"{enhanced_desc} {context_info}"
+            app_logger.info(f"Enhanced Figure {figure_number} with contextual information")
+            
+            # Add contextual description to the content
+            enhanced_content = f"Figure {figure_number}: {full_description}\n\n{content}"
+            return enhanced_content
     
     return content
 
@@ -264,3 +289,114 @@ def enhance_table_content(content: str, table_number: Optional[int] = None,
         return enhanced_content
     
     return content
+
+def extract_contextual_figure_info(figure_number: int, all_chunks: List[Dict]) -> str:
+    """
+    Extract additional contextual information about a figure from surrounding text.
+    
+    Args:
+        figure_number: Figure number to search for
+        all_chunks: All document chunks to search
+        
+    Returns:
+        Additional contextual information about the figure
+    """
+    if not all_chunks:
+        return ""
+    
+    contextual_info = []
+    figure_keywords = {
+        1: ['vibration', 'time', 'signal', 'measurement'],
+        2: ['frequency', 'domain', 'spectrum', 'analysis'],
+        3: ['fft', 'spectrogram', 'fourier', 'transform', 'frequency'],
+        4: ['energy', 'modulation', 'fme', 'normalized']
+    }
+    
+    # Get keywords for this figure
+    keywords = figure_keywords.get(figure_number, [])
+    if not keywords:
+        return ""
+    
+    # Search for chunks that contain these keywords and provide context
+    for chunk in all_chunks:
+        content = chunk.get('content', '').lower()
+        section_type = chunk.get('section_type', '')
+        
+        # Skip figure chunks themselves
+        if section_type == 'Figure':
+            continue
+            
+        # Look for chunks that mention the keywords and provide analysis
+        keyword_matches = sum(1 for keyword in keywords if keyword in content)
+        if keyword_matches >= 2:  # At least 2 keywords match
+            # Extract relevant sentences
+            original_content = chunk.get('content', '')
+            sentences = re.split(r'[.!?]+', original_content)
+            relevant_sentences = []
+            
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if len(sentence) < 20:  # Skip very short sentences
+                    continue
+                    
+                sentence_lower = sentence.lower()
+                if any(keyword in sentence_lower for keyword in keywords):
+                    relevant_sentences.append(sentence)
+            
+            if relevant_sentences:
+                contextual_info.extend(relevant_sentences[:2])  # Max 2 sentences per chunk
+    
+    if contextual_info:
+        return " ".join(contextual_info[:3])  # Max 3 sentences total
+    
+    return ""
+
+def extract_figure_explanations_from_chunks(chunks: List[Dict]) -> Dict[int, List[str]]:
+    """
+    Extract detailed explanations and discussions about figures from nearby text chunks.
+    This goes beyond simple captions to find analytical content.
+    
+    Args:
+        chunks: List of document chunks to search
+        
+    Returns:
+        Dictionary mapping figure numbers to lists of explanation text
+    """
+    figure_explanations = {}
+    
+    for chunk in chunks:
+        content = chunk.get('content', '')
+        if not content:
+            continue
+            
+        # Skip figure chunks themselves
+        if chunk.get('section_type') == 'Figure':
+            continue
+            
+        # Look for references to specific figures in analytical text
+        figure_ref_patterns = [
+            r'Figure\s+(\d+)\s+(?:shows?|demonstrates?|illustrates?|reveals?|indicates?)\s+([^.]+\.)',
+            r'(?:As shown in|According to|Based on)\s+Figure\s+(\d+)[,:]?\s*([^.]+\.)',
+            r'Figure\s+(\d+)\s+(?:clearly|obviously|evidently)?\s*([^.]+\.)',
+            r'(?:The|This)\s+(?:spectrogram|chart|plot|graph|figure)\s+\(Figure\s+(\d+)\)\s+([^.]+\.)',
+        ]
+        
+        for pattern in figure_ref_patterns:
+            matches = re.findall(pattern, content, re.IGNORECASE)
+            for match in matches:
+                try:
+                    fig_num = int(match[0])
+                    explanation = match[1].strip()
+                    
+                    # Clean up explanation
+                    explanation = re.sub(r'\s+', ' ', explanation)
+                    
+                    if len(explanation) > 20:  # Only meaningful explanations
+                        if fig_num not in figure_explanations:
+                            figure_explanations[fig_num] = []
+                        figure_explanations[fig_num].append(explanation)
+                        app_logger.debug(f"Found explanation for Figure {fig_num}: {explanation[:50]}...")
+                except (ValueError, IndexError):
+                    continue
+    
+    return figure_explanations

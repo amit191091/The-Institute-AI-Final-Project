@@ -614,15 +614,15 @@ def structure_chunks(elements, file_path: str) -> List[Dict]:
 				custom_anchor = f"figure-{figure_number_final}"
 
 			# Build content with normalized caption shown to the LLM; compute token budget after composing
-			# Enhanced figure content processing to handle garbled OCR
+			# Enhanced figure content processing to handle garbled OCR and add contextual information
 			try:
 				enhanced_content = enhance_figure_content(
 					content=caption_norm,
 					figure_number=figure_number_final,
 					all_chunks=all_text_chunks
 				)
-				# If enhancement produced meaningful content, use it
-				if enhanced_content and enhanced_content != caption_norm and "garbled" in enhanced_content.lower():
+				# If enhancement produced meaningful content (different from original), use it
+				if enhanced_content and enhanced_content != caption_norm:
 					content = f"[FIGURE]\n{enhanced_content}"
 				else:
 					content = f"[FIGURE]\nCAPTION:\n{figure_summary_short}\nSUMMARY:\n{figure_summary}"
