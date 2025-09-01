@@ -1,0 +1,73 @@
+[
+  {
+    "question": "What is the wear depth for case W25 (in μm)?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "What is the wear depth for case W31 (in μm)?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "What is the wear depth for case W33 (in μm)?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "What is the wear depth for case W35 (in μm)?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "Which wear case corresponds to 294 μm?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "Which wear case corresponds to 466 μm?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "Which wear case corresponds to 744 μm?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "Which wear case corresponds to 579 μm?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "List the health stages in chronological order.",
+    "ground_truths": [
+      "Healthy baseline",
+      "Mild wear",
+      "Moderate wear",
+      "Severe wear",
+      "Failure"
+    ]
+  },
+  {
+    "question": "At which two speeds were both baseline and severe-wear measurements acquired?",
+    "ground_truths": [
+      "15 and 45 RPS"
+    ]
+  },
+  {
+    "question": "Name the two primary sensor modalities used to document wear progression.",
+    "ground_truths": [
+      "Accelerometers",
+      "Tachometers"
+    ]
+  }
+]

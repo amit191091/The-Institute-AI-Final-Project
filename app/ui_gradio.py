@@ -522,6 +522,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 	# Auto-load default ground truths and QA if files exist
 	try:
 		for _cand in [
+			Path("data")/"gear_wear_QA_groundtruth_EVAL.json",
 			Path("gear_wear_ground_truth_context_free.json"),
 			Path("data")/"gear_wear_ground_truth_context_free.json",
 		]:
@@ -1069,6 +1070,15 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					value="Force-directed (default)",
 					label="Layout type"
 				)
+				# Slider for original Graph tab - controls nodes in the main document graph
+				max_nodes_slider = gr.Slider(
+					minimum=10,
+					maximum=200,
+					value=60,
+					step=10,
+					label="Maximum Nodes (Original DB)",
+					info="Adjust the number of nodes to show in the original document graph (higher = more detailed but slower)"
+				)
 				btn_graph = gr.Button("Generate / Refresh Graph")
 				gr.Markdown("#### Graph DB (Neo4j) — optional")
 				# Prefill with a sample so clicks don't pass an empty string on some Gradio builds
@@ -1164,7 +1174,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 						G4.add_edge(na, nb, type=str(t))
 					return G4
 
-				def _gen_graph(source_choice: str, layout_choice: str):
+				def _gen_graph(source_choice: str, layout_choice: str, max_nodes: int = 60):
 					try:
 						if render_graph_html is None:
 							return gr.update(value=""), "(graph module not available; install dependencies: networkx, pyvis)"
@@ -1174,7 +1184,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 								return gr.update(value=""), "(build_graph not available)"
 							# Use the enhanced graph building with filtering
 							from app.graph import create_clean_graph
-							G = create_clean_graph(docs, max_nodes=60)
+							G = create_clean_graph(docs, max_nodes=max_nodes)
 						elif source_choice == "Normalized graph.json":
 							G = _build_graph_from_normalized_json()
 						elif source_choice == "Normalized chunks":
@@ -1186,7 +1196,7 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 								return gr.update(value=""), "(unknown source)"
 							# Use the enhanced graph building with filtering
 							from app.graph import create_clean_graph
-							G = create_clean_graph(docs, max_nodes=60)
+							G = create_clean_graph(docs, max_nodes=max_nodes)
 						Path("logs").mkdir(exist_ok=True)
 						out = Path("logs")/"graph.html"
 						
@@ -1207,9 +1217,9 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 							# Fallback to standard rendering
 							render_graph_html(G, str(out))
 						html_data = out.read_text(encoding="utf-8")
-						# Best-effort inline via iframe srcdoc; also provide a link for full view
-						iframe = f"<p><a href='file:///{out.resolve().as_posix()}' target='_blank'>Open graph.html in browser</a></p>" \
-							 f"<iframe style='width:100%;height:650px;border:1px solid #ddd' srcdoc=\"{_html.escape(html_data)}\"></iframe>"
+						# Full screen iframe for better graph viewing
+						iframe = f"<p><a href='file:///{out.resolve().as_posix()}' target='_blank'>Open graph.html in browser (full screen)</a></p>" \
+							 f"<iframe style='width:100%;height:100vh;border:1px solid #ddd;min-height:800px' srcdoc=\"{_html.escape(html_data)}\"></iframe>"
 						return gr.update(value=iframe), "Graph updated."
 					except Exception as e:
 						return gr.update(value=""), f"(failed to build graph: {e})"
@@ -1219,14 +1229,14 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 					graph_html_path = Path("logs")/"graph.html"
 					if graph_html_path.exists():
 						html_data = graph_html_path.read_text(encoding="utf-8")
-						iframe = f"<p><a href='file:///{graph_html_path.resolve().as_posix()}' target='_blank'>Open graph.html in browser</a></p>" \
-							 f"<iframe style='width:100%;height:650px;border:1px solid #ddd' srcdoc=\"{_html.escape(html_data)}\"></iframe>"
+						iframe = f"<p><a href='file:///{graph_html_path.resolve().as_posix()}' target='_blank'>Open graph.html in browser (full screen)</a></p>" \
+							 f"<iframe style='width:100%;height:100vh;border:1px solid #ddd;min-height:800px' srcdoc=\"{_html.escape(html_data)}\"></iframe>"
 						_graph_view.value = iframe
 					else:
 						_graph_status.value = "(Graph not available yet – click the button to generate it.)"
 				except Exception:
 					_graph_status.value = "(Graph not available yet – click the button to generate it.)"
-				btn_graph.click(_gen_graph, inputs=[src, layout], outputs=[_graph_view, _graph_status])
+				btn_graph.click(_gen_graph, inputs=[src, layout, max_nodes_slider], outputs=[_graph_view, _graph_status])
 
 				def _run_cypher_ui(q:str=""):
 					try:
@@ -1242,6 +1252,151 @@ def build_ui(docs, hybrid, llm, debug=None) -> gr.Blocks:
 				# Support both click and Enter-to-submit
 				btn_cypher.click(_run_cypher_ui, inputs=[cypher], outputs=[cypher_out])
 				cypher.submit(_run_cypher_ui, inputs=[cypher], outputs=[cypher_out])
+
+			with gr.Tab("Union DB"):
+				gr.Markdown("### Union Database Graph (Combined Documents)")
+				# Load union database data
+				_union_graph_view = gr.HTML(value="")
+				_union_graph_status = gr.Markdown()
+				union_src = gr.Dropdown(
+					choices=[
+						"Union DB (default)",
+						"Union DB - Force-directed",
+						"Union DB - Spread",
+						"Union DB - Cluster",
+						"Union DB - Hierarchical",
+						"Union DB - Circular"
+					],
+					value="Union DB (default)",
+					label="Union Graph source"
+				)
+				union_layout = gr.Dropdown(
+					choices=[
+						"Force-directed (default)",
+						"Spread (maximum spacing)",
+						"Cluster (W-case optimized)",
+						"Hierarchical",
+						"Circular",
+						"Compact"
+					],
+					value="Force-directed (default)",
+					label="Layout type"
+				)
+				# Slider for Union DB tab - controls nodes in the combined documents graph
+				max_nodes_slider = gr.Slider(
+					minimum=10,
+					maximum=200,
+					value=200,
+					step=10,
+					label="Maximum Nodes (Union DB)",
+					info="Adjust the number of nodes to show in the union database graph (higher = more detailed but slower)"
+				)
+				btn_union_graph = gr.Button("Generate / Refresh Union Graph")
+
+				def _load_union_db_data():
+					"""Load data from db_snapshot_union.jsonl and convert to Document objects"""
+					from langchain.schema import Document
+					import json
+					
+					union_docs = []
+					union_file = Path("logs") / "db_snapshot_union.jsonl"
+					
+					if not union_file.exists():
+						raise RuntimeError("logs/db_snapshot_union.jsonl not found")
+					
+					with open(union_file, "r", encoding="utf-8") as f:
+						for line in f:
+							line = line.strip()
+							if not line:
+								continue
+							try:
+								data = json.loads(line)
+								# Create Document object with metadata
+								doc = Document(
+									page_content=data.get("preview", ""),
+									metadata={
+										"file_name": data.get("file", ""),
+										"page": data.get("page"),
+										"section": data.get("section"),
+										"anchor": data.get("anchor"),
+										"table_number": data.get("table_number"),
+										"figure_number": data.get("figure_number"),
+										"figure_order": data.get("figure_order"),
+										"figure_label": data.get("figure_label"),
+										"table_label": data.get("table_label"),
+										"image_path": data.get("image_path"),
+										"table_md_path": data.get("table_md_path"),
+										"table_csv_path": data.get("table_csv_path"),
+										"dataset_id": data.get("dataset_id", ""),
+										"words": data.get("words", 0),
+										"chunk_id": data.get("chunk_id", ""),
+										"doc_id": data.get("doc_id", ""),
+										"source_document_id": data.get("source_document_id", "")
+									}
+								)
+								union_docs.append(doc)
+							except Exception as e:
+								continue
+					
+					return union_docs
+
+				def _build_union_graph(source_choice: str, layout_choice: str, max_nodes: int = 200):
+					try:
+						if render_graph_html is None:
+							return gr.update(value=""), "(graph module not available; install dependencies: networkx, pyvis)"
+						
+						# Load union database data
+						union_docs = _load_union_db_data()
+						
+						if not union_docs:
+							return gr.update(value=""), "(no union database data found)"
+						
+						# Use the enhanced union graph building with expanded filtering
+						from app.graph import create_union_graph
+						G = create_union_graph(union_docs, max_nodes=max_nodes)  # Use enhanced union graph function
+						
+						Path("logs").mkdir(exist_ok=True)
+						out = Path("logs")/"union_graph.html"
+						
+						# Apply layout-specific rendering if available
+						try:
+							from app.graph import render_graph_html_with_layout
+							layout_map = {
+								"Force-directed (default)": "force",
+								"Spread (maximum spacing)": "spread",
+								"Cluster (W-case optimized)": "cluster",
+								"Hierarchical": "hierarchical", 
+								"Circular": "circular",
+								"Compact": "force"
+							}
+							layout_type = layout_map.get(layout_choice, "force")
+							render_graph_html_with_layout(G, str(out), layout_type)
+						except ImportError:
+							# Fallback to standard rendering
+							render_graph_html(G, str(out))
+						
+						html_data = out.read_text(encoding="utf-8")
+						# Best-effort inline via iframe srcdoc; also provide a link for full view
+						iframe = f"<p><a href='file:///{out.resolve().as_posix()}' target='_blank'>Open union_graph.html in browser</a></p>" \
+							 f"<iframe style='width:100%;height:650px;border:1px solid #ddd' srcdoc=\"{_html.escape(html_data)}\"></iframe>"
+						return gr.update(value=iframe), f"Union Graph updated with {len(union_docs)} documents and {len(G.nodes())} nodes (max: {max_nodes})."
+					except Exception as e:
+						return gr.update(value=""), f"(failed to build union graph: {e})"
+
+				# Initial load if file exists
+				try:
+					union_graph_html_path = Path("logs")/"union_graph.html"
+					if union_graph_html_path.exists():
+						html_data = union_graph_html_path.read_text(encoding="utf-8")
+						iframe = f"<p><a href='file:///{union_graph_html_path.resolve().as_posix()}' target='_blank'>Open union_graph.html in browser</a></p>" \
+							 f"<iframe style='width:100%;height:650px;border:1px solid #ddd' srcdoc=\"{_html.escape(html_data)}\"></iframe>"
+						_union_graph_view.value = iframe
+					else:
+						_union_graph_status.value = "(Union Graph not available yet – click the button to generate it.)"
+				except Exception:
+					_union_graph_status.value = "(Union Graph not available yet – click the button to generate it.)"
+				
+				btn_union_graph.click(_build_union_graph, inputs=[union_src, union_layout, max_nodes_slider], outputs=[_union_graph_view, _union_graph_status])
 
 			with gr.Tab("DB Explorer"):
 				gr.Markdown("### Browse indexed documents (filters below)")

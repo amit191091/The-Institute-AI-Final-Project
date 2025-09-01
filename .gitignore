@@ -120,6 +120,7 @@ logs/*.log
 logs/*.jsonl
 logs/*.json
 logs/graph.html
+logs/union_graph.html
 logs/improved_config_test.json
 logs/improvements_test.json
 logs/answers_found.jsonl

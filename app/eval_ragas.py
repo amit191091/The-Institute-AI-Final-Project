@@ -83,6 +83,80 @@ def overlap_prf1(reference: str, contexts: List[str]) -> Tuple[float, float, flo
 	r = inter / max(1, len(ref_tokens))
 	f1 = (2 * p * r / (p + r)) if (p + r) > 0 else 0.0
 	return float(p), float(r), float(f1)
+
+@trace_func
+def compute_answer_correctness(answer: str, ground_truths: List[str]) -> float:
+	"""Compute answer correctness score (context-insensitive ground truth comparison).
+	
+	This metric compares the generated answer directly against ground truth answers
+	without considering the retrieved context. It uses a combination of:
+	1. Exact match (case-insensitive)
+	2. Token overlap F1 score
+	3. Semantic similarity (if embeddings available)
+	
+	Args:
+		answer: The generated answer
+		ground_truths: List of acceptable ground truth answers
+		
+	Returns:
+		Float score between 0.0 and 1.0, where 1.0 is perfect correctness
+	"""
+	if not answer or not ground_truths:
+		return 0.0
+	
+	answer = str(answer).strip()
+	ground_truths = [str(gt).strip() for gt in ground_truths if gt]
+	
+	if not answer or not ground_truths:
+		return 0.0
+	
+	# 1. Check for exact match (case-insensitive)
+	answer_lower = answer.lower()
+	for gt in ground_truths:
+		if answer_lower == gt.lower():
+			return 1.0
+	
+	# 2. Compute token overlap F1 score with best ground truth
+	best_f1 = 0.0
+	answer_tokens = set(_simple_tokens(answer))
+	
+	for gt in ground_truths:
+		gt_tokens = set(_simple_tokens(gt))
+		if not answer_tokens and not gt_tokens:
+			continue
+		
+		# Compute F1 score
+		inter = len(answer_tokens & gt_tokens)
+		precision = inter / max(1, len(answer_tokens))
+		recall = inter / max(1, len(gt_tokens))
+		f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+		best_f1 = max(best_f1, f1)
+	
+	# 3. Try semantic similarity if embeddings are available
+	semantic_score = 0.0
+	try:
+		embeddings = _setup_ragas_embeddings()
+		if embeddings:
+			# Get embeddings for answer and ground truths
+			answer_emb = embeddings.embed_query(answer)
+			gt_embs = [embeddings.embed_query(gt) for gt in ground_truths]
+			
+			# Compute cosine similarity with best ground truth
+			import numpy as np
+			for gt_emb in gt_embs:
+				cos_sim = np.dot(answer_emb, gt_emb) / (np.linalg.norm(answer_emb) * np.linalg.norm(gt_emb))
+				semantic_score = max(semantic_score, cos_sim)
+	except Exception:
+		# If embeddings fail, continue without semantic similarity
+		pass
+	
+	# Combine scores: exact match (1.0) > semantic similarity > token F1
+	if best_f1 > 0.8:  # High token overlap
+		return max(best_f1, semantic_score)
+	elif semantic_score > 0.7:  # Good semantic similarity
+		return semantic_score
+	else:
+		return best_f1
 @trace_func
 def _setup_ragas_llm():
 	"""Setup LLM for RAGAS evaluation.
@@ -435,6 +509,7 @@ def run_eval_detailed(dataset):
 		q_list = list(_get_col("question"))
 		a_list = list(_get_col("answer"))
 		r_list = list(_get_col("reference"))
+		gts_list = list(_get_col("ground_truths"))
 		tr_raw = _get_col("reasoning_trace")
 		tr_list = list(tr_raw) if tr_raw else []
 		n = max(len(q_list), len(a_list), len(r_list))
@@ -497,6 +572,18 @@ def run_eval_detailed(dataset):
 				# mark table QA correctness
 				rec["table_like"] = _is_table_like_question(rec.get("question"))
 				rec["table_correct"] = _table_correct(rec)
+				
+				# Add answer correctness (context-insensitive ground truth comparison)
+				try:
+					answer = rec.get("answer") or ""
+					ground_truths = gts_list[i] if i < len(gts_list) else []
+					if ground_truths:
+						rec["answer_correctness"] = compute_answer_correctness(answer, ground_truths)
+					else:
+						rec["answer_correctness"] = None
+				except Exception:
+					rec["answer_correctness"] = None
+				
 				per_q.append(rec)
 		elif hasattr(result, "results"):
 			items = list(getattr(result, "results") or [])
@@ -528,6 +615,18 @@ def run_eval_detailed(dataset):
 				# mark table QA correctness
 				rec["table_like"] = _is_table_like_question(rec.get("question"))
 				rec["table_correct"] = _table_correct(rec)
+				
+				# Add answer correctness (context-insensitive ground truth comparison)
+				try:
+					answer = rec.get("answer") or ""
+					ground_truths = gts_list[i] if i < len(gts_list) else []
+					if ground_truths:
+						rec["answer_correctness"] = compute_answer_correctness(answer, ground_truths)
+					else:
+						rec["answer_correctness"] = None
+				except Exception:
+					rec["answer_correctness"] = None
+				
 				per_q.append(rec)
 		# If results shorter than dataset, pad remaining with None metrics
 		for i in range(len(per_q), n):
@@ -542,6 +641,7 @@ def run_eval_detailed(dataset):
 				"context_recall": None,
 				"table_like": _is_table_like_question(q_list[i] if i < len(q_list) else None),
 				"table_correct": None,
+				"answer_correctness": None,
 			})
 	except Exception:
 		per_q = []
@@ -587,6 +687,16 @@ def run_eval_detailed(dataset):
 	except Exception:
 		pass
 
+	# Answer correctness (context-insensitive ground truth comparison)
+	try:
+		correctness_scores = [r.get("answer_correctness") for r in per_q if r.get("answer_correctness") is not None]
+		if correctness_scores:
+			summary["answer_correctness"] = _mean_safe(correctness_scores)
+		else:
+			summary["answer_correctness"] = None
+	except Exception:
+		summary["answer_correctness"] = None
+
 	return summary, per_q
 
 
@@ -595,6 +705,7 @@ TARGETS = {
 	"context_recall": 0.70,
 	"faithfulness": 0.85,
 	"table_qa_accuracy": 0.90,
+	"answer_correctness": 0.75,  # Context-insensitive ground truth comparison
 }
 
 @trace_func
@@ -617,6 +728,8 @@ def pretty_metrics(m: dict) -> str:
 		f"Context precision: {_fmt(m.get('context_precision'))}",
 		f"Context recall: {_fmt(m.get('context_recall'))}",
 	]
+	if "answer_correctness" in m:
+		lines.append(f"Answer correctness: {_fmt(m.get('answer_correctness'))}")
 	if "table_qa_accuracy" in m:
 		lines.append(f"Table QA accuracy: {_fmt(m.get('table_qa_accuracy'))}")
 	# Factual metrics (context-agnostic)

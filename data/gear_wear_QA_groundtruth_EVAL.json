@@ -1,0 +1,186 @@
+[
+  {
+    "question": "On what date was the first onset of wear detected by visual inspection?",
+    "ground_truths": ["April 9, 2023"]
+  },
+  {
+    "question": "On what date did the system reach the failure stage?",
+    "ground_truths": ["May 15, 2023"]
+  },
+  {
+    "question": "Between which dates did the severe wear stage occur?",
+    "ground_truths": ["May 1, 2023 to May 15, 2023"]
+  },
+  {
+    "question": "When did moderate wear begin?",
+    "ground_truths": ["April 20, 2023"]
+  },
+  {
+    "question": "Until what date did the healthy baseline extend with no abnormal indications?",
+    "ground_truths": ["April 8, 2023"]
+  },
+  {
+    "question": "What is the model of the marine reduction gearbox investigated?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "Which vessel's propulsion train was monitored?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "What two steady speeds were used for data acquisition (in RPS)?",
+    "ground_truths": ["15 and 45 RPS"]
+  },
+  {
+    "question": "What was the sampling rate per record?",
+    "ground_truths": ["50 kHz"]
+  },
+  {
+    "question": "What was the duration of each time record?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "Which lubricant and viscosity grade were in service?",
+    "ground_truths": ["2640 semi-synthetic (15W/40)"]
+  },
+  {
+    "question": "Name the accelerometer model used on the shafts.",
+    "ground_truths": ["Dytran 3053B"]
+  },
+  {
+    "question": "Which brand and model were used for the tachometer?",
+    "ground_truths": ["Honeywell 3010AN"]
+  },
+  {
+    "question": "How many teeth did the tachometer gear have?",
+    "ground_truths": ["30 teeth"]
+  },
+  {
+    "question": "What is the gear type and module size?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "What is the driving/driven transmission ratio?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "Which monitoring method provided the earliest reliable indicator of wear onset?",
+    "ground_truths": ["Frequency domain analysis"]
+  },
+  {
+    "question": "Name two spectral characteristics of the healthy baseline.",
+    "ground_truths": ["Low amplitude", "Stable frequency components"]
+  },
+  {
+    "question": "What two vibration-domain signs accompanied early flank wear during mild wear?",
+    "ground_truths": ["Increased RMS", "Frequency modulation"]
+  },
+  {
+    "question": "At 15 RPS during early wear, what high-frequency behavior was observed?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "List two hallmark spectral changes that defined the moderate wear stage.",
+    "ground_truths": ["Increased sidebands", "Frequency broadening"]
+  },
+  {
+    "question": "During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "Name three combined indicators that characterized the severe wear stage.",
+    "ground_truths": ["High RMS", "Severe frequency distortion", "Physical damage"]
+  },
+  {
+    "question": "What physical tooth-surface changes typified the transition into severe wear?",
+    "ground_truths": ["Pitting", "Spalling", "Cracking"]
+  },
+  {
+    "question": "Why can RMS energy drop at the moment of failure despite catastrophic damage?",
+    "ground_truths": ["Energy dissipation through material failure"]
+  },
+  {
+    "question": "Which metric should frequency-domain monitoring emphasize for earlier detection?",
+    "ground_truths": ["Sideband analysis"]
+  },
+  {
+    "question": "What is the recommended action at the severe wear stage?",
+    "ground_truths": ["Immediate shutdown and replacement"]
+  },
+  {
+    "question": "What is the recommended action at the moderate wear stage?",
+    "ground_truths": ["Increased monitoring frequency"]
+  },
+  {
+    "question": "Which two data sources should be synchronized into a single diagnostic report?",
+    "ground_truths": ["Vibration data", "Visual inspection data"]
+  },
+  {
+    "question": "Name one AI-driven image task suggested to support objective assessments.",
+    "ground_truths": ["Automated wear pattern recognition"]
+  },
+  {
+    "question": "What is the wear depth for case W1 (in μm)?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "What is the wear depth for case W13 (in μm)?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "What is the wear depth for case W22 (in μm)?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "What is the wear depth for case W24 (in μm)?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "What is the wear depth for case W25 (in μm)?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "What is the wear depth for case W31 (in μm)?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "What is the wear depth for case W33 (in μm)?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "What is the wear depth for case W35 (in μm)?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "Which wear case corresponds to 294 μm?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "Which wear case corresponds to 466 μm?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "Which wear case corresponds to 744 μm?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "Which wear case corresponds to 579 μm?",
+    "ground_truths": ["Not specified in document"]
+  },
+  {
+    "question": "List the health stages in chronological order.",
+    "ground_truths": ["Healthy baseline", "Mild wear", "Moderate wear", "Severe wear", "Failure"]
+  },
+  {
+    "question": "At which two speeds were both baseline and severe-wear measurements acquired?",
+    "ground_truths": ["15 and 45 RPS"]
+  },
+  {
+    "question": "Name the two primary sensor modalities used to document wear progression.",
+    "ground_truths": ["Accelerometers", "Tachometers"]
+  }
+]

@@ -1,16 +1,17 @@
 {
-  "faithfulness": 1.0,
-  "answer_relevancy": 0.0,
-  "context_precision": 0.99999999995,
-  "context_recall": 1.0,
+  "faithfulness": 0.5909090909090909,
+  "answer_relevancy": 0.43225885823088994,
+  "context_precision": 0.2816883116747739,
+  "context_recall": 0.5454545454545454,
   "factual_em_rate": 0.0,
-  "factual_token_f1": 0.25,
+  "factual_token_f1": 0.05641025641025641,
   "factual_numeric": 0.0,
   "factual_range": 0.0,
   "factual_list_f1": 0.0,
-  "factual_score": 0.05,
-  "overlap_precision": 0.011627906976744186,
-  "overlap_recall": 1.0,
-  "overlap_f1": 0.022988505747126436,
-  "table_qa_accuracy": 0.0
+  "factual_score": 0.011282051282051283,
+  "overlap_precision": 0.0022093989294500534,
+  "overlap_recall": 0.47424242424242424,
+  "overlap_f1": 0.004391889587934684,
+  "table_qa_accuracy": 0.0,
+  "answer_correctness": 0.0652014652014652
 }

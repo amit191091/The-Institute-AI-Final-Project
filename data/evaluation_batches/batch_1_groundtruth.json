@@ -1,0 +1,74 @@
+[
+  {
+    "question": "On what date was the first onset of wear detected by visual inspection?",
+    "ground_truths": [
+      "April 9, 2023"
+    ]
+  },
+  {
+    "question": "On what date did the system reach the failure stage?",
+    "ground_truths": [
+      "May 15, 2023"
+    ]
+  },
+  {
+    "question": "Between which dates did the severe wear stage occur?",
+    "ground_truths": [
+      "May 1, 2023 to May 15, 2023"
+    ]
+  },
+  {
+    "question": "When did moderate wear begin?",
+    "ground_truths": [
+      "April 20, 2023"
+    ]
+  },
+  {
+    "question": "Until what date did the healthy baseline extend with no abnormal indications?",
+    "ground_truths": [
+      "April 8, 2023"
+    ]
+  },
+  {
+    "question": "What is the model of the marine reduction gearbox investigated?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "Which vessel's propulsion train was monitored?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "What two steady speeds were used for data acquisition (in RPS)?",
+    "ground_truths": [
+      "15 and 45 RPS"
+    ]
+  },
+  {
+    "question": "What was the sampling rate per record?",
+    "ground_truths": [
+      "50 kHz"
+    ]
+  },
+  {
+    "question": "What was the duration of each time record?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "Which lubricant and viscosity grade were in service?",
+    "ground_truths": [
+      "2640 semi-synthetic (15W/40)"
+    ]
+  },
+  {
+    "question": "Name the accelerometer model used on the shafts.",
+    "ground_truths": [
+      "Dytran 3053B"
+    ]
+  }
+]

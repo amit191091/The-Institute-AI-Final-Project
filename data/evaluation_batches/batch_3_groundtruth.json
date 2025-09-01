@@ -1,0 +1,71 @@
+[
+  {
+    "question": "What physical tooth-surface changes typified the transition into severe wear?",
+    "ground_truths": [
+      "Pitting",
+      "Spalling",
+      "Cracking"
+    ]
+  },
+  {
+    "question": "Why can RMS energy drop at the moment of failure despite catastrophic damage?",
+    "ground_truths": [
+      "Energy dissipation through material failure"
+    ]
+  },
+  {
+    "question": "Which metric should frequency-domain monitoring emphasize for earlier detection?",
+    "ground_truths": [
+      "Sideband analysis"
+    ]
+  },
+  {
+    "question": "What is the recommended action at the severe wear stage?",
+    "ground_truths": [
+      "Immediate shutdown and replacement"
+    ]
+  },
+  {
+    "question": "What is the recommended action at the moderate wear stage?",
+    "ground_truths": [
+      "Increased monitoring frequency"
+    ]
+  },
+  {
+    "question": "Which two data sources should be synchronized into a single diagnostic report?",
+    "ground_truths": [
+      "Vibration data",
+      "Visual inspection data"
+    ]
+  },
+  {
+    "question": "Name one AI-driven image task suggested to support objective assessments.",
+    "ground_truths": [
+      "Automated wear pattern recognition"
+    ]
+  },
+  {
+    "question": "What is the wear depth for case W1 (in μm)?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "What is the wear depth for case W13 (in μm)?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "What is the wear depth for case W22 (in μm)?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "What is the wear depth for case W24 (in μm)?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  }
+]

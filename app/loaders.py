@@ -35,10 +35,8 @@ try:
 except ImportError:
     pdfplumber = None
 
-try:
-    import camelot  # type: ignore
-except ImportError:
-    camelot = None
+# Camelot import will be handled lazily when needed
+camelot = None
 
 try:
     # Prefer the public API; Pylance flags tabula.read_pdf as private otherwise
@@ -308,8 +306,20 @@ def _try_camelot_tables(pdf_path: Path) -> List[Element]:
     Requires: camelot-py[base] and Ghostscript installed on the system.
     Enabled by RAG_USE_CAMELOT (default: off).
     """
-    if not camelot or not _env_enabled("RAG_USE_CAMELOT"):
+    if not _env_enabled("RAG_USE_CAMELOT"):
         return []
+    
+    # Lazy import of camelot to avoid import issues
+    global camelot
+    if camelot is None:
+        try:
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                import camelot  # type: ignore
+        except (ImportError, Exception) as e:
+            print(f"Camelot import failed: {e}")
+            return []
     
     log = get_logger()
     debug = _env_enabled("RAG_CAMELOT_DEBUG")

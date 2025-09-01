@@ -35,6 +35,59 @@ def _extract_entities(text: str) -> List[str]:
     return list(ents)
 
 @trace_func
+def _extract_entities_enhanced(text: str) -> List[str]:
+    """Enhanced entity extraction for union database with more comprehensive coverage."""
+    t = text or ""
+    ents = set()
+    
+    # Original entities
+    for m in re.findall(r"\bW\d{1,3}\b", t):
+        ents.add(m)
+    
+    # Enhanced date patterns
+    for m in re.findall(r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}\b", t, re.I):
+        ents.add(m)
+    for m in re.findall(r"\b20\d{2}-\d{2}-\d{2}\b", t):
+        ents.add(m)
+    for m in re.findall(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", t):
+        ents.add(m)
+    
+    # Enhanced time patterns
+    for m in re.findall(r"\b\d{1,2}:\d{2}(?:\s*[–-]\s*\d{1,2}:\d{2})?\b", t):
+        ents.add(m)
+    
+    # Enhanced technical terms
+    enhanced_keywords = [
+        "RMS", "FME", "GMF", "RPS", "crest factor", "wear depth",
+        "accelerometer", "tachometer", "sensor", "sensitivity", "sampling rate",
+        "frequency", "amplitude", "vibration", "bearing", "gear", "shaft",
+        "failure", "investigation", "measurement", "analysis", "threshold",
+        "alert", "warning", "critical", "normal", "abnormal", "condition",
+        "monitoring", "diagnostics", "maintenance", "inspection", "visual",
+        "ultrasonic", "magnetic", "particle", "lubrication", "oil", "grease",
+        "temperature", "pressure", "load", "speed", "torque", "power",
+        "efficiency", "performance", "reliability", "safety", "compliance"
+    ]
+    
+    for kw in enhanced_keywords:
+        if re.search(rf"\b{re.escape(kw)}\b", t, re.I):
+            ents.add(kw)
+    
+    # Extract table and figure references
+    for m in re.findall(r"\b(?:Table|Figure)\s+\d+\b", t, re.I):
+        ents.add(m)
+    
+    # Extract measurement units
+    for m in re.findall(r"\b\d+(?:\.\d+)?\s*(?:kHz|kS|RPS|μm|mm|cm|m|g|N|Pa|bar|psi|°C|°F|rpm|Hz)\b", t, re.I):
+        ents.add(m)
+    
+    # Extract file names and document references
+    for m in re.findall(r"\b(?:Gear|Sliding|Bearing|Failure|Investigation|Report)\.pdf\b", t, re.I):
+        ents.add(m)
+    
+    return list(ents)
+
+@trace_func
 def build_graph(docs: Sequence[DocLike]) -> nx.Graph:
     """Build a simple undirected graph of entities co-mentioned within the same chunk.
     Nodes: entities and file/page anchors. Edges: co-mentions.
@@ -107,12 +160,112 @@ def create_clean_graph(docs: Sequence[DocLike], max_nodes: int = 60) -> nx.Graph
 
 
 @trace_func
-def render_graph_html(G: nx.Graph, out_path: str, height: str = "800px") -> str:
+def create_union_graph(docs: Sequence[DocLike], max_nodes: int = 200) -> nx.Graph:
+    """Create an enhanced graph specifically for union database with expanded entity extraction.
+    
+    This function creates a more comprehensive graph for the union database by:
+    1. Using enhanced entity extraction with more technical terms
+    2. Including more document metadata
+    3. Creating better node organization for combined documents
+    """
+    G = nx.Graph()
+    
+    # First pass: build the full graph with enhanced entities
+    for d in docs:
+        md = d.metadata or {}
+        # Create more descriptive node labels for union database
+        file_name = md.get('file_name', 'doc')
+        page = md.get('page', '')
+        section = md.get('section', '')
+        anchor = md.get('anchor', '')
+        
+        # Create a more informative node label
+        if section and anchor:
+            node_doc = f"{file_name}#p{page}:{section}/{anchor}"
+        elif section:
+            node_doc = f"{file_name}#p{page}:{section}"
+        else:
+            node_doc = f"{file_name}#p{page}"
+        
+        G.add_node(node_doc, type="chunk", label=node_doc, file=file_name, page=page, section=section)
+        
+        # Use enhanced entity extraction
+        ents = _extract_entities_enhanced(d.page_content)
+        for e in ents:
+            if not G.has_node(e):
+                G.add_node(e, type="entity", label=e)
+            G.add_edge(node_doc, e)
+        
+        # Connect entities co-mentioned in same chunk
+        for i in range(len(ents)):
+            for j in range(i + 1, len(ents)):
+                a, b = ents[i], ents[j]
+                if a != b:
+                    G.add_edge(a, b)
+    
+    # Second pass: clean and filter the graph
+    if len(G.nodes()) > max_nodes:
+        # Calculate degree centrality for all nodes
+        degree_centrality = nx.degree_centrality(G)
+        
+        # Sort nodes by degree centrality (importance)
+        sorted_nodes = sorted(degree_centrality.items(), key=lambda x: x[1], reverse=True)
+        
+        # Keep only the most important nodes
+        nodes_to_keep = [node for node, _ in sorted_nodes[:max_nodes]]
+        
+        # Create a subgraph with only the important nodes
+        G = G.subgraph(nodes_to_keep).copy()
+    
+    # Remove isolated nodes (degree 0)
+    isolated_nodes = [n for n in G.nodes() if G.degree(n) == 0]
+    G.remove_nodes_from(isolated_nodes)
+    
+    return G
+
+
+@trace_func
+def render_graph_html(G: nx.Graph, out_path: str, height: str = "100vh") -> str:
     """Render the graph to an interactive HTML with improved layout and clarity.
     
     Uses enhanced physics settings, better node styling, and filtering to create
     a much more readable and organized graph visualization.
     """
+    # Check if graph is empty or has no nodes
+    if not G or len(G.nodes()) == 0:
+        print("Graph is empty, creating fallback HTML")
+        # Create a simple fallback HTML
+        fallback_html = f"""<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Knowledge Graph</title>
+    <style>
+        body {{ margin: 0; padding: 20px; font-family: Arial, sans-serif; }}
+        .empty-graph {{ 
+            width: 100%; 
+            height: {height}; 
+            border: 2px solid #ddd; 
+            border-radius: 8px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            background: #f9f9f9; 
+            color: #666; 
+            font-size: 18px; 
+        }}
+    </style>
+</head>
+<body>
+    <div class="empty-graph">
+        No graph data available to display
+    </div>
+</body>
+</html>"""
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(fallback_html)
+        return out_path
+    
     # First, try PyVis rendering with improved settings
     try:
         from pyvis.network import Network  # type: ignore
@@ -132,7 +285,17 @@ def render_graph_html(G: nx.Graph, out_path: str, height: str = "800px") -> str:
             nodes_to_remove = [n for n in filtered_G.nodes() if n not in nodes_to_keep]
             filtered_G.remove_nodes_from(nodes_to_remove)
         
-        net = Network(height=height, width="100%", directed=False, notebook=False, cdn_resources="in_line")
+        # Check if filtered graph is empty
+        if len(filtered_G.nodes()) == 0:
+            print("Filtered graph is empty, using original graph")
+            filtered_G = G.copy()
+        
+        # Create Network object with proper error handling
+        try:
+            net = Network(height=height, width="100%", directed=False, notebook=False, cdn_resources="in_line")
+        except Exception as e:
+            print(f"Failed to create Network object: {e}")
+            raise
         
         # Add nodes with enhanced styling
         for n, data in filtered_G.nodes(data=True):
@@ -161,33 +324,41 @@ def render_graph_html(G: nx.Graph, out_path: str, height: str = "800px") -> str:
                 color = "#95A5A6"  # Gray for unknown
             
             # Add node with enhanced properties
-            net.add_node(
-                n, 
-                label=data.get("label", str(n))[:35],  # Slightly longer labels
-                color=color,
-                size=size,
-                font={
-                    "size": max(12, size - 3), 
-                    "face": "Arial", 
-                    "color": "#000000",
-                    "strokeWidth": 2,
-                    "strokeColor": "#FFFFFF"
-                },
-                borderWidth=3 if degree > 8 else 2,
-                borderColor="#000000",
-                shadow=True,
-                mass=degree + 1  # Heavier nodes for better physics
-            )
+            try:
+                net.add_node(
+                    str(n),  # Ensure node ID is string
+                    label=str(data.get("label", str(n)))[:35],  # Slightly longer labels
+                    color=color,
+                    size=size,
+                    font={
+                        "size": max(12, size - 3), 
+                        "face": "Arial", 
+                        "color": "#000000",
+                        "strokeWidth": 2,
+                        "strokeColor": "#FFFFFF"
+                    },
+                    borderWidth=3 if degree > 8 else 2,
+                    borderColor="#000000",
+                    shadow=True,
+                    mass=degree + 1  # Heavier nodes for better physics
+                )
+            except Exception as e:
+                print(f"Failed to add node {n}: {e}")
+                continue
         
         # Add edges with improved styling
         for u, v in filtered_G.edges():
-            net.add_edge(
-                str(u), 
-                str(v),
-                width=1,
-                color={"color": "#848484", "opacity": 0.6},
-                smooth={"type": "continuous", "forceDirection": "none"}
-            )
+            try:
+                net.add_edge(
+                    str(u), 
+                    str(v),
+                    width=1,
+                    color={"color": "#848484", "opacity": 0.6},
+                    smooth={"type": "continuous", "forceDirection": "none"}
+                )
+            except Exception as e:
+                print(f"Failed to add edge {u}-{v}: {e}")
+                continue
         
         # Enhanced physics and layout settings with maximum spacing
         physics_options = {
@@ -243,17 +414,29 @@ def render_graph_html(G: nx.Graph, out_path: str, height: str = "800px") -> str:
             "interaction": interaction_options
         }
         
-        net.set_options(json.dumps(all_options))
+        try:
+            net.set_options(json.dumps(all_options))
+        except Exception as e:
+            print(f"Failed to set options: {e}")
         
+        # Write HTML with proper error handling
         try:
             net.write_html(out_path)  # avoid opening browser
-        except Exception:
-            net.show(out_path)
-        return out_path
+            print(f"Successfully wrote PyVis HTML to {out_path}")
+            return out_path
+        except Exception as e:
+            print(f"Failed to write HTML with write_html: {e}")
+            try:
+                net.show(out_path)
+                print(f"Successfully wrote PyVis HTML with show() to {out_path}")
+                return out_path
+            except Exception as e2:
+                print(f"Failed to write HTML with show(): {e2}")
+                raise
         
     except Exception as e:
         print(f"PyVis rendering failed: {e}")
-        pass
+        # Continue to fallback rendering
 
     # Fallback: write an improved vis-network HTML manually
     # Filter graph for fallback too
@@ -407,7 +590,7 @@ def render_graph_html(G: nx.Graph, out_path: str, height: str = "800px") -> str:
 
 
 @trace_func
-def render_graph_html_with_layout(G: nx.Graph, out_path: str, layout_type: str = "force", height: str = "800px") -> str:
+def render_graph_html_with_layout(G: nx.Graph, out_path: str, layout_type: str = "force", height: str = "100vh") -> str:
     """Render graph with different layout options for better clarity.
     
     Args:
@@ -416,9 +599,41 @@ def render_graph_html_with_layout(G: nx.Graph, out_path: str, layout_type: str =
         layout_type: One of "force", "hierarchical", "circular", "grid"
         height: Graph height in CSS units
     """
-    # Use the clean graph function first
-    if len(G.nodes()) > 100:
-        G = create_clean_graph([], max_nodes=60)  # This is a placeholder - in practice you'd pass the docs
+    # Check if graph is empty or has no nodes
+    if not G or len(G.nodes()) == 0:
+        print("Graph is empty in render_graph_html_with_layout")
+        # Create a simple fallback HTML
+        fallback_html = f"""<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Knowledge Graph - {layout_type.title()}</title>
+    <style>
+        body {{ margin: 0; padding: 20px; font-family: Arial, sans-serif; }}
+        .empty-graph {{ 
+            width: 100%; 
+            height: {height}; 
+            border: 2px solid #ddd; 
+            border-radius: 8px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            background: #f9f9f9; 
+            color: #666; 
+            font-size: 18px; 
+        }}
+    </style>
+</head>
+<body>
+    <div class="empty-graph">
+        No graph data available to display<br>
+        Layout: {layout_type.title()}
+    </div>
+</body>
+</html>"""
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(fallback_html)
+        return out_path
     
     # Layout-specific physics settings with enhanced spacing
     if layout_type == "force":

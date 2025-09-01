@@ -796,6 +796,16 @@ def _index_ground_truth(gt_rows):
 def run_evaluation(docs, hybrid, llm: _LLM):
     log = get_logger()
     qa_path, gt_path = _discover_eval_files()
+    return _run_evaluation_with_files(docs, hybrid, llm, qa_path, gt_path)
+
+@trace_func
+def run_evaluation_with_files(docs, hybrid, llm: _LLM, qa_path, gt_path):
+    """Run evaluation with custom file paths for batch processing"""
+    return _run_evaluation_with_files(docs, hybrid, llm, qa_path, gt_path)
+
+@trace_func
+def _run_evaluation_with_files(docs, hybrid, llm: _LLM, qa_path, gt_path):
+    log = get_logger()
     # Diagnostics for file discovery
     try:
         log.info(

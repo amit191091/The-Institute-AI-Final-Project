@@ -1,0 +1,79 @@
+[
+  {
+    "question": "Which brand and model were used for the tachometer?",
+    "ground_truths": [
+      "Honeywell 3010AN"
+    ]
+  },
+  {
+    "question": "How many teeth did the tachometer gear have?",
+    "ground_truths": [
+      "30 teeth"
+    ]
+  },
+  {
+    "question": "What is the gear type and module size?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "What is the driving/driven transmission ratio?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "Which monitoring method provided the earliest reliable indicator of wear onset?",
+    "ground_truths": [
+      "Frequency domain analysis"
+    ]
+  },
+  {
+    "question": "Name two spectral characteristics of the healthy baseline.",
+    "ground_truths": [
+      "Low amplitude",
+      "Stable frequency components"
+    ]
+  },
+  {
+    "question": "What two vibration-domain signs accompanied early flank wear during mild wear?",
+    "ground_truths": [
+      "Increased RMS",
+      "Frequency modulation"
+    ]
+  },
+  {
+    "question": "At 15 RPS during early wear, what high-frequency behavior was observed?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "By approximately how much did RMS rise above April 9 levels at 45 RPS during moderate wear?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "List two hallmark spectral changes that defined the moderate wear stage.",
+    "ground_truths": [
+      "Increased sidebands",
+      "Frequency broadening"
+    ]
+  },
+  {
+    "question": "During severe wear at 45 RPS, by how much did RMS exceed the April 9 baseline?",
+    "ground_truths": [
+      "Not specified in document"
+    ]
+  },
+  {
+    "question": "Name three combined indicators that characterized the severe wear stage.",
+    "ground_truths": [
+      "High RMS",
+      "Severe frequency distortion",
+      "Physical damage"
+    ]
+  }
+]
